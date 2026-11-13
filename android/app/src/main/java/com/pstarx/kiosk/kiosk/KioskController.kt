@@ -134,11 +134,19 @@ class KioskController private constructor(context: Context) {
 
         if (!inLockTask || bringToFront) {
             // Device Owner pode abrir activity a partir de segundo plano (exceção do Android 10+)
-            ctx.startActivity(
-                Intent(ctx, KioskActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT),
-            )
+            ctx.startActivity(homeIntent())
         }
     }
+
+    /**
+     * Abre a tela do kiosk **como home** (ação MAIN + categoria HOME). Aberta com um intent comum, ela vira uma
+     * tarefa "standard" e o Android continua com o launcher antigo como home: quando o app do kiosk cai, o
+     * launcher do sistema aparece (visto no C6000). Sem componente explícito: no Android 10 um intent de HOME com
+     * componente só vira home se vier do sistema; sem ele, a resolução cai na preferência persistente (o kiosk).
+     */
+    fun homeIntent(): Intent = Intent(Intent.ACTION_MAIN)
+        .addCategory(Intent.CATEGORY_HOME)
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 
     private fun setLockTaskFeatures(c: KioskConfig) {
         var f = 0

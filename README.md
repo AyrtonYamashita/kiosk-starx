@@ -16,7 +16,7 @@ docs/      guias
 
 | Fase | Conteúdo | Estado |
 |---|---|---|
-| 1 | App kiosk local: Device Owner, app único / grade / site, configurações no aparelho (gesto + PIN), JSON com import/export, ADB, boot | ✅ código e testes; falta validar no C6000 |
+| 1 | App kiosk local: Device Owner, app único / grade / site, configurações no aparelho (gesto + PIN), JSON com import/export, ADB, boot | ✅ (validada no C6000) |
 | 2 | VPS (Docker Compose + Caddy/HTTPS + Postgres), painel (Next.js), cadastro por QR, check-in, inventário | |
 | 3 | Configuração remota: editor no painel, perfis por grupo, sincronização | |
 | 4 | Comandos (bloquear, reiniciar, mensagem, captura de tela) e apps (instalar/remover, auto-update) | |

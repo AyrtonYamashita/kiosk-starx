@@ -131,8 +131,19 @@ object Ui {
         }
     }
 
+    /** Fileira de opções (uma selecionada), com rolagem horizontal em telas estreitas. */
+    fun pills(ctx: Context, labels: List<String>, selected: Int, onSelect: (Int) -> Unit): View {
+        val row = LinearLayout(ctx).apply { setPadding(dp(ctx, 12), 0, dp(ctx, 12), 0) }
+        labels.forEachIndexed { i, label ->
+            row.addView(pill(ctx, label, i == selected) { onSelect(i) },
+                LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginEnd = dp(ctx, 8) })
+        }
+        return android.widget.HorizontalScrollView(ctx).apply { isHorizontalScrollBarEnabled = false; addView(row) }
+    }
+
     fun pill(ctx: Context, text: String, selected: Boolean, onClick: () -> Unit): TextView = TextView(ctx).apply {
         this.text = text
+        isSingleLine = true
         gravity = Gravity.CENTER
         setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
         setPadding(dp(ctx, 16), dp(ctx, 10), dp(ctx, 16), dp(ctx, 10))

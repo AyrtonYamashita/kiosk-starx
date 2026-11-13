@@ -157,6 +157,14 @@ class ConfigTest {
     }
 
     @Test
+    fun `pretty escreve barras sem escape e continua JSON equivalente`() {
+        val c = KioskConfig(kiosk = KioskConfig.Kiosk(web = KioskConfig.Web(url = "https://a.b/c/d")))
+        val text = KioskConfig.pretty(c.toJson())
+        assertTrue(text.contains("\"https://a.b/c/d\""))
+        assertEquals(c, KioskConfig.parse(JSONObject(text)).config)
+    }
+
+    @Test
     fun `redacted esconde o hash do pin`() {
         val json = KioskConfig(security = KioskConfig.Security(pinHash = fastHash("1234"))).toJson()
         val red = KioskConfig.redacted(json)

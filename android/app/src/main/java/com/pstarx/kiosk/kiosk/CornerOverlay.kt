@@ -35,7 +35,9 @@ object CornerOverlay {
         val ctx = context.applicationContext
         val kiosk = KioskController.get(ctx)
         val c = kiosk.config
-        val wanted = kiosk.enforced && c.kiosk.enabled && c.kiosk.mode != KioskConfig.Mode.WEB && canShow(ctx)
+        // escondida durante a administração: senão cobre os botões do canto (ex.: Salvar)
+        val wanted = kiosk.enforced && c.kiosk.enabled && c.kiosk.mode != KioskConfig.Mode.WEB &&
+            !kiosk.adminSessionActive && canShow(ctx)
         val key = "${c.security.exitCorner}:${c.security.exitTaps}"
         if (!wanted) {
             hide(ctx)
@@ -50,7 +52,7 @@ object CornerOverlay {
     @SuppressLint("ClickableViewAccessibility")
     private fun show(ctx: Context, corner: KioskConfig.Corner, taps: Int) {
         val wm = ctx.getSystemService(WindowManager::class.java)
-        val size = (56 * ctx.resources.displayMetrics.density).toInt()
+        val size = (48 * ctx.resources.displayMetrics.density).toInt()
         val counter = TapCounter(taps)
         val v = View(ctx).apply {
             setOnTouchListener { _, ev ->

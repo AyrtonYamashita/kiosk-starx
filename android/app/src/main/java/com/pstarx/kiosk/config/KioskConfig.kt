@@ -271,6 +271,9 @@ data class KioskConfig(
             return out
         }
 
+        /** JSON indentado para gente ler (o org.json escreve "https:\/\/"; "\/" e "/" são equivalentes em JSON). */
+        fun pretty(json: JSONObject): String = json.toString(2).replace(Regex("(?<!\\\\)\\\\/"), "/")
+
         /** Remove o hash do PIN (para mostrar/registrar a configuração sem material do PIN). */
         fun redacted(json: JSONObject): JSONObject {
             val copy = JSONObject(json.toString())

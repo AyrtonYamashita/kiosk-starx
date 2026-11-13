@@ -56,7 +56,7 @@ class SettingsActivity : Activity() {
         draft = saved
         window.decorView.setBackgroundColor(Color.WHITE)
 
-        status = Ui.note(this, "").apply { setPadding(Ui.dp(this@SettingsActivity, 16), 0, Ui.dp(this@SettingsActivity, 16), Ui.dp(this@SettingsActivity, 8)) }
+        status = Ui.note(this, "").apply { setTextIsSelectable(false); setPadding(Ui.dp(this@SettingsActivity, 16), 0, Ui.dp(this@SettingsActivity, 16), Ui.dp(this@SettingsActivity, 8)) }
         tabs = LinearLayout(this).apply { setPadding(Ui.dp(this@SettingsActivity, 12), 0, Ui.dp(this@SettingsActivity, 12), Ui.dp(this@SettingsActivity, 8)) }
         content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
 
@@ -149,12 +149,8 @@ class SettingsActivity : Activity() {
         val k = draft.kiosk
         add(Ui.switchRow(this, "Kiosk ligado", "Desligado, o aparelho funciona normalmente", k.enabled) { on -> edit({ it.copy(kiosk = it.kiosk.copy(enabled = on)) }) })
         add(Ui.section(this, "Modo"))
-        add(LinearLayout(this).apply {
-            setPadding(Ui.dp(this@SettingsActivity, 12), 0, Ui.dp(this@SettingsActivity, 12), 0)
-            for (m in KioskConfig.Mode.entries) {
-                addView(Ui.pill(this@SettingsActivity, m.label, m == k.mode) { edit({ it.copy(kiosk = it.kiosk.copy(mode = m)) }, rerender = true) },
-                    LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginEnd = Ui.dp(this@SettingsActivity, 8) })
-            }
+        add(Ui.pills(this, KioskConfig.Mode.entries.map { it.label }, KioskConfig.Mode.entries.indexOf(k.mode)) { i ->
+            edit({ it.copy(kiosk = it.kiosk.copy(mode = KioskConfig.Mode.entries[i])) }, rerender = true)
         })
         when (k.mode) {
             KioskConfig.Mode.APP -> {
@@ -235,12 +231,8 @@ class SettingsActivity : Activity() {
         d.brightness?.let { b -> add(Ui.slider(this, "Brilho", b, 0..100, "%") { v -> edit({ it.copy(display = it.display.copy(brightness = v)) }) }) }
         add(Ui.switchRow(this, "Barra de status", "Hora, bateria e rede visíveis no kiosk", d.showStatusBar) { on -> edit({ it.copy(display = it.display.copy(showStatusBar = on)) }) })
         add(Ui.section(this, "Orientação (grade e site)"))
-        add(LinearLayout(this).apply {
-            setPadding(Ui.dp(this@SettingsActivity, 12), 0, Ui.dp(this@SettingsActivity, 12), 0)
-            for (o in KioskConfig.Orientation.entries) {
-                addView(Ui.pill(this@SettingsActivity, o.label, o == d.orientation) { edit({ it.copy(display = it.display.copy(orientation = o)) }, rerender = true) },
-                    LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginEnd = Ui.dp(this@SettingsActivity, 8) })
-            }
+        add(Ui.pills(this, KioskConfig.Orientation.entries.map { it.label }, KioskConfig.Orientation.entries.indexOf(d.orientation)) { i ->
+            edit({ it.copy(display = it.display.copy(orientation = KioskConfig.Orientation.entries[i])) }, rerender = true)
         })
         add(Ui.section(this, "Aparência"))
         add(Ui.labeled(this, "Título (aparece no topo da grade)", Ui.textField(this, "Ex.: Expedição", a.title) { v -> edit({ it.copy(appearance = it.appearance.copy(title = v.take(80))) }) }))
@@ -374,7 +366,7 @@ class SettingsActivity : Activity() {
     }
 
     private fun showJson() {
-        val json = KioskConfig.redacted(draft.toJson()).toString(2)
+        val json = KioskConfig.pretty(KioskConfig.redacted(draft.toJson()))
         val tv = TextView(this).apply {
             text = json
             typeface = Typeface.MONOSPACE
@@ -423,7 +415,7 @@ class SettingsActivity : Activity() {
         if (resultCode != RESULT_OK || uri == null) return
         when (requestCode) {
             REQ_EXPORT -> try {
-                contentResolver.openOutputStream(uri, "wt")!!.use { it.write(draft.toJson().toString(2).toByteArray()) }
+                contentResolver.openOutputStream(uri, "wt")!!.use { it.write(KioskConfig.pretty(draft.toJson()).toByteArray()) }
                 toast("Configuração exportada")
             } catch (e: Exception) {
                 toast("Falha ao exportar: ${e.message}")
