@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">StarX Kiosk</string>
+    <string name="admin_description">Modo kiosk e gerenciamento do aparelho.</string>
+</resources>

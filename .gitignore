@@ -1,0 +1,16 @@
+# Android
+android/local.properties
+android/.gradle/
+android/build/
+android/app/build/
+android/.idea/
+android/.kotlin/
+*.iml
+*.jks
+*.keystore
+*.apk
+
+# geral
+.env
+node_modules/
+.DS_Store

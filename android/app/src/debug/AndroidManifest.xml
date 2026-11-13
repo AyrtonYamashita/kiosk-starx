@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Build de debug: testOnly permite remover o Device Owner por ADB (dpm remove-active-admin)
+     sem reset de fábrica. Instale com `adb install -t`. O build de release (QR) não tem isso. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application android:testOnly="true" />
+</manifest>
