@@ -1,6 +1,7 @@
 # StarX Kiosk na VPS: API + Postgres + backup diário.
 # O Caddy que já existe na VPS faz o HTTPS e encaminha para a API (veja Caddyfile.snippet).
-# A API só escuta em 127.0.0.1 (Caddy no host). Se o Caddy roda em Docker, veja "Caddy em Docker" no README.
+# A API escuta em API_BIND:API_PORT. Caddy na mesma máquina: 127.0.0.1. Caddy em outra VM: o IP interno desta VM
+# (e o firewall libera a porta só para a VM do Caddy).
 services:
   api:
     build: ../server
@@ -14,7 +15,7 @@ services:
     volumes:
       - ./data/apks:/data/apks
     ports:
-      - "127.0.0.1:${API_PORT:-3100}:3100"
+      - "${API_BIND:-127.0.0.1}:${API_PORT:-3100}:3100"
     depends_on:
       postgres:
         condition: service_healthy
