@@ -31,6 +31,8 @@ object PanelSync {
             val client = PanelClient(ctx)
             when {
                 s.pendingUrl != null && s.pendingCode != null && !s.enrolled -> {
+                    // garante a permissão do serial antes de cadastrar (o painel reconhece o aparelho pelo serial)
+                    com.pstarx.kiosk.admin.DeviceOwner.grantSelfPermissions(ctx)
                     val r = client.enroll(s.pendingUrl, s.pendingCode)
                     Log.i(TAG, "Cadastro pendente ($reason): $r")
                     // código recusado: não adianta insistir

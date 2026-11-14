@@ -29,8 +29,10 @@ class AdminReceiver : DeviceAdminReceiver() {
         val pending = goAsync()
         thread {
             try {
-                applyProvisioningExtras(context, adminExtras(intent))
+                // permissões antes do cadastro: sem READ_PHONE_STATE o serial não é lido e o painel não reconhece
+                // o aparelho cadastrado antes (visto no C6000: registro duplicado)
                 DeviceOwner.grantSelfPermissions(context)
+                applyProvisioningExtras(context, adminExtras(intent))
                 KioskController.get(context).apply("provisioning")
             } finally {
                 pending.finish()

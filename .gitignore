@@ -21,3 +21,4 @@ server/.env
 deploy/.env
 deploy/data/
 deploy/backups/
+android/build-publish/

@@ -61,11 +61,26 @@ function stripPin(config: Record<string, unknown>): Record<string, unknown> {
 export async function deviceRoutes(app: FastifyInstance, opts: { db: Db; config: Config }) {
   const { db, config } = opts;
 
-  async function authDevice(req: FastifyRequest): Promise<{ id: string; apps_hash: string | null; config_revision: number | null; name: string } | null> {
+  async function authDevice(
+    req: FastifyRequest,
+  ): Promise<{ id: string; apps_hash: string | null; config_revision: number | null; name: string; serial: string | null; enrollment_code_id: string | null } | null> {
     const auth = req.headers.authorization;
     if (!auth?.startsWith("Bearer ")) return null;
-    const r = await db.query("SELECT id, name, apps_hash, config_revision FROM devices WHERE token_hash = $1", [sha256(auth.slice(7))]);
+    const r = await db.query("SELECT id, name, serial, enrollment_code_id, apps_hash, config_revision FROM devices WHERE token_hash = $1", [sha256(auth.slice(7))]);
     return r.rows[0] ?? null;
+  }
+
+  /**
+   * O aparelho informou o serial pela primeira vez (ex.: cadastrado logo após o QR, antes de poder ler o serial).
+   * Se já existe outro registro com esse serial, é o mesmo aparelho cadastrado antes: herda o nome e o duplicado sai.
+   */
+  async function mergeBySerial(deviceId: string, serial: string, currentName: string, enrollmentCodeId: string | null): Promise<string> {
+    const old = (await db.query("SELECT id, name FROM devices WHERE serial = $1 AND id <> $2 ORDER BY enrolled_at DESC LIMIT 1", [serial, deviceId])).rows[0];
+    if (!old) return currentName;
+    await db.query("DELETE FROM devices WHERE serial = $1 AND id <> $2", [serial, deviceId]);
+    await db.query("UPDATE devices SET name = $2 WHERE id = $1", [deviceId, old.name]);
+    if (enrollmentCodeId) await db.query("UPDATE enrollment_codes SET uses = GREATEST(uses - 1, 0) WHERE id = $1", [enrollmentCodeId]);
+    return old.name;
   }
 
   /**
@@ -172,10 +187,12 @@ export async function deviceRoutes(app: FastifyInstance, opts: { db: Db; config:
       set("config_source", b.configSource ?? null);
       sets.push("config_updated_at = now()");
     }
+    let name = device.name;
+    if (hw.serial && !device.serial) name = await mergeBySerial(device.id, hw.serial, device.name, device.enrollment_code_id);
     await db.query(`UPDATE devices SET ${sets.join(", ")} WHERE id = $1`, params);
     return {
       serverTime: new Date().toISOString(),
-      name: device.name,
+      name,
       checkinIntervalSec: config.checkinIntervalSec,
       appsHash,
       configRevision,

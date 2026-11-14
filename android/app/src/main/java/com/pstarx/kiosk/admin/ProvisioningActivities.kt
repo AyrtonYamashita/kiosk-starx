@@ -28,6 +28,7 @@ class PolicyComplianceActivity : Activity() {
         super.onCreate(savedInstanceState)
         val extras = AdminReceiver.adminExtras(intent)
         thread {
+            DeviceOwner.grantSelfPermissions(this)
             AdminReceiver.applyProvisioningExtras(this, extras)
             runOnUiThread {
                 setResult(RESULT_OK)

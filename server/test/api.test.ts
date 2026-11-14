@@ -168,10 +168,32 @@ describe("cadastro e check-in", () => {
     expect((await api("POST", "/v1/device/checkin", {}, deviceToken)).json).toMatchObject({ appsHash: null, configRevision: null });
   });
 
+  it("cadastro sem serial (logo após o QR) é unificado ao registro antigo quando o serial aparece", async () => {
+    const c = (await api("POST", "/v1/admin/enrollments", { name: "Sem serial" })).json;
+    const noSerial = { ...info("x"), hardware: { model: "C6000", serialNumber: null } };
+    const r = await api("POST", "/v1/device/enroll", { code: c.code, info: noSerial }, "");
+    expect(r.status).toBe(200);
+    expect(r.json.deviceId).not.toBe(deviceId);
+    expect((await api("GET", "/v1/admin/devices")).json.devices).toHaveLength(2);
+    // primeiro check-in com serial: herda o nome "Doca 3" e o registro antigo some
+    const ck = await api("POST", "/v1/device/checkin", { info: info("H6000A1") }, r.json.token);
+    expect(ck.json.name).toBe("Doca 3");
+    const list = (await api("GET", "/v1/admin/devices")).json.devices;
+    expect(list).toHaveLength(1);
+    expect(list[0]).toMatchObject({ id: r.json.deviceId, name: "Doca 3", serial: "H6000A1" });
+    const e = (await api("GET", "/v1/admin/enrollments")).json.enrollments.find((x: { id: string }) => x.id === c.id);
+    expect(e.uses).toBe(0);
+    // o token antigo não vale mais; os testes seguintes usam o novo registro
+    expect((await api("POST", "/v1/device/checkin", {}, deviceToken)).status).toBe(401);
+    deviceId = r.json.deviceId;
+    deviceToken = r.json.token;
+  });
+
   it("código esgotado (2 usos) recusa novos cadastros", async () => {
     expect((await api("POST", "/v1/device/enroll", { code, info: info("OUTRO") }, "")).status).toBe(403);
     const e = (await api("GET", "/v1/admin/enrollments")).json.enrollments.find((x: { id: string }) => x.id === codeId);
-    expect(e).toMatchObject({ uses: 2, status: "exhausted", devices: 1 });
+    // devices: 0 porque o aparelho foi recadastrado com outro código no teste anterior
+    expect(e).toMatchObject({ uses: 2, status: "exhausted", devices: 0 });
   });
 
   it("código revogado recusa", async () => {
