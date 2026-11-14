@@ -5,7 +5,9 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import com.pstarx.kiosk.config.ConfigStore
 import com.pstarx.kiosk.kiosk.KioskController
+import com.pstarx.kiosk.panel.PanelSync
 
 class KioskApp : Application() {
     override fun onCreate() {
@@ -24,5 +26,8 @@ class KioskApp : Application() {
                 KioskController.get(context).apply("packages")
             }
         }, filter)
+        // painel: configuração alterada (tela, ADB, importação) vai no próximo check-in, que é antecipado
+        ConfigStore.get(this).addListener { PanelSync.now(this, "config") }
+        PanelSync.schedule(this)
     }
 }

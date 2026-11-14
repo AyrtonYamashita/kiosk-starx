@@ -11,6 +11,8 @@ import android.util.Base64
 import android.util.Log
 import com.pstarx.kiosk.config.ConfigStore
 import com.pstarx.kiosk.kiosk.KioskController
+import com.pstarx.kiosk.panel.PanelStore
+import com.pstarx.kiosk.panel.PanelSync
 import org.json.JSONObject
 import kotlin.concurrent.thread
 
@@ -57,6 +59,14 @@ class AdminReceiver : DeviceAdminReceiver() {
          * Lento se houver PIN (hash): rode fora da thread principal. Só vale uma vez (aparelho recém-provisionado).
          */
         fun applyProvisioningExtras(context: Context, extras: PersistableBundle?) {
+            // painel: endereço + código de cadastro do QR. A rede pode ainda não estar pronta: fica pendente e o
+            // PanelSync tenta a cada 30 s até cadastrar.
+            val serverUrl = extras?.getString("server_url")?.let { PanelStore.normalizeUrl(it) }
+            val code = extras?.getString("enrollment_code")
+            if (serverUrl != null && !code.isNullOrBlank() && !PanelStore.get(context).state.enrolled) {
+                PanelStore.get(context).setPending(serverUrl, code)
+                PanelSync.now(context, "provisioning")
+            }
             val raw = extras?.getString("config")
                 ?: extras?.getString("config_b64")?.let { String(Base64.decode(it, Base64.DEFAULT), Charsets.UTF_8) }
                 ?: return

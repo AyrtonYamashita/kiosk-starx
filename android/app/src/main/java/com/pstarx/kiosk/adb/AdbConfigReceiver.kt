@@ -12,6 +12,9 @@ import com.pstarx.kiosk.config.ConfigStore
 import com.pstarx.kiosk.config.KioskConfig
 import com.pstarx.kiosk.device.DeviceInfo
 import com.pstarx.kiosk.kiosk.KioskController
+import com.pstarx.kiosk.panel.PanelClient
+import com.pstarx.kiosk.panel.PanelStore
+import com.pstarx.kiosk.panel.PanelSync
 import com.pstarx.kiosk.security.Pin
 import com.pstarx.kiosk.security.PinGate
 import org.json.JSONArray
@@ -63,7 +66,23 @@ class AdbConfigReceiver : BroadcastReceiver() {
         }
 
         if (extras.getBoolean("dump", false)) {
-            return ok().put("revision", store.meta.revision).put("config", KioskConfig.redacted(store.config.toJson()))
+            return ok().put("revision", store.meta.revision).put("config", KioskConfig.redacted(store.config.toJson())).put("panel", panelStatus(ctx))
+        }
+        // painel: cadastrar com o código (aparelho que já tem o app)
+        val enrollUrl = extras.getString("enroll_url")
+        val enrollCode = extras.getString("enroll_code")
+        if (enrollUrl != null || enrollCode != null) {
+            if (enrollUrl.isNullOrBlank() || enrollCode.isNullOrBlank()) return error("passe --es enroll_url <endereço> e --es enroll_code <código>")
+            return when (val r = PanelClient(ctx).enroll(enrollUrl, enrollCode)) {
+                is PanelClient.Result.Ok -> ok().put("message", r.message).put("panel", panelStatus(ctx))
+                is PanelClient.Result.Failed -> error(r.message)
+            }.also { PanelSync.schedule(ctx) }
+        }
+        if (extras.getBoolean("checkin", false)) {
+            return when (val r = PanelClient(ctx).checkin()) {
+                is PanelClient.Result.Ok -> ok().put("panel", panelStatus(ctx))
+                is PanelClient.Result.Failed -> error(r.message)
+            }
         }
         if (extras.getBoolean("info", false)) {
             return ok().put("info", DeviceInfo(ctx).collect(includeApps = extras.getBoolean("apps", false)))
@@ -74,7 +93,7 @@ class AdbConfigReceiver : BroadcastReceiver() {
         val patch = when {
             raw != null -> runCatching { JSONObject(raw) }.getOrElse { return error("config não é um JSON válido: ${it.message}") }
             !hasPin -> JSONObject() // só definir o PIN
-            else -> return error("nada a fazer: passe --es config '<json>', --ez dump true ou --ez info true")
+            else -> return error("nada a fazer: passe --es config '<json>', --ez dump true, --ez info true, --ez checkin true ou --es enroll_url/--es enroll_code")
         }
         // aparelho sem PIN: o PIN do comando vira o PIN (a não ser que a configuração traga outro)
         if (!hasPin) {
@@ -85,6 +104,18 @@ class AdbConfigReceiver : BroadcastReceiver() {
         if (!result.ok) return error(result.error ?: "configuração recusada")
         Handler(Looper.getMainLooper()).post { KioskController.get(ctx).apply("config") }
         return ok().put("revision", store.meta.revision).put("warnings", JSONArray(result.warnings))
+    }
+
+    private fun panelStatus(ctx: Context): JSONObject {
+        val s = PanelStore.get(ctx).state
+        return JSONObject()
+            .put("serverUrl", s.serverUrl ?: JSONObject.NULL)
+            .put("enrolled", s.enrolled)
+            .put("name", s.name ?: JSONObject.NULL)
+            .put("lastOkAt", if (s.lastOkAt > 0) java.time.Instant.ofEpochMilli(s.lastOkAt).toString() else JSONObject.NULL)
+            .put("lastError", s.lastError ?: JSONObject.NULL)
+            .put("removed", s.removed)
+            .put("pending", s.pendingCode != null)
     }
 
     private fun ok() = JSONObject().put("ok", true)

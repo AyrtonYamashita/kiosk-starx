@@ -14,3 +14,10 @@ android/.kotlin/
 .env
 node_modules/
 .DS_Store
+
+# servidor
+server/data/
+server/.env
+deploy/.env
+deploy/data/
+deploy/backups/

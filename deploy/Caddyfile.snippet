@@ -1,0 +1,5 @@
+# Acrescente ao Caddyfile que já existe na VPS (troque o domínio) e recarregue o Caddy.
+kiosk-api.suaempresa.com.br {
+	encode gzip
+	reverse_proxy 127.0.0.1:3100
+}

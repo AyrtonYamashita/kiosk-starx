@@ -1,0 +1,14 @@
+# Postgres de desenvolvimento/testes: 127.0.0.1:5434 (5432/5433 já estão ocupadas nesta máquina)
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: kiosk
+      POSTGRES_PASSWORD: kiosk
+      POSTGRES_DB: kiosk
+    ports:
+      - "127.0.0.1:${DEV_POSTGRES_PORT:-5434}:5432"
+    volumes:
+      - pgdata-dev:/var/lib/postgresql/data
+volumes:
+  pgdata-dev:

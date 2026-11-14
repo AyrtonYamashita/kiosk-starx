@@ -1,0 +1,59 @@
+# StarX Kiosk na VPS: API + Postgres + backup diário.
+# O Caddy que já existe na VPS faz o HTTPS e encaminha para a API (veja Caddyfile.snippet).
+# A API só escuta em 127.0.0.1 (Caddy no host). Se o Caddy roda em Docker, veja "Caddy em Docker" no README.
+services:
+  api:
+    build: ../server
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://kiosk:${POSTGRES_PASSWORD}@postgres:5432/kiosk
+      APK_DIR: /data/apks
+      PORT: "3100"
+      TRUST_PROXY: "true"
+    volumes:
+      - ./data/apks:/data/apks
+    ports:
+      - "127.0.0.1:${API_PORT:-3100}:3100"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: kiosk
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: kiosk
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kiosk"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # pg_dump diário em ./backups (mantém os últimos 14)
+  backup:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ./backups:/backups
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        while true; do
+          f=/backups/kiosk-$$(date +%Y%m%d-%H%M).sql.gz
+          if pg_dump -h postgres -U kiosk kiosk | gzip > $$f.tmp; then mv $$f.tmp $$f; echo "backup $$f"; else rm -f $$f.tmp; echo "backup falhou"; fi
+          ls -1t /backups/kiosk-*.sql.gz 2>/dev/null | tail -n +15 | xargs -r rm -f
+          sleep 86400
+        done
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:

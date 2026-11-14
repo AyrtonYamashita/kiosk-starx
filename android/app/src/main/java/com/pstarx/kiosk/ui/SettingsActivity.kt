@@ -30,6 +30,9 @@ import com.pstarx.kiosk.config.KioskConfig
 import com.pstarx.kiosk.device.DeviceInfo
 import com.pstarx.kiosk.kiosk.CornerOverlay
 import com.pstarx.kiosk.kiosk.KioskController
+import com.pstarx.kiosk.panel.PanelClient
+import com.pstarx.kiosk.panel.PanelStore
+import com.pstarx.kiosk.panel.PanelSync
 import com.pstarx.kiosk.security.Pin
 import org.json.JSONObject
 import kotlin.concurrent.thread
@@ -323,6 +326,8 @@ class SettingsActivity : Activity() {
             "Configuração: rev ${meta.revision}, ${meta.updatedAt ?: "nunca salva"}${meta.source?.let { ", origem $it" } ?: ""}", Color.rgb(20, 20, 30)))
         add(Ui.row(this, "Informações do aparelho", "Serial, IMEI, bateria, rede, armazenamento") { deviceInfo() })
 
+        panelSection()
+
         add(Ui.section(this, "Gesto sobre outros apps"))
         val overlay = CornerOverlay.canShow(this)
         add(Ui.row(this, "Permissão \"Sobrepor a outros apps\"", if (overlay) "Concedida" else "Não concedida: toque para abrir a tela do Android") {
@@ -356,6 +361,90 @@ class SettingsActivity : Activity() {
                 if (err == null) { toast("Device Owner removido"); finish() } else toast("Falhou: $err")
             }
         })
+    }
+
+    // ---------------------------------------------------------------- painel
+
+    private fun panelSection() {
+        val s = PanelStore.get(this).state
+        add(Ui.section(this, "Painel"))
+        val status = when {
+            s.enrolled -> buildString {
+                append("Conectado como \"${s.name ?: "?"}\"\n${s.serverUrl}\n")
+                append(if (s.lastOkAt > 0) "Último contato: ${ago(s.lastOkAt)}" else "Ainda sem contato")
+                if (s.lastError != null && s.lastErrorAt > s.lastOkAt) append("\nÚltima falha (${ago(s.lastErrorAt)}): ${s.lastError}")
+            }
+            s.pendingCode != null -> "Cadastro pendente em ${s.pendingUrl} (tentando a cada 30 s)" + (s.lastError?.let { "\n$it" } ?: "")
+            s.removed -> "⚠ Este aparelho foi removido do painel. Cadastre de novo para voltar a aparecer."
+            else -> "Não conectado a um painel."
+        }
+        add(Ui.note(this, status, if (s.removed) Ui.DANGER else Color.rgb(20, 20, 30)))
+        add(Ui.row(this, if (s.enrolled) "Cadastrar de novo" else "Conectar ao painel", "Endereço do painel e código de cadastro") { enrollDialog(s.serverUrl ?: s.pendingUrl) })
+        if (s.enrolled) {
+            add(Ui.row(this, "Enviar dados agora", null) {
+                thread {
+                    val r = PanelClient(this).checkin()
+                    runOnUiThread {
+                        toast(if (r is PanelClient.Result.Ok) "Enviado" else (r as PanelClient.Result.Failed).message)
+                        render()
+                    }
+                }
+            })
+            add(Ui.row(this, "Desconectar do painel", "O aparelho para de enviar dados (continua aparecendo no painel como offline)") {
+                confirm("Desconectar do painel?", "Desconectar") {
+                    PanelStore.get(this).clear()
+                    PanelSync.schedule(this)
+                    render()
+                }
+            })
+        }
+    }
+
+    private fun enrollDialog(currentUrl: String?) {
+        val ctx = this
+        val url = EditText(ctx).apply { hint = "https://kiosk-api.empresa.com.br"; setText(currentUrl.orEmpty()); inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI }
+        val code = EditText(ctx).apply { hint = "Código (10 letras/números)"; inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS }
+        val box = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(Ui.dp(ctx, 20), Ui.dp(ctx, 8), Ui.dp(ctx, 20), 0)
+            addView(url)
+            addView(code)
+            addView(Ui.note(ctx, "O código fica no painel, em Cadastro."))
+        }
+        val dialog = AlertDialog.Builder(ctx).setTitle("Conectar ao painel").setView(box)
+            .setPositiveButton("Conectar", null).setNegativeButton("Cancelar", null).create()
+        dialog.setOnShowListener {
+            val ok = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+            ok.setOnClickListener {
+                if (PanelStore.normalizeUrl(url.text.toString()) == null) { url.error = "Endereço inválido"; return@setOnClickListener }
+                if (code.text.isBlank()) { code.error = "Informe o código"; return@setOnClickListener }
+                ok.isEnabled = false
+                ok.text = "Conectando…"
+                thread {
+                    val r = PanelClient(ctx).enroll(url.text.toString(), code.text.toString())
+                    PanelSync.schedule(ctx)
+                    runOnUiThread {
+                        ok.isEnabled = true
+                        ok.text = "Conectar"
+                        when (r) {
+                            is PanelClient.Result.Ok -> { dialog.dismiss(); toast("Conectado: ${r.message}"); render() }
+                            is PanelClient.Result.Failed -> code.error = r.message
+                        }
+                    }
+                }
+            }
+        }
+        dialog.show()
+    }
+
+    private fun ago(ms: Long): String {
+        val s = (System.currentTimeMillis() - ms) / 1000
+        return when {
+            s < 60 -> "agora"
+            s < 3600 -> "há ${s / 60} min"
+            s < 172_800 -> "há ${s / 3600} h"
+            else -> "há ${s / 86_400} d"
+        }
     }
 
     private fun deviceInfo() {

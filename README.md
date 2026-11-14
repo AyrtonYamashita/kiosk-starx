@@ -9,6 +9,9 @@ depois, o painel mexem no mesmo documento. Veja [docs/configuracao.md](docs/conf
 
 ```
 android/   app Kotlin com.pstarx.kiosk (sem AndroidX e sem dependências externas)
+server/    API (Node + Fastify + Postgres): cadastro, check-in, painel, APK do QR → VPS
+web/       painel (Next.js) → Vercel
+deploy/    docker compose da VPS, bloco do Caddy, guia de deploy
 docs/      guias
 ```
 
@@ -17,7 +20,7 @@ docs/      guias
 | Fase | Conteúdo | Estado |
 |---|---|---|
 | 1 | App kiosk local: Device Owner, app único / grade / site, configurações no aparelho (gesto + PIN), JSON com import/export, ADB, boot | ✅ (validada no C6000) |
-| 2 | VPS (Docker Compose + Caddy/HTTPS + Postgres), painel (Next.js), cadastro por QR, check-in, inventário | |
+| 2 | API na VPS (Docker + Postgres, atrás do Caddy existente), painel na Vercel, cadastro por QR/ADB/tela, check-in, inventário | ✅ local; falta publicar e validar o QR |
 | 3 | Configuração remota: editor no painel, perfis por grupo, sincronização | |
 | 4 | Comandos (bloquear, reiniciar, mensagem, captura de tela) e apps (instalar/remover, auto-update) | |
 | 5 | Agenda de tela, protetor de tela, alertas, backup | |
