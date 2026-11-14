@@ -41,3 +41,12 @@ export const enrollmentStatus: Record<"active" | "expired" | "exhausted" | "revo
   exhausted: ["off", "esgotado"],
   revoked: ["danger", "revogado"],
 };
+
+/** Situação da configuração do painel no aparelho: [classe do badge, rótulo, explicação]. */
+export const configStatusLabel: Record<"none" | "applied" | "modified" | "pending" | "error", [string, string, string]> = {
+  none: ["off", "local", "sem perfil: o aparelho usa a configuração feita nele"],
+  applied: ["ok", "aplicada", "o aparelho está com a configuração do painel"],
+  modified: ["warn", "alterada no aparelho", "aplicada, mas alterada depois no próprio aparelho; reaplique para desfazer"],
+  pending: ["warn", "pendente", "o aparelho recebe no próximo contato"],
+  error: ["danger", "erro", "o aparelho recusou a configuração"],
+};

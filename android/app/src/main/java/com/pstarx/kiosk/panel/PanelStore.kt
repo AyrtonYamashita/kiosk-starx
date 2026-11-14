@@ -27,6 +27,10 @@ class PanelStore private constructor(context: Context) {
         /** Cadastro pendente (QR/ADB sem rede no momento): tentado a cada ciclo até dar certo. */
         val pendingUrl: String?,
         val pendingCode: String?,
+        /** Hash da última configuração do painel aplicada aqui. */
+        val appliedHash: String?,
+        /** Resultado da última aplicação, ainda não enviado ao painel. */
+        val pendingApplyResult: org.json.JSONObject?,
     ) {
         val enrolled get() = serverUrl != null && token != null
     }
@@ -46,6 +50,8 @@ class PanelStore private constructor(context: Context) {
             serverConfigRevision = if (prefs.contains("server_config_revision")) prefs.getInt("server_config_revision", 0) else null,
             pendingUrl = prefs.getString("pending_url", null),
             pendingCode = prefs.getString("pending_code", null),
+            appliedHash = prefs.getString("applied_hash", null),
+            pendingApplyResult = prefs.getString("apply_result", null)?.let { runCatching { org.json.JSONObject(it) }.getOrNull() },
         )
 
     fun saveEnrollment(url: String, deviceId: String, token: String, name: String?, intervalSec: Int) {
@@ -55,6 +61,7 @@ class PanelStore private constructor(context: Context) {
             .putBoolean("removed", false)
             .remove("server_apps_hash").remove("server_config_revision")
             .remove("pending_url").remove("pending_code")
+            .remove("applied_hash").remove("apply_result")
             .remove("last_error").remove("last_error_at")
             .commit()
         notifyListeners()
@@ -78,6 +85,20 @@ class PanelStore private constructor(context: Context) {
             remove("last_error")
         }.commit()
         notifyListeners()
+    }
+
+    fun setApplied(hash: String, result: org.json.JSONObject) {
+        prefs.edit().putString("applied_hash", hash).putString("apply_result", result.toString()).commit()
+        notifyListeners()
+    }
+
+    fun setApplyFailed(result: org.json.JSONObject) {
+        prefs.edit().putString("apply_result", result.toString()).commit()
+        notifyListeners()
+    }
+
+    fun clearApplyResult() {
+        prefs.edit().remove("apply_result").commit()
     }
 
     fun checkinFailed(error: String) {

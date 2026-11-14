@@ -131,6 +131,13 @@ class SettingsActivity : Activity() {
                 Ui.DANGER,
             ))
         }
+        if (PanelStore.get(this).state.let { it.enrolled && it.appliedHash != null }) {
+            content.addView(Ui.note(
+                this,
+                "Este aparelho segue a configuração do painel. O que você mudar aqui vale até o painel mudar o perfil ou reaplicar a configuração.",
+                Ui.PRIMARY,
+            ))
+        }
         when (tab) {
             Tab.GENERAL -> general()
             Tab.DISPLAY -> display()

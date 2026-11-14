@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AutoRefresh } from "@/components/AutoRefresh";
-import { api, ApiError, type DeviceDetail } from "@/lib/api";
+import { api, ApiError, type DeviceDetail, type Profile } from "@/lib/api";
 import { ago, bytes, dateTime, kioskModeLabel, networkLabel, uptime } from "@/lib/format";
 import { DeleteDevice, RenameDevice } from "./DeviceForms";
 import { AppsTable } from "./AppsTable";
+import { DeviceConfig } from "./DeviceConfig";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,7 @@ export default async function DevicePage({ params }: { params: Promise<{ id: str
     if (e instanceof ApiError && e.status === 404) notFound();
     throw e;
   }
+  const { profiles } = await api<{ profiles: Profile[] }>("/v1/admin/profiles");
   const hw = d.info?.hardware ?? {};
   const bat = d.info?.battery ?? {};
   const net = d.info?.network ?? {};
@@ -156,6 +158,11 @@ export default async function DevicePage({ params }: { params: Promise<{ id: str
       </div>
 
       <section className="card stack">
+        <h2>Configuração pelo painel</h2>
+        <DeviceConfig device={d} profiles={profiles.map((p) => ({ id: p.id, name: p.name }))} />
+      </section>
+
+      <section className="card stack">
         <h2>Apps instalados ({d.apps.length})</h2>
         <AppsTable apps={d.apps} />
         <span className="muted small">Lista enviada {ago(d.appsUpdatedAt)}.</span>
@@ -165,7 +172,7 @@ export default async function DevicePage({ params }: { params: Promise<{ id: str
         <section className="card stack">
           <details>
             <summary>
-              <strong>Configuração do aparelho (JSON)</strong> <span className="muted small">— só leitura; edição pelo painel na fase 3</span>
+              <strong>Configuração atual no aparelho (JSON)</strong> <span className="muted small">— como o aparelho informou no último contato</span>
             </summary>
             <pre className="json mono" style={{ marginTop: 12 }}>
               {JSON.stringify(d.config, null, 2)}

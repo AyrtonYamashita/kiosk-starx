@@ -3,7 +3,9 @@ import { z } from "zod";
 import type { Config } from "../config.js";
 import { hashPassword, newEnrollmentCode, newToken, sha256, verifyPassword } from "../crypto.js";
 import type { Db } from "../db.js";
+import { redactConfig } from "../kioskConfig.js";
 import { provisioningPayload, readRelease } from "../release.js";
+import { configStatus, profileRoutes } from "./profiles.js";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -19,6 +21,7 @@ const CreateCode = z.object({
   maxUses: z.number().int().min(1).max(100_000).nullable().optional(),
   expiresInDays: z.number().int().min(1).max(3650).nullable().optional(),
   initialConfig: z.record(z.string(), z.unknown()).nullable().optional(),
+  profileId: z.uuid().nullable().optional(),
 });
 const Qr = z.object({
   wifi: z
@@ -74,6 +77,8 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
   app.register(async (priv) => {
     priv.addHook("preHandler", requireAdmin);
 
+    await priv.register(profileRoutes, { db });
+
     priv.post("/v1/admin/logout", async (req) => {
       await db.query("DELETE FROM sessions WHERE id = $1", [req.admin!.sessionId]);
       return { ok: true };
@@ -96,11 +101,12 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
 
     priv.get("/v1/admin/devices", async () => {
       const r = await db.query(
-        `SELECT id, name, serial, manufacturer, model, android_version, app_version, enrolled_at, last_seen_at, last_ip,
-                info->'battery' AS battery, info->'network' AS network, info->'app' AS app, config_revision,
-                config->'kiosk'->>'mode' AS kiosk_mode, (config->'kiosk'->>'enabled')::boolean AS kiosk_enabled,
-                last_seen_at > now() - make_interval(secs => $1) AS online
-         FROM devices ORDER BY name`,
+        `SELECT d.id, d.name, d.serial, d.manufacturer, d.model, d.android_version, d.app_version, d.enrolled_at, d.last_seen_at, d.last_ip,
+                d.info->'battery' AS battery, d.info->'network' AS network, d.info->'app' AS app, d.config_revision, d.config_source,
+                d.config->'kiosk'->>'mode' AS kiosk_mode, (d.config->'kiosk'->>'enabled')::boolean AS kiosk_enabled,
+                d.last_seen_at > now() - make_interval(secs => $1) AS online,
+                d.profile_id, p.name AS profile_name, p.config AS profile_config, d.config_overrides, d.config_nonce, d.applied_hash, d.failed_hash
+         FROM devices d LEFT JOIN profiles p ON p.id = d.profile_id ORDER BY d.name`,
         [onlineWindowSec(config)],
       );
       return {
@@ -123,6 +129,10 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
           kioskMode: d.kiosk_mode,
           kioskEnabled: d.kiosk_enabled,
           configRevision: d.config_revision,
+          profileId: d.profile_id,
+          profileName: d.profile_name,
+          hasOverrides: !!d.config_overrides,
+          configStatus: configStatus(d).status,
         })),
       };
     });
@@ -131,8 +141,10 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
       const { id } = req.params as { id: string };
       if (!z.uuid().safeParse(id).success) return reply.code(404).send({ error: "not_found" });
       const r = await db.query(
-        `SELECT d.*, e.name AS enrollment_name, d.last_seen_at > now() - make_interval(secs => $2) AS online
-         FROM devices d LEFT JOIN enrollment_codes e ON e.id = d.enrollment_code_id WHERE d.id = $1`,
+        `SELECT d.*, e.name AS enrollment_name, d.last_seen_at > now() - make_interval(secs => $2) AS online,
+                p.name AS profile_name, p.config AS profile_config
+         FROM devices d LEFT JOIN enrollment_codes e ON e.id = d.enrollment_code_id LEFT JOIN profiles p ON p.id = d.profile_id
+         WHERE d.id = $1`,
         [id, onlineWindowSec(config)],
       );
       const d = r.rows[0];
@@ -158,6 +170,13 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
         configRevision: d.config_revision,
         configSource: d.config_source,
         configUpdatedAt: d.config_updated_at,
+        profileId: d.profile_id,
+        profileName: d.profile_name,
+        overrides: redactConfig(d.config_overrides),
+        configStatus: configStatus(d).status,
+        applyError: d.apply_error,
+        applyWarnings: d.apply_warnings ?? [],
+        appliedAt: d.applied_at,
       };
     });
 
@@ -183,8 +202,8 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
 
     priv.get("/v1/admin/enrollments", async () => {
       const r = await db.query(
-        `SELECT e.*, (SELECT count(*)::int FROM devices d WHERE d.enrollment_code_id = e.id) AS devices
-         FROM enrollment_codes e ORDER BY e.created_at DESC`,
+        `SELECT e.*, (SELECT count(*)::int FROM devices d WHERE d.enrollment_code_id = e.id) AS devices, p.name AS profile_name
+         FROM enrollment_codes e LEFT JOIN profiles p ON p.id = e.profile_id ORDER BY e.created_at DESC`,
       );
       return {
         release: readRelease(config.apkDir),
@@ -196,10 +215,14 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
       const body = CreateCode.safeParse(req.body);
       if (!body.success) return reply.code(400).send({ error: "invalid_body", details: body.error.issues });
       const b = body.data;
+      if (b.profileId && !(await db.query("SELECT 1 FROM profiles WHERE id = $1", [b.profileId])).rowCount) {
+        return reply.code(400).send({ error: "invalid_profile", message: "perfil não existe" });
+      }
       const expires = b.expiresInDays ? new Date(Date.now() + b.expiresInDays * 86_400_000) : null;
       const r = await db.query(
-        `INSERT INTO enrollment_codes (code, name, max_uses, expires_at, initial_config) VALUES ($1, $2, $3, $4, $5) RETURNING *, 0 AS devices`,
-        [newEnrollmentCode(), b.name, b.maxUses ?? null, expires, b.initialConfig ?? null],
+        `INSERT INTO enrollment_codes (code, name, max_uses, expires_at, initial_config, profile_id) VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING *, 0 AS devices, (SELECT name FROM profiles WHERE id = $6) AS profile_name`,
+        [newEnrollmentCode(), b.name, b.maxUses ?? null, expires, b.initialConfig ?? null, b.profileId ?? null],
       );
       return codeJson(r.rows[0]);
     });
@@ -253,6 +276,8 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
       revokedAt: e.revoked_at,
       createdAt: e.created_at,
       initialConfig: e.initial_config,
+      profileId: e.profile_id,
+      profileName: e.profile_name ?? null,
       status,
       serverUrl: config.publicUrl,
     };

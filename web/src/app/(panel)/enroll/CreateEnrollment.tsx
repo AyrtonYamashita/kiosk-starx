@@ -8,7 +8,7 @@ const EXAMPLE = `{
   "security": { "pin": "1234" }
 }`;
 
-export function CreateEnrollment() {
+export function CreateEnrollment({ profiles }: { profiles: { id: string; name: string }[] }) {
   const [state, action, pending] = useActionState(createEnrollment, undefined);
   return (
     <form action={action} className="stack">
@@ -22,12 +22,23 @@ export function CreateEnrollment() {
           <input name="maxUses" type="number" min={1} />
         </label>
         <label>
+          Perfil dos aparelhos cadastrados
+          <select name="profileId" defaultValue="">
+            <option value="">— Nenhum (configurar depois)</option>
+            {profiles.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
           Validade em dias (vazio = sem validade)
           <input name="expiresInDays" type="number" min={1} defaultValue={30} />
         </label>
       </div>
       <details>
-        <summary className="small">Configuração inicial do kiosk (opcional)</summary>
+        <summary className="small">Configuração inicial no QR (avançado; prefira um perfil)</summary>
         <label style={{ marginTop: 8 }}>
           <span className="muted small">
             Mesmo JSON da tela do aparelho (docs/configuracao.md). Vai no QR: o aparelho já sai do assistente com o kiosk configurado.

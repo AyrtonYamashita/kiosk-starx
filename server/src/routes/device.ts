@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { Config } from "../config.js";
 import { newToken, sha256 } from "../crypto.js";
 import type { Db } from "../db.js";
+import { desiredConfig } from "../kioskConfig.js";
 
 /** Inventário enviado pelo app (DeviceInfo.collect). Só os campos usados na listagem são conferidos. */
 const Info = z
@@ -35,6 +36,12 @@ const Checkin = z.object({
   config: z.record(z.string(), z.unknown()).optional(),
   configRevision: z.number().int().optional(),
   configSource: z.string().max(32).nullable().optional(),
+  /** Hash da última configuração do painel aplicada no aparelho (null = nunca). */
+  panelConfigHash: z.string().max(64).nullable().optional(),
+  /** Resultado da aplicação da configuração do painel (enviado uma vez, no check-in seguinte). */
+  applyResult: z
+    .object({ hash: z.string().max(64), ok: z.boolean(), error: z.string().max(500).nullable().optional(), warnings: z.array(z.string().max(300)).max(50).optional() })
+    .optional(),
 });
 
 function hardwareFields(info: z.infer<typeof Info> | undefined) {
@@ -75,10 +82,13 @@ export async function deviceRoutes(app: FastifyInstance, opts: { db: Db; config:
    * Se já existe outro registro com esse serial, é o mesmo aparelho cadastrado antes: herda o nome e o duplicado sai.
    */
   async function mergeBySerial(deviceId: string, serial: string, currentName: string, enrollmentCodeId: string | null): Promise<string> {
-    const old = (await db.query("SELECT id, name FROM devices WHERE serial = $1 AND id <> $2 ORDER BY enrolled_at DESC LIMIT 1", [serial, deviceId])).rows[0];
+    const old = (await db.query("SELECT id, name, profile_id, config_overrides FROM devices WHERE serial = $1 AND id <> $2 ORDER BY enrolled_at DESC LIMIT 1", [serial, deviceId])).rows[0];
     if (!old) return currentName;
     await db.query("DELETE FROM devices WHERE serial = $1 AND id <> $2", [serial, deviceId]);
-    await db.query("UPDATE devices SET name = $2 WHERE id = $1", [deviceId, old.name]);
+    await db.query(
+      `UPDATE devices SET name = $2, profile_id = COALESCE(profile_id, $3), config_overrides = COALESCE(config_overrides, $4) WHERE id = $1`,
+      [deviceId, old.name, old.profile_id, old.config_overrides],
+    );
     if (enrollmentCodeId) await db.query("UPDATE enrollment_codes SET uses = GREATEST(uses - 1, 0) WHERE id = $1", [enrollmentCodeId]);
     return old.name;
   }
@@ -96,7 +106,7 @@ export async function deviceRoutes(app: FastifyInstance, opts: { db: Db; config:
       await client.query("BEGIN");
       const ec = (
         await client.query(
-          `SELECT id, name FROM enrollment_codes
+          `SELECT id, name, profile_id FROM enrollment_codes
            WHERE code = $1 AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > now())
              AND (max_uses IS NULL OR uses < max_uses)
            FOR UPDATE`,
@@ -119,18 +129,19 @@ export async function deviceRoutes(app: FastifyInstance, opts: { db: Db; config:
           await client.query(
             `UPDATE devices SET token_hash = $2, enrollment_code_id = $3, enrolled_at = now(), last_seen_at = now(), last_ip = $4,
                     manufacturer = $5, model = $6, android_version = $7, app_version = $8, info = $9, info_updated_at = now(),
-                    apps = NULL, apps_hash = NULL, config = NULL, config_revision = NULL
+                    apps = NULL, apps_hash = NULL, config = NULL, config_revision = NULL, applied_hash = NULL,
+                    profile_id = COALESCE($10, profile_id)
              WHERE id = $1 RETURNING id, name`,
-            [existing.id, sha256(token), ec.id, req.ip, hw.manufacturer, hw.model, hw.androidVersion, body.data.appVersion ?? null, body.data.info],
+            [existing.id, sha256(token), ec.id, req.ip, hw.manufacturer, hw.model, hw.androidVersion, body.data.appVersion ?? null, body.data.info, ec.profile_id],
           )
         ).rows[0];
       } else {
         device = (
           await client.query(
             `INSERT INTO devices (name, token_hash, enrollment_code_id, last_seen_at, last_ip, serial, manufacturer, model,
-                                  android_version, app_version, info, info_updated_at)
-             VALUES ($1, $2, $3, now(), $4, $5, $6, $7, $8, $9, $10, now()) RETURNING id, name`,
-            [defaultName, sha256(token), ec.id, req.ip, hw.serial, hw.manufacturer, hw.model, hw.androidVersion, body.data.appVersion ?? null, body.data.info],
+                                  android_version, app_version, info, info_updated_at, profile_id)
+             VALUES ($1, $2, $3, now(), $4, $5, $6, $7, $8, $9, $10, now(), $11) RETURNING id, name`,
+            [defaultName, sha256(token), ec.id, req.ip, hw.serial, hw.manufacturer, hw.model, hw.androidVersion, body.data.appVersion ?? null, body.data.info, ec.profile_id],
           )
         ).rows[0];
       }
@@ -187,10 +198,33 @@ export async function deviceRoutes(app: FastifyInstance, opts: { db: Db; config:
       set("config_source", b.configSource ?? null);
       sets.push("config_updated_at = now()");
     }
+    if (b.applyResult) {
+      if (b.applyResult.ok) set("applied_hash", b.applyResult.hash);
+      set("failed_hash", b.applyResult.ok ? null : b.applyResult.hash);
+      set("apply_error", b.applyResult.ok ? null : (b.applyResult.error ?? "falha ao aplicar"));
+      set("apply_warnings", JSON.stringify(b.applyResult.warnings ?? []));
+      sets.push("applied_at = now()");
+    } else if (b.panelConfigHash !== undefined) {
+      set("applied_hash", b.panelConfigHash);
+    }
     let name = device.name;
     if (hw.serial && !device.serial) name = await mergeBySerial(device.id, hw.serial, device.name, device.enrollment_code_id);
     await db.query(`UPDATE devices SET ${sets.join(", ")} WHERE id = $1`, params);
+
+    // configuração do painel: vai só quando o aparelho ainda não aplicou a versão atual
+    const row = (
+      await db.query(
+        `SELECT p.config AS profile_config, d.config_overrides, d.config_nonce, d.failed_hash, d.applied_hash
+         FROM devices d LEFT JOIN profiles p ON p.id = d.profile_id WHERE d.id = $1`,
+        [device.id],
+      )
+    ).rows[0];
+    const desired = desiredConfig(row.profile_config, row.config_overrides, row.config_nonce);
+    const reported = b.applyResult?.ok ? b.applyResult.hash : (b.panelConfigHash ?? row.applied_hash);
+    // falhou com este mesmo hash: não reenvia em loop (o painel mostra o erro; reaplicar gera hash novo)
+    const sendDesired = desired && desired.hash !== reported && desired.hash !== row.failed_hash;
     return {
+      desired: sendDesired ? { hash: desired.hash, config: desired.config } : null,
       serverTime: new Date().toISOString(),
       name,
       checkinIntervalSec: config.checkinIntervalSec,

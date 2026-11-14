@@ -93,6 +93,7 @@ export async function createEnrollment(_: FormState, form: FormData): Promise<Fo
         maxUses: maxUses ? Number(maxUses) : null,
         expiresInDays: expires ? Number(expires) : null,
         initialConfig,
+        profileId: String(form.get("profileId") ?? "") || null,
       },
     });
   } catch (e) {
@@ -123,6 +124,81 @@ export async function generateQr(_: QrState, form: FormData): Promise<QrState> {
     const payload = JSON.stringify(r.payload);
     const svg = await QRCode.toString(payload, { type: "svg", errorCorrectionLevel: "M", margin: 2 });
     return { svg, payload };
+  } catch (e) {
+    return { error: message(e) };
+  }
+}
+
+// ---------------------------------------------------------------- perfis e configuração (fase 3)
+
+function parseConfigField(form: FormData, field: string): { ok: true; value: unknown } | { ok: false; error: string } {
+  const raw = String(form.get(field) ?? "").trim();
+  if (!raw) return { ok: true, value: null };
+  try {
+    return { ok: true, value: JSON.parse(raw) };
+  } catch {
+    return { ok: false, error: "JSON inválido." };
+  }
+}
+
+export async function saveProfile(_: FormState, form: FormData): Promise<FormState> {
+  const id = String(form.get("id") ?? "");
+  const config = parseConfigField(form, "config");
+  if (!config.ok) return { error: config.error };
+  const body = { name: String(form.get("name") ?? ""), description: String(form.get("description") ?? ""), config: config.value ?? {} };
+  let saved: { id: string };
+  try {
+    saved = id
+      ? await api<{ id: string }>(`/v1/admin/profiles/${id}`, { method: "PUT", body })
+      : await api<{ id: string }>("/v1/admin/profiles", { method: "POST", body });
+  } catch (e) {
+    return { error: message(e) };
+  }
+  revalidatePath("/profiles");
+  revalidatePath(`/profiles/${saved.id}`);
+  if (!id) redirect(`/profiles/${saved.id}?salvo=1`);
+  return { ok: "Perfil salvo. Os aparelhos com este perfil recebem a configuração no próximo contato (até 30 s)." };
+}
+
+export async function deleteProfile(form: FormData) {
+  await api(`/v1/admin/profiles/${String(form.get("id"))}`, { method: "DELETE" });
+  revalidatePath("/profiles");
+  redirect("/profiles");
+}
+
+export async function setDeviceConfig(_: FormState, form: FormData): Promise<FormState> {
+  const id = String(form.get("id"));
+  const overrides = parseConfigField(form, "overrides");
+  if (!overrides.ok) return { error: `Ajustes: ${overrides.error}` };
+  const profileId = String(form.get("profileId") ?? "") || null;
+  try {
+    await api(`/v1/admin/devices/${id}/config`, { method: "PUT", body: { profileId, overrides: overrides.value } });
+  } catch (e) {
+    return { error: message(e) };
+  }
+  revalidatePath(`/devices/${id}`);
+  revalidatePath("/");
+  return { ok: "Salvo. O aparelho recebe no próximo contato (até 30 s)." };
+}
+
+export async function reapplyConfig(form: FormData) {
+  const id = String(form.get("id"));
+  await api(`/v1/admin/devices/${id}/config/reapply`, { method: "POST" });
+  revalidatePath(`/devices/${id}`);
+  revalidatePath("/");
+}
+
+export async function bulkAssignProfile(_: FormState, form: FormData): Promise<FormState> {
+  const deviceIds = form.getAll("deviceId").map(String);
+  if (deviceIds.length === 0) return { error: "Selecione pelo menos um aparelho." };
+  const profileId = String(form.get("profileId") ?? "");
+  try {
+    const r = await api<{ updated: number }>("/v1/admin/devices/bulk/profile", {
+      method: "POST",
+      body: { deviceIds, profileId: profileId === "__none__" ? null : profileId },
+    });
+    revalidatePath("/");
+    return { ok: `${r.updated} aparelho(s) atualizado(s).` };
   } catch (e) {
     return { error: message(e) };
   }

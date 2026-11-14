@@ -1,12 +1,15 @@
 import Link from "next/link";
-import { api, type Enrollment, type Release } from "@/lib/api";
+import { api, type Enrollment, type Profile, type Release } from "@/lib/api";
 import { dateTime, enrollmentStatus as statusBadge } from "@/lib/format";
 import { CreateEnrollment } from "./CreateEnrollment";
 
 export const dynamic = "force-dynamic";
 
 export default async function EnrollPage() {
-  const { enrollments, release } = await api<{ enrollments: Enrollment[]; release: Release | null }>("/v1/admin/enrollments");
+  const [{ enrollments, release }, { profiles }] = await Promise.all([
+    api<{ enrollments: Enrollment[]; release: Release | null }>("/v1/admin/enrollments"),
+    api<{ profiles: Profile[] }>("/v1/admin/profiles"),
+  ]);
   return (
     <div className="stack">
       <h1>Cadastro de aparelhos</h1>
@@ -33,7 +36,7 @@ export default async function EnrollPage() {
 
       <section className="card stack">
         <h2>Novo código</h2>
-        <CreateEnrollment />
+        <CreateEnrollment profiles={profiles.map((p) => ({ id: p.id, name: p.name }))} />
       </section>
 
       <section className="card table-wrap" style={{ padding: 0 }}>
@@ -61,7 +64,8 @@ export default async function EnrollPage() {
                   <Link href={`/enroll/${e.id}`}>
                     <strong>{e.name}</strong>
                   </Link>
-                  {e.initialConfig ? <div className="muted small">com configuração inicial</div> : null}
+                  {e.profileName ? <div className="muted small">perfil {e.profileName}</div> : null}
+                  {e.initialConfig ? <div className="muted small">com configuração inicial no QR</div> : null}
                 </td>
                 <td className="mono">{e.code}</td>
                 <td>

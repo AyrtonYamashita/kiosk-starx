@@ -37,6 +37,8 @@ export default async function EnrollmentPage({ params }: { params: Promise<{ id:
               {e.uses}
               {e.maxUses !== null ? ` de ${e.maxUses}` : " (sem limite)"} · {e.devices} aparelho(s) hoje
             </dd>
+            <dt>Perfil</dt>
+            <dd>{e.profileName ?? "nenhum"}</dd>
             <dt>Validade</dt>
             <dd>{e.expiresAt ? dateTime(e.expiresAt) : "sem validade"}</dd>
             <dt>Criado</dt>

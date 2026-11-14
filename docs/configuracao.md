@@ -6,7 +6,7 @@ Toda a configuração do aparelho é **um documento JSON**. O mesmo documento é
 - exportado e importado em arquivo `.json` (aba **Avançado**);
 - aplicado por ADB (abaixo);
 - aplicado no provisionamento por QR (extras do QR);
-- a partir da fase 3, editado no painel.
+- editado no painel, por **perfil** (vários aparelhos) e com **ajustes por aparelho** (veja "Configuração pelo painel").
 
 Campo ausente = valor padrão. Valor inválido = valor padrão + aviso; nunca derruba a configuração inteira.
 Toda alteração ganha um número de **revisão** e a origem (`local`, `adb`, `provisioning`; depois `painel`).
@@ -118,3 +118,19 @@ motivo em `error`). Os avisos de valores corrigidos vêm em `warnings`.
 No QR de provisionamento, os extras do admin (`android.app.extra.PROVISIONING_ADMIN_EXTRAS_BUNDLE`) podem levar
 `config` (o JSON como texto) ou `config_b64`. O aparelho já sai do provisionamento com o kiosk configurado. Isso só
 vale na primeira configuração do aparelho. O QR completo (com o painel) chega na fase 2.
+
+## Configuração pelo painel
+
+- **Perfil:** configuração completa, aplicada a vários aparelhos. Ao salvar o perfil, cada aparelho recebe a
+  configuração no próximo contato (até 30 s) e a aplica inteira. O que o perfil não define volta ao padrão.
+- **Ajustes do aparelho:** JSON parcial mesclado por cima do perfil. Por exemplo, um site ou um título diferente para
+  um aparelho.
+- **PIN no perfil:** o PIN é digitado no painel e gravado só como hash, no mesmo formato do app. O perfil tem três
+  opções: "não mexer no PIN dos aparelhos" (cada um mantém o seu), "definir/trocar" ou "sem PIN".
+- **Alterações no próprio aparelho** (pela tela ou por ADB) depois do painel são mantidas. O painel mostra
+  "alterada no aparelho", e **Reaplicar** desfaz essas alterações.
+- **Configuração recusada pelo aparelho:** o painel mostra o erro e não reenvia a mesma versão até a configuração
+  mudar ou alguém clicar em Reaplicar.
+- **Aparelho sem perfil e sem ajustes:** o painel não envia nada, e o aparelho fica com a configuração local.
+- **Código de cadastro com perfil:** o aparelho cadastrado com esse código (por QR, ADB ou pela tela) já recebe a
+  configuração no primeiro contato.

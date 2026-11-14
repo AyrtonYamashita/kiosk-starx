@@ -77,7 +77,13 @@ export interface DeviceSummary {
   kioskMode: string | null;
   kioskEnabled: boolean | null;
   configRevision: number | null;
+  profileId: string | null;
+  profileName: string | null;
+  hasOverrides: boolean;
+  configStatus: ConfigStatus;
 }
+
+export type ConfigStatus = "none" | "applied" | "modified" | "pending" | "error";
 
 export interface DeviceDetail {
   id: string;
@@ -100,6 +106,31 @@ export interface DeviceDetail {
   configRevision: number | null;
   configSource: string | null;
   configUpdatedAt: string | null;
+  profileId: string | null;
+  profileName: string | null;
+  overrides: Record<string, unknown> | null;
+  configStatus: ConfigStatus;
+  applyError: string | null;
+  applyWarnings: string[];
+  appliedAt: string | null;
+}
+
+export interface Profile {
+  id: string;
+  name: string;
+  description: string;
+  config: Record<string, any>;
+  devices: number;
+  createdAt: string;
+  updatedAt: string;
+  deviceList?: { id: string; name: string; serial: string | null }[];
+}
+
+export interface CatalogApp {
+  package: string;
+  label: string | null;
+  devices: number;
+  system: boolean | null;
 }
 
 export interface Release {
@@ -122,6 +153,8 @@ export interface Enrollment {
   revokedAt: string | null;
   createdAt: string;
   initialConfig: unknown | null;
+  profileId: string | null;
+  profileName: string | null;
   status: "active" | "expired" | "exhausted" | "revoked";
   serverUrl: string;
 }

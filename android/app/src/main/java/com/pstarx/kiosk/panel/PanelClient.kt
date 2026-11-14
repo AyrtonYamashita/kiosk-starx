@@ -1,11 +1,15 @@
 package com.pstarx.kiosk.panel
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import com.pstarx.kiosk.BuildConfig
 import com.pstarx.kiosk.config.ConfigStore
 import com.pstarx.kiosk.config.KioskConfig
 import com.pstarx.kiosk.device.DeviceInfo
+import com.pstarx.kiosk.kiosk.KioskController
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
 import java.net.HttpURLConnection
@@ -79,6 +83,9 @@ class PanelClient(context: Context) {
                 .put("configRevision", meta.revision)
                 .put("configSource", meta.source ?: JSONObject.NULL)
         }
+        // configuração do painel: o que já está aplicado e o resultado da última aplicação (uma vez)
+        body.put("panelConfigHash", s.appliedHash ?: JSONObject.NULL)
+        s.pendingApplyResult?.let { body.put("applyResult", it) }
         return try {
             val (status, json) = post("$url/v1/device/checkin", body, token)
             when (status) {
@@ -89,6 +96,8 @@ class PanelClient(context: Context) {
                         appsHash = json.optString("appsHash").takeIf { !json.isNull("appsHash") && it.isNotBlank() },
                         configRevision = if (json.isNull("configRevision")) null else json.optInt("configRevision"),
                     )
+                    if (s.pendingApplyResult != null) store.clearApplyResult()
+                    json.optJSONObject("desired")?.let { applyDesired(it) }
                     Result.Ok("ok")
                 }
                 401 -> {
@@ -104,6 +113,34 @@ class PanelClient(context: Context) {
         } catch (e: Exception) {
             store.checkinFailed(e.message ?: e.javaClass.simpleName)
             Result.Failed("sem conexão com o painel: ${e.message}")
+        }
+    }
+
+    /**
+     * Aplica a configuração enviada pelo painel: substitui a configuração inteira (o que não vier volta ao padrão;
+     * o PIN só muda se vier pinHash). O resultado vai no próximo check-in, que é antecipado pela gravação.
+     */
+    private fun applyDesired(desired: JSONObject) {
+        val hash = desired.optString("hash")
+        val config = desired.optJSONObject("config")
+        if (hash.isBlank() || config == null) return
+        val result = JSONObject().put("hash", hash)
+        try {
+            val r = ConfigStore.get(ctx).update(config, source = SOURCE_PANEL, replace = true)
+            if (r.ok) {
+                result.put("ok", true).put("warnings", JSONArray(r.warnings))
+                store.setApplied(hash, result)
+                Log.i(TAG, "Configuração do painel aplicada ($hash). Avisos: ${r.warnings}")
+                Handler(Looper.getMainLooper()).post { KioskController.get(ctx).apply("config") }
+            } else {
+                result.put("ok", false).put("error", r.error ?: "configuração recusada")
+                store.setApplyFailed(result)
+                Log.w(TAG, "Configuração do painel recusada: ${r.error}")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Falha ao aplicar a configuração do painel", e)
+            result.put("ok", false).put("error", e.message ?: e.javaClass.simpleName)
+            store.setApplyFailed(result)
         }
     }
 
@@ -130,6 +167,8 @@ class PanelClient(context: Context) {
 
     companion object {
         private const val TAG = "Panel"
+        /** Origem gravada no ConfigStore quando a configuração vem do painel. */
+        const val SOURCE_PANEL = "painel"
 
         fun sha256(s: String): String =
             MessageDigest.getInstance("SHA-256").digest(s.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
