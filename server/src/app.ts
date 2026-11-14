@@ -14,6 +14,15 @@ export async function buildApp(config: Config, db: Db) {
     bodyLimit: 512 * 1024,
   });
 
+  // Atrás da Cloudflare, o IP real do cliente vem em CF-Connecting-IP (a API só é alcançável pelo Caddy, na rede
+  // interna). Vale para os logs, o rate limit e o "IP público" do aparelho.
+  app.addHook("onRequest", async (req) => {
+    const cf = req.headers["cf-connecting-ip"];
+    if (config.trustProxy && typeof cf === "string" && /^[0-9a-fA-F:.]{3,45}$/.test(cf)) {
+      Object.defineProperty(req, "ip", { value: cf, configurable: true });
+    }
+  });
+
   await app.register(fastifyRateLimit, { global: false });
 
   app.get("/health", async () => {
