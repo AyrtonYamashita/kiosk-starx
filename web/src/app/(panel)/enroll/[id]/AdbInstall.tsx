@@ -86,10 +86,13 @@ export function AdbInstall({ enrollment, release }: { enrollment: Enrollment; re
       // 2. conferir
       current = "check";
       set("check", "run");
-      const owners = await sh("dpm list-owners");
-      const ownerIsUs = owners.includes(PKG);
-      if (!ownerIsUs && /admin|owner/i.test(owners) && !/no owners/i.test(owners)) {
-        throw new Error(`o aparelho já tem outro Device Owner: ${owners}. Remova ou faça o reset de fábrica.`);
+      // `dpm list-owners` não existe no Android 10 (responde com a ajuda do comando); o dumpsys funciona em todas as
+      // versões: "Device Owner:" seguido de "admin=ComponentInfo{pacote/classe}" só quando há um dono
+      const policy = await sh("dumpsys device_policy");
+      const owner = /Device Owner:[\s\S]*?admin=ComponentInfo\{([^/}]+)\//.exec(policy)?.[1] ?? null;
+      const ownerIsUs = owner === PKG;
+      if (owner && !ownerIsUs) {
+        throw new Error(`o aparelho já tem outro Device Owner: ${owner}. Ele precisa ser removido (ou o aparelho resetado) antes.`);
       }
       const accounts = await sh("dumpsys account | grep -c 'Account {'");
       const hasAccounts = Number(accounts) > 0;
