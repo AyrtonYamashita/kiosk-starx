@@ -17,6 +17,7 @@ const STEPS: { key: string; label: string }[] = [
   { key: "install", label: "Instalar o app" },
   { key: "owner", label: "Tornar o app Device Owner" },
   { key: "overlay", label: "Liberar o gesto no canto (sobrepor a outros apps)" },
+  { key: "verifier", label: "Desligar a verificação do Play Protect (atualização automática)" },
   { key: "enroll", label: "Definir o PIN, aplicar a configuração inicial e cadastrar no painel" },
 ];
 
@@ -38,6 +39,7 @@ async function sha256Hex(data: Uint8Array) {
  */
 export function AdbInstall({ enrollment, release }: { enrollment: Enrollment; release: Release }) {
   const [pin, setPin] = useState("");
+  const [disableVerifier, setDisableVerifier] = useState(true);
   const [steps, setSteps] = useState<Step[]>(STEPS.map((s) => ({ ...s, state: "wait" })));
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
@@ -150,7 +152,24 @@ export function AdbInstall({ enrollment, release }: { enrollment: Enrollment; re
       await sh(`appops set ${PKG} SYSTEM_ALERT_WINDOW allow`);
       set("overlay", "ok");
 
-      // 7. PIN, configuração inicial e cadastro (o receptor de ADB do app)
+      // 7. Play Protect: sem isso, aparelhos com serviços do Google recusam a atualização automática do app
+      //    (instalação sem ninguém na tela para tocar em "Instalar mesmo assim")
+      current = "verifier";
+      const hasPlay = (await sh("pm list packages com.android.vending")).includes("package:com.android.vending");
+      if (!hasPlay) {
+        set("verifier", "skip", "sem serviços do Google (Play Protect não existe neste aparelho)");
+      } else if (!disableVerifier) {
+        set("verifier", "skip", "mantido ligado: atualizações do app terão de ser feitas pelo cabo");
+      } else {
+        set("verifier", "run");
+        await sh("settings put global package_verifier_enable 0");
+        await sh("settings put global verifier_verify_adb_installs 0");
+        const now = await sh("settings get global package_verifier_enable");
+        if (now !== "0") throw new Error(`o Android não aceitou desligar a verificação (package_verifier_enable=${now})`);
+        set("verifier", "ok", "verificação desligada: o app se atualiza sozinho");
+      }
+
+      // 8. PIN, configuração inicial e cadastro (o receptor de ADB do app)
       current = "enroll";
       set("enroll", "run");
       const receiver = `am broadcast -n ${PKG}/.adb.AdbConfigReceiver -a ${PKG}.CONFIG --es pin ${pin}`;
@@ -202,6 +221,16 @@ export function AdbInstall({ enrollment, release }: { enrollment: Enrollment; re
           {running ? "Instalando…" : "Conectar coletor e instalar"}
         </button>
       </div>
+      <label className="inline" style={{ alignItems: "flex-start" }}>
+        <input type="checkbox" checked={disableVerifier} onChange={(e) => setDisableVerifier(e.target.checked)} style={{ marginTop: 2 }} />
+        <span>
+          Desligar a verificação do Play Protect (só em aparelhos com serviços do Google)
+          <span className="muted small" style={{ display: "block" }}>
+            Sem isso, o Play Protect recusa a atualização automática do app do kiosk (não há ninguém para tocar em &quot;Instalar mesmo assim&quot;). O coletor em kiosk só
+            roda os apps liberados pelo painel.
+          </span>
+        </span>
+      </label>
       <span className="muted small">
         O PIN abre as configurações no coletor (5 toques no canto). Se o aparelho já tem o StarX com PIN, use o mesmo. O código {enrollment.code}
         {enrollment.profileName ? ` (perfil ${enrollment.profileName})` : ""} é usado no cadastro.

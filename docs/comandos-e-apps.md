@@ -71,5 +71,16 @@ pelo terminal (`publishApk` → `deploy/data/apks`, veja [deploy/README.md](../d
 contato. A atualização substitui o app sem tirar o Device Owner nem a configuração. O kiosk volta sozinho, e a
 versão nova aparece no painel no check-in seguinte. Para desligar: `AUTO_UPDATE_APP=false` no `.env` da VPS.
 
+**Aparelhos com serviços do Google (Play Protect):** o Play Protect recusa a instalação sem ninguém na tela
+(`INSTALL_FAILED_VERIFICATION_FAILURE`, visto no C6000), então a atualização automática só funciona com a verificação
+desligada. A instalação por USB do Cadastro faz isso (opção marcada por padrão). Num aparelho já instalado, com o cabo:
+
+```
+adb shell settings put global package_verifier_enable 0
+adb shell settings put global verifier_verify_adb_installs 0
+```
+
+A solução definitiva é registrar o app e a chave de assinatura numa conta de desenvolvedor verificada do Google.
+
 A assinatura tem de ser a mesma (keystore de release em `~/.starx-kiosk/signing`). Um build de debug não atualiza um
 aparelho provisionado com o build de release.

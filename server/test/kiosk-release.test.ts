@@ -87,3 +87,11 @@ describe("publicação do app do kiosk pelo painel", () => {
     expect(res.json().message).toMatch(/App do kiosk/);
   });
 });
+
+describe("download do APK do kiosk", () => {
+  it("não deixa a Cloudflare guardar (cache-control: no-store)", async () => {
+    const res = await t.app.inject({ method: "GET", url: "/apks/starx-kiosk-5.apk" });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["cache-control"]).toBe("no-store");
+  });
+});

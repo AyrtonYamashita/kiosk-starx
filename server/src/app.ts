@@ -40,6 +40,9 @@ export async function buildApp(config: Config, db: Db, waker = new Waker()) {
     prefix: "/apks/",
     decorateReply: false,
     allowedPath: (p) => p.endsWith(".apk"),
+    // sem cache na Cloudflare (que guarda .apk por padrão): toda tentativa de download chega ao servidor e aparece
+    // nos registros, e um APK republicado com o mesmo nome nunca é servido velho
+    setHeaders: (res) => res.header("cache-control", "no-store"),
   });
 
   fs.mkdirSync(config.appsDir, { recursive: true });
