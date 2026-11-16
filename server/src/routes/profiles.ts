@@ -1,12 +1,15 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { Db } from "../db.js";
+import { PackageName } from "./apps.js";
 import { desiredConfig, prepareConfig, redactConfig, type StoredConfig } from "../kioskConfig.js";
 
 const ProfileBody = z.object({
   name: z.string().trim().min(1).max(80),
   description: z.string().max(500).optional().default(""),
   config: z.unknown(),
+  /** Apps que o perfil mantém instalados e atualizados (pacotes do repositório). Ausente = não muda. */
+  managedApps: z.array(PackageName).max(100).optional(),
 });
 const DeviceConfigBody = z.object({
   profileId: z.uuid().nullable(),
@@ -60,13 +63,28 @@ export async function profileRoutes(app: FastifyInstance, opts: { db: Db }) {
     return { ...profileJson(p), deviceList: devices };
   });
 
+  /** Pacotes que não estão no repositório (mensagem de erro) ou null se todos existem. */
+  async function missingApps(packages: string[] | undefined): Promise<string | null> {
+    if (!packages?.length) return null;
+    const found = new Set((await db.query("SELECT package_name FROM apps WHERE package_name = ANY($1::text[])", [packages])).rows.map((r) => r.package_name));
+    const missing = packages.filter((p) => !found.has(p));
+    return missing.length ? `apps fora do repositório: ${missing.join(", ")}` : null;
+  }
+
   app.post("/v1/admin/profiles", async (req, reply) => {
     const body = ProfileBody.safeParse(req.body);
     if (!body.success) return reply.code(400).send({ error: "invalid_body", message: "nome obrigatório" });
     const v = prepareConfig(body.data.config, null);
     if (!v.ok) return reply.code(400).send({ error: "invalid_config", message: v.errors.join("; "), errors: v.errors });
+    const missing = await missingApps(body.data.managedApps);
+    if (missing) return reply.code(400).send({ error: "invalid_apps", message: missing });
     try {
-      const r = await db.query("INSERT INTO profiles (name, description, config) VALUES ($1, $2, $3) RETURNING *, 0 AS devices", [body.data.name, body.data.description, v.config]);
+      const r = await db.query("INSERT INTO profiles (name, description, config, managed_apps) VALUES ($1, $2, $3, $4) RETURNING *, 0 AS devices", [
+        body.data.name,
+        body.data.description,
+        v.config,
+        JSON.stringify([...new Set(body.data.managedApps ?? [])]),
+      ]);
       return profileJson(r.rows[0]);
     } catch (e) {
       if ((e as { code?: string }).code === "23505") return reply.code(409).send({ error: "duplicate", message: "já existe um perfil com esse nome" });
@@ -82,11 +100,13 @@ export async function profileRoutes(app: FastifyInstance, opts: { db: Db }) {
     if (!prev) return reply.code(404).send({ error: "not_found" });
     const v = prepareConfig(body.data.config, prev.config);
     if (!v.ok) return reply.code(400).send({ error: "invalid_config", message: v.errors.join("; "), errors: v.errors });
+    const missing = await missingApps(body.data.managedApps);
+    if (missing) return reply.code(400).send({ error: "invalid_apps", message: missing });
     try {
       const r = await db.query(
-        `UPDATE profiles SET name = $2, description = $3, config = $4, updated_at = now() WHERE id = $1
+        `UPDATE profiles SET name = $2, description = $3, config = $4, managed_apps = COALESCE($5, managed_apps), updated_at = now() WHERE id = $1
          RETURNING *, (SELECT count(*)::int FROM devices d WHERE d.profile_id = $1) AS devices`,
-        [id, body.data.name, body.data.description, v.config],
+        [id, body.data.name, body.data.description, v.config, body.data.managedApps ? JSON.stringify([...new Set(body.data.managedApps)]) : null],
       );
       return profileJson(r.rows[0]);
     } catch (e) {
@@ -159,6 +179,7 @@ function profileJson(p: Record<string, any>) {
     name: p.name,
     description: p.description,
     config: redactConfig(p.config),
+    managedApps: (p.managed_apps as string[] | null) ?? [],
     devices: p.devices ?? 0,
     createdAt: p.created_at,
     updatedAt: p.updated_at,

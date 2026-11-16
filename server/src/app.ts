@@ -5,6 +5,8 @@ import fs from "node:fs";
 import type { Config } from "./config.js";
 import type { Db } from "./db.js";
 import { adminRoutes } from "./routes/admin.js";
+import { deviceAppRoutes, uploadRoutes } from "./routes/apps.js";
+import { deviceScreenshotRoutes } from "./routes/commands.js";
 import { deviceRoutes } from "./routes/device.js";
 
 export async function buildApp(config: Config, db: Db) {
@@ -39,7 +41,11 @@ export async function buildApp(config: Config, db: Db) {
     allowedPath: (p) => p.endsWith(".apk"),
   });
 
+  fs.mkdirSync(config.appsDir, { recursive: true });
   await app.register(deviceRoutes, { db, config });
+  await app.register(deviceAppRoutes, { db, config });
+  await app.register(deviceScreenshotRoutes, { db });
+  await app.register(uploadRoutes, { db, config });
   await app.register(adminRoutes, { db, config });
   return app;
 }

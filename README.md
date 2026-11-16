@@ -22,7 +22,7 @@ docs/      guias
 | 1 | App kiosk local: Device Owner, app único / grade / site, configurações no aparelho (gesto + PIN), JSON com import/export, ADB, boot | ✅ (validada no C6000) |
 | 2 | API na VPS (Docker + Postgres, atrás do Caddy existente), painel na Vercel, cadastro por QR/ADB/tela, check-in, inventário | ✅ publicada (api-kiosk.pstarx.com + kiosk.pstarx.com); ✅ QR validado no C6000 |
 | 3 | Configuração pelo painel: perfis, ajustes por aparelho, aplicação em lote, reaplicar, código de cadastro com perfil | ✅ código e testes; falta validar no C6000 |
-| 4 | Comandos (bloquear, reiniciar, mensagem, captura de tela) e apps (instalar/remover, auto-update) | |
+| 4 | Comandos (bloquear, reiniciar, recarregar, mensagem, captura de tela) e apps (repositório, instalar/remover, apps gerenciados pelo perfil, auto-update do app) — [docs/comandos-e-apps.md](docs/comandos-e-apps.md) | 🚧 código e testes; falta validar no aparelho |
 | 5 | Agenda de tela, protetor de tela, alertas, backup | |
 
 ## Build do app

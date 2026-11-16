@@ -1,9 +1,15 @@
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { Config } from "../config.js";
 import { newToken, sha256 } from "../crypto.js";
 import type { Db } from "../db.js";
+import { authDevice } from "../deviceAuth.js";
 import { desiredConfig } from "../kioskConfig.js";
+import { readRelease } from "../release.js";
+import { latestArtifacts, type Artifact } from "./apps.js";
+import { CommandResult, commandsForDevice, recordResults } from "./commands.js";
+
+const KIOSK_PACKAGE = "com.pstarx.kiosk";
 
 /** Inventário enviado pelo app (DeviceInfo.collect). Só os campos usados na listagem são conferidos. */
 const Info = z
@@ -28,8 +34,18 @@ const Enroll = z.object({
   info: Info,
 });
 
+const ManagedStatus = z.record(
+  z.string().max(255),
+  z.object({ versionCode: z.number().int().nullable().optional(), error: z.string().max(500).nullable().optional(), at: z.string().max(40).optional() }),
+);
+
 const Checkin = z.object({
   appVersion: z.string().max(32).optional(),
+  appVersionCode: z.number().int().optional(),
+  /** Resultados de comandos (enviados até o painel confirmar com `ackResults`). */
+  commandResults: z.array(CommandResult).max(100).optional(),
+  /** Situação dos apps gerenciados (instalados/atualizados pelo painel), quando mudou. */
+  managedStatus: ManagedStatus.optional(),
   info: Info.optional(),
   apps: z.array(App).max(2000).optional(),
   appsHash: z.string().max(128).optional(),
@@ -68,13 +84,24 @@ function stripPin(config: Record<string, unknown>): Record<string, unknown> {
 export async function deviceRoutes(app: FastifyInstance, opts: { db: Db; config: Config }) {
   const { db, config } = opts;
 
-  async function authDevice(
-    req: FastifyRequest,
-  ): Promise<{ id: string; apps_hash: string | null; config_revision: number | null; name: string; serial: string | null; enrollment_code_id: string | null } | null> {
-    const auth = req.headers.authorization;
-    if (!auth?.startsWith("Bearer ")) return null;
-    const r = await db.query("SELECT id, name, serial, enrollment_code_id, apps_hash, config_revision FROM devices WHERE token_hash = $1", [sha256(auth.slice(7))]);
-    return r.rows[0] ?? null;
+  /**
+   * Apps que o aparelho deve ter (versão mais nova do repositório) e o próprio app do kiosk, se houver versão
+   * publicada mais nova. O aparelho instala o que estiver faltando ou mais velho; nunca rebaixa.
+   */
+  async function managedArtifacts(packages: string[], appVersionCode: number | null): Promise<Artifact[]> {
+    const list = await latestArtifacts(db, packages.filter((p) => p !== KIOSK_PACKAGE));
+    const release = config.autoUpdateApp ? readRelease(config.apkDir) : null;
+    if (release && appVersionCode !== null && release.versionCode > appVersionCode) {
+      list.push({
+        packageName: release.packageName,
+        versionCode: release.versionCode,
+        versionName: release.versionName,
+        url: `/apks/${release.file}`,
+        sha256: release.sha256,
+        sizeBytes: release.sizeBytes,
+      });
+    }
+    return list;
   }
 
   /**
@@ -162,7 +189,7 @@ export async function deviceRoutes(app: FastifyInstance, opts: { db: Db; config:
    * (a resposta diz o que o servidor tem: appsHash e configRevision).
    */
   app.post("/v1/device/checkin", { bodyLimit: 2 * 1024 * 1024 }, async (req, reply) => {
-    const device = await authDevice(req);
+    const device = await authDevice(db, req);
     if (!device) return reply.code(401).send({ error: "unauthorized", message: "aparelho não cadastrado (ou removido do painel)" });
     const body = Checkin.safeParse(req.body);
     if (!body.success) return reply.code(400).send({ error: "invalid_body", details: body.error.issues });
@@ -175,6 +202,8 @@ export async function deviceRoutes(app: FastifyInstance, opts: { db: Db; config:
       sets.push(`${sql} = $${params.length}`);
     };
     if (b.appVersion) set("app_version", b.appVersion);
+    if (b.appVersionCode !== undefined) set("app_version_code", b.appVersionCode);
+    if (b.managedStatus) set("managed_status", JSON.stringify(b.managedStatus));
     if (b.info) {
       set("info", b.info);
       sets.push("info_updated_at = now()");
@@ -210,11 +239,12 @@ export async function deviceRoutes(app: FastifyInstance, opts: { db: Db; config:
     let name = device.name;
     if (hw.serial && !device.serial) name = await mergeBySerial(device.id, hw.serial, device.name, device.enrollment_code_id);
     await db.query(`UPDATE devices SET ${sets.join(", ")} WHERE id = $1`, params);
+    if (b.commandResults?.length) await recordResults(db, device.id, b.commandResults);
 
     // configuração do painel: vai só quando o aparelho ainda não aplicou a versão atual
     const row = (
       await db.query(
-        `SELECT p.config AS profile_config, d.config_overrides, d.config_nonce, d.failed_hash, d.applied_hash
+        `SELECT p.config AS profile_config, p.managed_apps, d.config_overrides, d.config_nonce, d.failed_hash, d.applied_hash, d.app_version_code
          FROM devices d LEFT JOIN profiles p ON p.id = d.profile_id WHERE d.id = $1`,
         [device.id],
       )
@@ -225,6 +255,9 @@ export async function deviceRoutes(app: FastifyInstance, opts: { db: Db; config:
     const sendDesired = desired && desired.hash !== reported && desired.hash !== row.failed_hash;
     return {
       desired: sendDesired ? { hash: desired.hash, config: desired.config } : null,
+      commands: await commandsForDevice(db, device.id),
+      ackResults: (b.commandResults ?? []).map((r) => r.id),
+      apps: await managedArtifacts((row.managed_apps as string[] | null) ?? [], row.app_version_code),
       serverTime: new Date().toISOString(),
       name,
       checkinIntervalSec: config.checkinIntervalSec,

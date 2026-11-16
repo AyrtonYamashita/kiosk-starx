@@ -91,9 +91,19 @@ class KioskActivity : Activity() {
         ensureLockTask()
         refresh()
         if (config.kiosk.mode == KioskConfig.Mode.APP) {
-            // voltando da administração: reabre logo, sem contar como queda
-            val fromAdmin = SystemClock.uptimeMillis() - kiosk.adminClosedAtUptime < 3_000
-            scheduleLaunch(returning = launchedApp && !fromAdmin)
+            if (kiosk.restartAppPending) {
+                // "recarregar" do painel: o app já foi para segundo plano; encerra e abre de novo (sem contar como queda)
+                kiosk.restartAppPending = false
+                config.kiosk.app?.let { pkg ->
+                    handler.postDelayed({ runCatching { getSystemService(android.app.ActivityManager::class.java).killBackgroundProcesses(pkg) } }, 300)
+                }
+                launchedApp = false
+                scheduleLaunch(returning = false, forceDelayMs = 1_500)
+            } else {
+                // voltando da administração: reabre logo, sem contar como queda
+                val fromAdmin = SystemClock.uptimeMillis() - kiosk.adminClosedAtUptime < 3_000
+                scheduleLaunch(returning = launchedApp && !fromAdmin)
+            }
         }
         launchedApp = false
     }
@@ -141,7 +151,7 @@ class KioskActivity : Activity() {
         config = kiosk.config
         applyWindow()
         // redesenha só se algo visível mudou (evita recarregar o site a cada aviso)
-        val key = listOf(config.kiosk, config.appearance, config.security.exitCorner, config.security.exitTaps, appsVersion).toString()
+        val key = listOf(config.kiosk, config.appearance, config.security.exitCorner, config.security.exitTaps, appsVersion, kiosk.reloadNonce).toString()
         if (key == renderedKey) return
         renderedKey = key
         root.removeAllViews()
@@ -334,11 +344,11 @@ class KioskActivity : Activity() {
      * Abre o app. Na primeira vez, quase direto; quando o app fechou (voltou para cá), espera alguns segundos
      * (dá tempo de chegar no canto) e conta a reabertura. Caiu 5 vezes em 2 min: espera 30 s.
      */
-    private fun scheduleLaunch(returning: Boolean) {
+    private fun scheduleLaunch(returning: Boolean, forceDelayMs: Long? = null) {
         cancelCountdown()
         val pkg = config.kiosk.app ?: return
         val launch = packageManager.getLaunchIntentForPackage(pkg) ?: return
-        var delayMs = if (returning) config.kiosk.relaunchDelaySec * 1000L else 500L
+        var delayMs = forceDelayMs ?: if (returning) config.kiosk.relaunchDelaySec * 1000L else 500L
         if (returning) {
             val now = SystemClock.elapsedRealtime()
             restarts.addLast(now)

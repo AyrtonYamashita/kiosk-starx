@@ -12,6 +12,8 @@ import com.pstarx.kiosk.panel.PanelSync
 class KioskApp : Application() {
     override fun onCreate() {
         super.onCreate()
+        // captura de tela remota: precisa saber qual tela deste app está na frente
+        registerActivityLifecycleCallbacks(com.pstarx.kiosk.commands.ScreenCapture.tracker)
         // apps instalados/removidos: o app do kiosk pode ter chegado (ou sumido); a grade precisa redesenhar.
         // Broadcast implícito: só por registro dinâmico (o processo vive enquanto a tela do kiosk for o launcher).
         val filter = IntentFilter().apply {

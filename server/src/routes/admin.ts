@@ -5,6 +5,8 @@ import { hashPassword, newEnrollmentCode, newToken, sha256, verifyPassword } fro
 import type { Db } from "../db.js";
 import { redactConfig } from "../kioskConfig.js";
 import { provisioningPayload, readRelease } from "../release.js";
+import { appRepoRoutes } from "./apps.js";
+import { commandRoutes } from "./commands.js";
 import { configStatus, profileRoutes } from "./profiles.js";
 
 declare module "fastify" {
@@ -78,6 +80,8 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
     priv.addHook("preHandler", requireAdmin);
 
     await priv.register(profileRoutes, { db });
+    await priv.register(commandRoutes, { db });
+    await priv.register(appRepoRoutes, { db, config });
 
     priv.post("/v1/admin/logout", async (req) => {
       await db.query("DELETE FROM sessions WHERE id = $1", [req.admin!.sessionId]);
@@ -142,7 +146,7 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
       if (!z.uuid().safeParse(id).success) return reply.code(404).send({ error: "not_found" });
       const r = await db.query(
         `SELECT d.*, e.name AS enrollment_name, d.last_seen_at > now() - make_interval(secs => $2) AS online,
-                p.name AS profile_name, p.config AS profile_config
+                p.name AS profile_name, p.config AS profile_config, p.managed_apps
          FROM devices d LEFT JOIN enrollment_codes e ON e.id = d.enrollment_code_id LEFT JOIN profiles p ON p.id = d.profile_id
          WHERE d.id = $1`,
         [id, onlineWindowSec(config)],
@@ -177,6 +181,10 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
         applyError: d.apply_error,
         applyWarnings: d.apply_warnings ?? [],
         appliedAt: d.applied_at,
+        appVersionCode: d.app_version_code,
+        managedApps: (d.managed_apps as string[] | null) ?? [],
+        managedStatus: d.managed_status ?? {},
+        lastScreenshotAt: d.last_screenshot_at,
       };
     });
 

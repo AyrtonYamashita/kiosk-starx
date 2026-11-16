@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 const LINKS = [
   { href: "/", label: "Aparelhos", match: (p: string) => p === "/" || p.startsWith("/devices") },
   { href: "/profiles", label: "Perfis", match: (p: string) => p.startsWith("/profiles") },
+  { href: "/apps", label: "Apps", match: (p: string) => p.startsWith("/apps") },
   { href: "/enroll", label: "Cadastro", match: (p: string) => p.startsWith("/enroll") },
   { href: "/account", label: "Conta", match: (p: string) => p.startsWith("/account") },
 ];

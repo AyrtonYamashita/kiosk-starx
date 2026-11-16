@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { api, ApiError, type CatalogApp, type Profile } from "@/lib/api";
+import { api, ApiError, type CatalogApp, type Profile, type RepoApp } from "@/lib/api";
 import { DeleteProfile } from "./DeleteProfile";
 import { ProfileForm } from "../ProfileForm";
 
@@ -16,14 +16,17 @@ export default async function ProfilePage({ params, searchParams }: { params: Pr
     if (e instanceof ApiError && e.status === 404) notFound();
     throw e;
   }
-  const { apps } = await api<{ apps: CatalogApp[] }>("/v1/admin/apps-catalog");
+  const [{ apps }, { apps: repo }] = await Promise.all([
+    api<{ apps: CatalogApp[] }>("/v1/admin/apps-catalog"),
+    api<{ apps: RepoApp[] }>("/v1/admin/apps"),
+  ]);
   return (
     <div className="stack">
       <Link href="/profiles" className="muted">
         ← Perfis
       </Link>
       <h1>{profile.name}</h1>
-      <ProfileForm profile={profile} catalog={apps} justSaved={!!salvo} />
+      <ProfileForm profile={profile} catalog={apps} repo={repo} justSaved={!!salvo} />
 
       <section className="card stack">
         <h2>Aparelhos com este perfil ({profile.deviceList?.length ?? 0})</h2>

@@ -113,6 +113,54 @@ export interface DeviceDetail {
   applyError: string | null;
   applyWarnings: string[];
   appliedAt: string | null;
+  appVersionCode: number | null;
+  managedApps: string[];
+  managedStatus: Record<string, { versionCode: number | null; error: string | null; at?: string }>;
+  lastScreenshotAt: string | null;
+}
+
+export type CommandType = "reboot" | "lock" | "message" | "screenshot" | "reload" | "install_app" | "uninstall_app";
+
+export interface Command {
+  id: string;
+  type: CommandType;
+  payload: any;
+  status: "pending" | "sent" | "ok" | "failed" | "expired" | "canceled";
+  message: string | null;
+  output: any;
+  createdBy: string | null;
+  createdAt: string;
+  sentAt: string | null;
+  doneAt: string | null;
+  expiresAt: string;
+}
+
+export interface Screenshot {
+  id: string;
+  width: number | null;
+  height: number | null;
+  createdAt: string;
+}
+
+export interface RepoApp {
+  packageName: string;
+  label: string;
+  signingCertSha256: string;
+  createdAt: string;
+  versions: {
+    id: string;
+    versionCode: number;
+    versionName: string | null;
+    minSdk: number | null;
+    sizeBytes: number;
+    sha256: string;
+    uploadedBy: string | null;
+    uploadedAt: string;
+    devices: number;
+  }[];
+  installedDevices: number;
+  upToDateDevices: number;
+  profiles: { id: string; name: string }[];
 }
 
 export interface Profile {
@@ -120,6 +168,7 @@ export interface Profile {
   name: string;
   description: string;
   config: Record<string, any>;
+  managedApps: string[];
   devices: number;
   createdAt: string;
   updatedAt: string;

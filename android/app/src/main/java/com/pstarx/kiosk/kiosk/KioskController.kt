@@ -77,6 +77,21 @@ class KioskController private constructor(context: Context) {
         notifyListeners()
     }
 
+    /** Muda a cada "recarregar" do painel: a tela do kiosk redesenha (site recarrega, grade redesenha). */
+    @Volatile var reloadNonce = 0
+        private set
+    /** Modo app único: a tela do kiosk fecha o app e o abre de novo na próxima vez que voltar à frente. */
+    @Volatile var restartAppPending = false
+
+    /** Comando "recarregar" do painel. Thread principal. */
+    fun reload() {
+        if (!enforced) return
+        reloadNonce++
+        if (config.kiosk.mode == KioskConfig.Mode.APP) restartAppPending = true
+        notifyListeners()
+        ctx.startActivity(homeIntent())
+    }
+
     // ---------------------------------------------------------------- administração
 
     fun beginAdminSession() {

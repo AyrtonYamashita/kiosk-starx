@@ -3,9 +3,9 @@
 import { useActionState } from "react";
 import { ConfigEditor } from "@/components/ConfigEditor";
 import { saveProfile } from "@/lib/actions";
-import type { CatalogApp, Profile } from "@/lib/api";
+import type { CatalogApp, Profile, RepoApp } from "@/lib/api";
 
-export function ProfileForm({ profile, catalog, justSaved }: { profile: Profile | null; catalog: CatalogApp[]; justSaved?: boolean }) {
+export function ProfileForm({ profile, catalog, repo, justSaved }: { profile: Profile | null; catalog: CatalogApp[]; repo: RepoApp[]; justSaved?: boolean }) {
   const [state, action, pending] = useActionState(saveProfile, justSaved ? { ok: "Perfil criado." } : undefined);
   return (
     <form action={action} className="stack">
@@ -22,6 +22,30 @@ export function ProfileForm({ profile, catalog, justSaved }: { profile: Profile 
       </div>
       <section className="card">
         <ConfigEditor key={profile?.updatedAt ?? "novo"} name="config" initial={profile?.config ?? null} catalog={catalog} hasExistingPin={profile?.config?.security?.pinHash === "<definido>"} />
+      </section>
+      <section className="card stack">
+        <h2 style={{ margin: 0 }}>Apps gerenciados</h2>
+        <input type="hidden" name="managedAppsPresent" value="1" />
+        <span className="muted small">
+          Os aparelhos com este perfil instalam estes apps e os mantêm na versão mais nova do repositório, sem pedir nada na tela. Tirar daqui não remove o app dos
+          aparelhos.
+        </span>
+        {repo.length === 0 ? (
+          <span className="muted small">
+            O repositório está vazio: envie APKs no menu <a href="/apps">Apps</a>.
+          </span>
+        ) : (
+          <div className="grid" style={{ gap: 6 }}>
+            {repo.map((a) => (
+              <label key={a.packageName} className="inline">
+                <input type="checkbox" name="managedApp" value={a.packageName} defaultChecked={profile?.managedApps.includes(a.packageName)} />
+                <span>
+                  {a.label} <span className="muted small">{a.versions[0] ? `${a.versions[0].versionName ?? ""} (${a.versions[0].versionCode})` : ""}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+        )}
       </section>
       {state?.error && <div className="alert error">{state.error}</div>}
       {state?.ok && <div className="alert ok">{state.ok}</div>}

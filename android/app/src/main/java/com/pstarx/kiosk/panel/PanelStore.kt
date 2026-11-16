@@ -31,6 +31,8 @@ class PanelStore private constructor(context: Context) {
         val appliedHash: String?,
         /** Resultado da última aplicação, ainda não enviado ao painel. */
         val pendingApplyResult: org.json.JSONObject?,
+        /** Situação dos apps gerenciados enviada por último (só reenvia quando muda). */
+        val sentManagedStatus: String?,
     ) {
         val enrolled get() = serverUrl != null && token != null
     }
@@ -52,6 +54,7 @@ class PanelStore private constructor(context: Context) {
             pendingCode = prefs.getString("pending_code", null),
             appliedHash = prefs.getString("applied_hash", null),
             pendingApplyResult = prefs.getString("apply_result", null)?.let { runCatching { org.json.JSONObject(it) }.getOrNull() },
+            sentManagedStatus = prefs.getString("sent_managed_status", null),
         )
 
     fun saveEnrollment(url: String, deviceId: String, token: String, name: String?, intervalSec: Int) {
@@ -61,7 +64,7 @@ class PanelStore private constructor(context: Context) {
             .putBoolean("removed", false)
             .remove("server_apps_hash").remove("server_config_revision")
             .remove("pending_url").remove("pending_code")
-            .remove("applied_hash").remove("apply_result")
+            .remove("applied_hash").remove("apply_result").remove("sent_managed_status")
             .remove("last_error").remove("last_error_at")
             .commit()
         notifyListeners()
@@ -95,6 +98,10 @@ class PanelStore private constructor(context: Context) {
     fun setApplyFailed(result: org.json.JSONObject) {
         prefs.edit().putString("apply_result", result.toString()).commit()
         notifyListeners()
+    }
+
+    fun setSentManagedStatus(text: String) {
+        prefs.edit().putString("sent_managed_status", text).apply()
     }
 
     fun clearApplyResult() {

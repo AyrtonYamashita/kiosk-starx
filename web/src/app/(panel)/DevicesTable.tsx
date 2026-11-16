@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useActionState, useState } from "react";
-import { bulkAssignProfile } from "@/lib/actions";
+import { bulkAssignProfile, sendCommand } from "@/lib/actions";
 import type { DeviceSummary, Profile } from "@/lib/api";
 import { ago, configStatusLabel, kioskModeLabel, networkLabel } from "@/lib/format";
 
@@ -16,7 +16,60 @@ function Battery({ b }: { b: DeviceSummary["battery"] }) {
   );
 }
 
-export function DevicesTable({ devices, profiles }: { devices: DeviceSummary[]; profiles: Pick<Profile, "id" | "name">[] }) {
+function BulkCommand({ ids, repo }: { ids: string[]; repo: { packageName: string; label: string }[] }) {
+  const [state, action, pending] = useActionState(sendCommand, undefined);
+  const [type, setType] = useState("");
+  return (
+    <form
+      action={action}
+      onSubmit={(e) => {
+        if (type === "reboot" && !confirm(`Reiniciar ${ids.length} aparelho(s)?`)) e.preventDefault();
+      }}
+      className="row"
+    >
+      {ids.map((id) => (
+        <input key={id} type="hidden" name="deviceId" value={id} />
+      ))}
+      <select name="type" required value={type} onChange={(e) => setType(e.target.value)} style={{ width: "auto", minWidth: 200 }}>
+        <option value="" disabled>
+          Enviar comando…
+        </option>
+        <option value="lock">Bloquear tela</option>
+        <option value="reload">Recarregar kiosk</option>
+        <option value="screenshot">Capturar tela</option>
+        <option value="message">Mensagem</option>
+        <option value="install_app">Instalar app (mais nova)</option>
+        <option value="reboot">Reiniciar</option>
+      </select>
+      {type === "message" && <input name="text" required maxLength={1000} placeholder="Mensagem (fica na tela até tocarem em OK)" style={{ width: "auto", minWidth: 280 }} />}
+      {type === "install_app" && (
+        <select name="app" required defaultValue="" style={{ width: "auto", minWidth: 200 }}>
+          <option value="" disabled>
+            {repo.length ? "App…" : "repositório vazio"}
+          </option>
+          {repo.map((a) => (
+            <option key={a.packageName} value={a.packageName}>
+              {a.label}
+            </option>
+          ))}
+        </select>
+      )}
+      <button disabled={pending || !type}>Enviar</button>
+      {state?.ok && <span className="alert ok small">{state.ok}</span>}
+      {state?.error && <span className="alert error small">{state.error}</span>}
+    </form>
+  );
+}
+
+export function DevicesTable({
+  devices,
+  profiles,
+  repo,
+}: {
+  devices: DeviceSummary[];
+  profiles: Pick<Profile, "id" | "name">[];
+  repo: { packageName: string; label: string }[];
+}) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [state, action, pending] = useActionState(bulkAssignProfile, undefined);
   const all = devices.length > 0 && selected.size === devices.length;
@@ -31,7 +84,8 @@ export function DevicesTable({ devices, profiles }: { devices: DeviceSummary[]; 
   return (
     <div className="stack">
       {selected.size > 0 && (
-        <form action={action} className="card row" style={{ padding: "10px 14px" }}>
+        <div className="card stack" style={{ padding: "10px 14px", gap: 10 }}>
+        <form action={action} className="row">
           {[...selected].map((id) => (
             <input key={id} type="hidden" name="deviceId" value={id} />
           ))}
@@ -56,6 +110,8 @@ export function DevicesTable({ devices, profiles }: { devices: DeviceSummary[]; 
           {state?.ok && <span className="alert ok">{state.ok}</span>}
           {state?.error && <span className="alert error">{state.error}</span>}
         </form>
+        <BulkCommand ids={[...selected]} repo={repo} />
+        </div>
       )}
       <div className="card table-wrap" style={{ padding: 0 }}>
         <table>

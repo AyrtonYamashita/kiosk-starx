@@ -10,10 +10,13 @@ services:
     environment:
       DATABASE_URL: postgres://kiosk:${POSTGRES_PASSWORD}@postgres:5432/kiosk
       APK_DIR: /data/apks
+      APPS_DIR: /data/apps
       PORT: "3100"
       TRUST_PROXY: "true"
     volumes:
       - ./data/apks:/data/apks
+      # repositório de apps (APKs enviados pelo painel): entra no backup junto com o banco
+      - ./data/apps:/data/apps
     ports:
       - "${API_BIND:-127.0.0.1}:${API_PORT:-3100}:3100"
     depends_on:

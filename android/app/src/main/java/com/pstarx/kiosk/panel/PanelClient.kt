@@ -5,6 +5,8 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import com.pstarx.kiosk.BuildConfig
+import com.pstarx.kiosk.apps.ManagedApps
+import com.pstarx.kiosk.commands.Commands
 import com.pstarx.kiosk.config.ConfigStore
 import com.pstarx.kiosk.config.KioskConfig
 import com.pstarx.kiosk.device.DeviceInfo
@@ -70,7 +72,15 @@ class PanelClient(context: Context) {
         val info = DeviceInfo(ctx)
         val body = JSONObject()
             .put("appVersion", BuildConfig.VERSION_NAME)
+            .put("appVersionCode", BuildConfig.VERSION_CODE)
             .put("info", info.collect(includeApps = false))
+
+        // resultados de comandos ainda não confirmados e a situação dos apps gerenciados (só quando mudou)
+        val results = Commands.pendingResults(ctx)
+        if (results.length() > 0) body.put("commandResults", results)
+        val managed = ManagedApps.status(ctx)
+        val managedText = managed.toString()
+        if (managedText != s.sentManagedStatus) body.put("managedStatus", managed)
 
         val apps = info.apps()
         val appsHash = sha256(apps.toString())
@@ -97,7 +107,11 @@ class PanelClient(context: Context) {
                         configRevision = if (json.isNull("configRevision")) null else json.optInt("configRevision"),
                     )
                     if (s.pendingApplyResult != null) store.clearApplyResult()
+                    if (body.has("managedStatus")) store.setSentManagedStatus(managedText)
+                    json.optJSONArray("ackResults")?.let { Commands.ack(ctx, it, results) }
                     json.optJSONObject("desired")?.let { applyDesired(it) }
+                    json.optJSONArray("commands")?.let { Commands.receive(ctx, it) }
+                    json.optJSONArray("apps")?.let { ManagedApps.reconcile(ctx, it) }
                     Result.Ok("ok")
                 }
                 401 -> {

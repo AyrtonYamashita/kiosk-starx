@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AutoRefresh } from "@/components/AutoRefresh";
-import { api, ApiError, type DeviceDetail, type Profile } from "@/lib/api";
+import { api, ApiError, type Command, type DeviceDetail, type Profile, type RepoApp, type Screenshot } from "@/lib/api";
 import { ago, bytes, dateTime, kioskModeLabel, networkLabel, uptime } from "@/lib/format";
 import { DeleteDevice, RenameDevice } from "./DeviceForms";
 import { AppsTable } from "./AppsTable";
+import { DeviceCommands, ManagedAppsStatus } from "./DeviceCommands";
 import { DeviceConfig } from "./DeviceConfig";
 
 export const dynamic = "force-dynamic";
@@ -18,7 +19,11 @@ export default async function DevicePage({ params }: { params: Promise<{ id: str
     if (e instanceof ApiError && e.status === 404) notFound();
     throw e;
   }
-  const { profiles } = await api<{ profiles: Profile[] }>("/v1/admin/profiles");
+  const [{ profiles }, { commands, screenshots }, { apps: repo }] = await Promise.all([
+    api<{ profiles: Profile[] }>("/v1/admin/profiles"),
+    api<{ commands: Command[]; screenshots: Screenshot[] }>(`/v1/admin/devices/${id}/commands`),
+    api<{ apps: RepoApp[] }>("/v1/admin/apps"),
+  ]);
   const hw = d.info?.hardware ?? {};
   const bat = d.info?.battery ?? {};
   const net = d.info?.network ?? {};
@@ -29,7 +34,7 @@ export default async function DevicePage({ params }: { params: Promise<{ id: str
 
   return (
     <div className="stack">
-      <AutoRefresh seconds={20} />
+      <AutoRefresh seconds={10} />
       <div className="row">
         <Link href="/" className="muted">
           ← Aparelhos
@@ -158,8 +163,18 @@ export default async function DevicePage({ params }: { params: Promise<{ id: str
       </div>
 
       <section className="card stack">
+        <h2>Comandos</h2>
+        <DeviceCommands device={d} commands={commands} screenshots={screenshots} repo={repo} />
+      </section>
+
+      <section className="card stack">
         <h2>Configuração pelo painel</h2>
         <DeviceConfig device={d} profiles={profiles.map((p) => ({ id: p.id, name: p.name }))} />
+      </section>
+
+      <section className="card stack">
+        <h2>Apps gerenciados pelo perfil</h2>
+        <ManagedAppsStatus device={d} repo={repo} />
       </section>
 
       <section className="card stack">

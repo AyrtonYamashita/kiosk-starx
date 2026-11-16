@@ -1,14 +1,15 @@
 import Link from "next/link";
 import { AutoRefresh } from "@/components/AutoRefresh";
-import { api, type DeviceSummary, type Profile } from "@/lib/api";
+import { api, type DeviceSummary, type Profile, type RepoApp } from "@/lib/api";
 import { DevicesTable } from "./DevicesTable";
 
 export const dynamic = "force-dynamic";
 
 export default async function DevicesPage() {
-  const [{ devices }, { profiles }] = await Promise.all([
+  const [{ devices }, { profiles }, { apps: repo }] = await Promise.all([
     api<{ devices: DeviceSummary[]; onlineWindowSec: number }>("/v1/admin/devices"),
     api<{ profiles: Profile[] }>("/v1/admin/profiles"),
+    api<{ apps: RepoApp[] }>("/v1/admin/apps"),
   ]);
   const online = devices.filter((d) => d.online).length;
   return (
@@ -32,7 +33,7 @@ export default async function DevicesPage() {
           código (aparelho que já tem o app).
         </div>
       ) : (
-        <DevicesTable devices={devices} profiles={profiles.map((p) => ({ id: p.id, name: p.name }))} />
+        <DevicesTable devices={devices} profiles={profiles.map((p) => ({ id: p.id, name: p.name }))} repo={repo.map((a) => ({ packageName: a.packageName, label: a.label }))} />
       )}
     </div>
   );

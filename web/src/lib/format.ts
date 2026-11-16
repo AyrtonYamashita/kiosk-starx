@@ -50,3 +50,23 @@ export const configStatusLabel: Record<"none" | "applied" | "modified" | "pendin
   pending: ["warn", "pendente", "o aparelho recebe no próximo contato"],
   error: ["danger", "erro", "o aparelho recusou a configuração"],
 };
+
+export const commandLabel: Record<string, string> = {
+  reboot: "Reiniciar",
+  lock: "Bloquear tela",
+  message: "Mensagem",
+  screenshot: "Captura de tela",
+  reload: "Recarregar kiosk",
+  install_app: "Instalar app",
+  uninstall_app: "Remover app",
+};
+
+/** Situação do comando: [classe do badge, rótulo]. */
+export const commandStatusLabel: Record<"pending" | "sent" | "ok" | "failed" | "expired" | "canceled", [string, string]> = {
+  pending: ["warn", "aguardando o aparelho"],
+  sent: ["warn", "em execução"],
+  ok: ["ok", "concluído"],
+  failed: ["danger", "falhou"],
+  expired: ["off", "expirou"],
+  canceled: ["off", "cancelado"],
+};

@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import QRCode from "qrcode";
-import { api, ApiError, apiLogin, SESSION_COOKIE, type Enrollment } from "./api";
+import { api, ApiError, apiLogin, SESSION_COOKIE, type CommandType, type Enrollment } from "./api";
 
 export type FormState = { error?: string; ok?: string } | undefined;
 
@@ -145,7 +145,13 @@ export async function saveProfile(_: FormState, form: FormData): Promise<FormSta
   const id = String(form.get("id") ?? "");
   const config = parseConfigField(form, "config");
   if (!config.ok) return { error: config.error };
-  const body = { name: String(form.get("name") ?? ""), description: String(form.get("description") ?? ""), config: config.value ?? {} };
+  const body = {
+    name: String(form.get("name") ?? ""),
+    description: String(form.get("description") ?? ""),
+    config: config.value ?? {},
+    // o formulário sempre manda a lista (marcador presente), mesmo vazia
+    ...(form.has("managedAppsPresent") ? { managedApps: form.getAll("managedApp").map(String) } : {}),
+  };
   let saved: { id: string };
   try {
     saved = id
@@ -202,4 +208,99 @@ export async function bulkAssignProfile(_: FormState, form: FormData): Promise<F
   } catch (e) {
     return { error: message(e) };
   }
+}
+
+// ---------------------------------------------------------------- comandos e apps (fase 4)
+
+const COMMAND_LABEL: Record<CommandType, string> = {
+  reboot: "Reiniciar",
+  lock: "Bloquear tela",
+  message: "Mensagem",
+  screenshot: "Captura de tela",
+  reload: "Recarregar kiosk",
+  install_app: "Instalar app",
+  uninstall_app: "Remover app",
+};
+
+/** Um comando para um ou vários aparelhos (campos deviceId repetidos). */
+export async function sendCommand(_: FormState, form: FormData): Promise<FormState> {
+  const deviceIds = form.getAll("deviceId").map(String);
+  if (deviceIds.length === 0) return { error: "Selecione pelo menos um aparelho." };
+  const type = String(form.get("type") ?? "") as CommandType;
+  let payload: Record<string, unknown> = {};
+  if (type === "message") {
+    const text = String(form.get("text") ?? "").trim();
+    if (!text) return { error: "Escreva a mensagem." };
+    const title = String(form.get("title") ?? "").trim();
+    payload = { text, ...(title ? { title } : {}) };
+  } else if (type === "install_app") {
+    const [packageName, versionCode] = String(form.get("app") ?? "").split("@");
+    if (!packageName) return { error: "Escolha o app." };
+    payload = { packageName, versionCode: versionCode ? Number(versionCode) : null };
+  } else if (type === "uninstall_app") {
+    const packageName = String(form.get("packageName") ?? "");
+    if (!packageName) return { error: "Escolha o app." };
+    payload = { packageName };
+  } else if (!(type in COMMAND_LABEL)) {
+    return { error: "Escolha o comando." };
+  }
+  try {
+    const r = await api<{ created: number }>("/v1/admin/commands", { method: "POST", body: { deviceIds, type, payload } });
+    for (const id of deviceIds) revalidatePath(`/devices/${id}`);
+    return { ok: `${COMMAND_LABEL[type]}: enviado para ${r.created} aparelho(s). Chega no próximo contato (até 30 s).` };
+  } catch (e) {
+    return { error: message(e) };
+  }
+}
+
+export async function cancelCommand(form: FormData) {
+  try {
+    await api(`/v1/admin/commands/${String(form.get("id"))}/cancel`, { method: "POST" });
+  } catch (e) {
+    if (!(e instanceof ApiError)) throw e;
+  }
+  revalidatePath(`/devices/${String(form.get("deviceId"))}`);
+}
+
+/** Token de uso único para o navegador mandar o APK direto para a API (a Vercel não aceita arquivos grandes). */
+export async function uploadToken(): Promise<{ token: string; uploadUrl: string; maxApkMb: number } | { error: string }> {
+  try {
+    return await api<{ token: string; uploadUrl: string; maxApkMb: number }>("/v1/admin/apps/upload-token", { method: "POST" });
+  } catch (e) {
+    return { error: message(e) };
+  }
+}
+
+export async function refreshApps() {
+  revalidatePath("/apps");
+}
+
+export async function renameApp(_: FormState, form: FormData): Promise<FormState> {
+  try {
+    await api(`/v1/admin/apps/${encodeURIComponent(String(form.get("packageName")))}`, { method: "PATCH", body: { label: String(form.get("label") ?? "") } });
+    revalidatePath("/apps");
+    return { ok: "Nome salvo." };
+  } catch (e) {
+    return { error: message(e) };
+  }
+}
+
+export async function deleteApp(_: FormState, form: FormData): Promise<FormState> {
+  try {
+    await api(`/v1/admin/apps/${encodeURIComponent(String(form.get("packageName")))}`, { method: "DELETE" });
+  } catch (e) {
+    return { error: message(e) };
+  }
+  revalidatePath("/apps");
+  return { ok: "Removido do repositório." };
+}
+
+export async function deleteAppVersion(_: FormState, form: FormData): Promise<FormState> {
+  try {
+    await api(`/v1/admin/apps/${encodeURIComponent(String(form.get("packageName")))}/versions/${Number(form.get("versionCode"))}`, { method: "DELETE" });
+  } catch (e) {
+    return { error: message(e) };
+  }
+  revalidatePath("/apps");
+  return { ok: "Versão removida." };
 }
