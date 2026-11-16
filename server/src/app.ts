@@ -8,8 +8,9 @@ import { adminRoutes } from "./routes/admin.js";
 import { deviceAppRoutes, uploadRoutes } from "./routes/apps.js";
 import { deviceScreenshotRoutes } from "./routes/commands.js";
 import { deviceRoutes } from "./routes/device.js";
+import { Waker } from "./wake.js";
 
-export async function buildApp(config: Config, db: Db) {
+export async function buildApp(config: Config, db: Db, waker = new Waker()) {
   const app = Fastify({
     logger: { level: config.logLevel, redact: ["req.headers.authorization", "req.headers.cookie"] },
     trustProxy: config.trustProxy,
@@ -42,10 +43,10 @@ export async function buildApp(config: Config, db: Db) {
   });
 
   fs.mkdirSync(config.appsDir, { recursive: true });
-  await app.register(deviceRoutes, { db, config });
+  await app.register(deviceRoutes, { db, config, waker });
   await app.register(deviceAppRoutes, { db, config });
   await app.register(deviceScreenshotRoutes, { db });
   await app.register(uploadRoutes, { db, config });
-  await app.register(adminRoutes, { db, config });
+  await app.register(adminRoutes, { db, config, waker });
   return app;
 }

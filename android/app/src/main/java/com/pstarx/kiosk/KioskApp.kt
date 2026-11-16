@@ -31,5 +31,7 @@ class KioskApp : Application() {
         // painel: configuração alterada (tela, ADB, importação) vai no próximo check-in, que é antecipado
         ConfigStore.get(this).addListener { PanelSync.now(this, "config") }
         PanelSync.schedule(this)
+        // aviso imediato do painel (comandos e configuração chegam em ~1 s, não em até 30 s)
+        com.pstarx.kiosk.panel.PanelPush.start(this)
     }
 }

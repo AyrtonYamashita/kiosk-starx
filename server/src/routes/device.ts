@@ -8,6 +8,7 @@ import { desiredConfig } from "../kioskConfig.js";
 import { readRelease } from "../release.js";
 import { latestArtifacts, type Artifact } from "./apps.js";
 import { CommandResult, commandsForDevice, recordResults } from "./commands.js";
+import type { Waker } from "../wake.js";
 
 const KIOSK_PACKAGE = "com.pstarx.kiosk";
 
@@ -81,8 +82,28 @@ function stripPin(config: Record<string, unknown>): Record<string, unknown> {
   return copy;
 }
 
-export async function deviceRoutes(app: FastifyInstance, opts: { db: Db; config: Config }) {
-  const { db, config } = opts;
+export async function deviceRoutes(app: FastifyInstance, opts: { db: Db; config: Config; waker: Waker }) {
+  const { db, config, waker } = opts;
+
+  /**
+   * Long polling: o aparelho espera aqui até o painel ter algo para ele (comando ou configuração) ou o tempo
+   * acabar (até 50 s; a Cloudflare corta conexões paradas em 100 s). {wake: true} → o aparelho faz o check-in já.
+   */
+  app.get("/v1/device/wait", async (req, reply) => {
+    const device = await authDevice(db, req);
+    if (!device) return reply.code(401).send({ error: "unauthorized" });
+    const { timeoutSec } = req.query as { timeoutSec?: string };
+    const ms = Math.min(Math.max(Number(timeoutSec) || 50, 1), 50) * 1000;
+    // comando criado enquanto o aparelho não estava esperando (entre duas esperas): responde na hora
+    const pending = await db.query("SELECT 1 FROM commands WHERE device_id = $1 AND status = 'pending' AND expires_at > now() LIMIT 1", [device.id]);
+    if (pending.rowCount) return { wake: true };
+    const abort = new AbortController();
+    // conexão caiu (aparelho saiu da rede): solta a espera. O "close" da resposta, não da requisição (num GET
+    // a requisição "fecha" logo que é lida)
+    reply.raw.on("close", () => abort.abort());
+    return { wake: await waker.wait(device.id, ms, abort.signal) };
+  });
+
 
   /**
    * Apps que o aparelho deve ter (versão mais nova do repositório) e o próprio app do kiosk, se houver versão

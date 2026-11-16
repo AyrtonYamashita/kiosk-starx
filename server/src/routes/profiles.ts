@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { Db } from "../db.js";
 import { PackageName } from "./apps.js";
+import type { Waker } from "../wake.js";
 import { desiredConfig, prepareConfig, redactConfig, type StoredConfig } from "../kioskConfig.js";
 
 const ProfileBody = z.object({
@@ -40,8 +41,11 @@ export function configStatus(d: {
 }
 
 /** Registrado dentro do escopo autenticado do painel (herda o preHandler de admin). */
-export async function profileRoutes(app: FastifyInstance, opts: { db: Db }) {
-  const { db } = opts;
+export async function profileRoutes(app: FastifyInstance, opts: { db: Db; waker: Waker }) {
+  const { db, waker } = opts;
+  /** Aparelhos de um perfil: recebem a configuração nova na hora. */
+  const wakeProfile = async (profileId: string) =>
+    waker.wake((await db.query("SELECT id FROM devices WHERE profile_id = $1", [profileId])).rows.map((r) => r.id as string));
 
   const uuidParam = (req: FastifyRequest) => {
     const { id } = req.params as { id: string };
@@ -108,6 +112,7 @@ export async function profileRoutes(app: FastifyInstance, opts: { db: Db }) {
          RETURNING *, (SELECT count(*)::int FROM devices d WHERE d.profile_id = $1) AS devices`,
         [id, body.data.name, body.data.description, v.config, body.data.managedApps ? JSON.stringify([...new Set(body.data.managedApps)]) : null],
       );
+      await wakeProfile(id);
       return profileJson(r.rows[0]);
     } catch (e) {
       if ((e as { code?: string }).code === "23505") return reply.code(409).send({ error: "duplicate", message: "já existe um perfil com esse nome" });
@@ -141,6 +146,7 @@ export async function profileRoutes(app: FastifyInstance, opts: { db: Db }) {
       return reply.code(400).send({ error: "invalid_profile", message: "perfil não existe" });
     }
     await db.query("UPDATE devices SET profile_id = $2, config_overrides = $3, failed_hash = NULL WHERE id = $1", [id, body.data.profileId, overrides]);
+    waker.wake([id]);
     return { ok: true };
   });
 
@@ -149,6 +155,7 @@ export async function profileRoutes(app: FastifyInstance, opts: { db: Db }) {
     const id = uuidParam(req);
     const r = id ? await db.query("UPDATE devices SET config_nonce = config_nonce + 1, failed_hash = NULL WHERE id = $1", [id]) : null;
     if (!r?.rowCount) return reply.code(404).send({ error: "not_found" });
+    waker.wake([id!]);
     return { ok: true };
   });
 
@@ -159,6 +166,7 @@ export async function profileRoutes(app: FastifyInstance, opts: { db: Db }) {
       return reply.code(400).send({ error: "invalid_profile", message: "perfil não existe" });
     }
     const r = await db.query("UPDATE devices SET profile_id = $2, failed_hash = NULL WHERE id = ANY($1::uuid[])", [body.data.deviceIds, body.data.profileId]);
+    waker.wake(body.data.deviceIds);
     return { ok: true, updated: r.rowCount };
   });
 

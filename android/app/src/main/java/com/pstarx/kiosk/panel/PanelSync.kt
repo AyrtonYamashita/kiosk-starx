@@ -39,7 +39,11 @@ object PanelSync {
                     if (r is PanelClient.Result.Ok || (r is PanelClient.Result.Failed && !r.message.startsWith("sem conexão"))) store.clearPending()
                     if (r is PanelClient.Result.Failed) store.checkinFailed("cadastro: ${r.message}")
                 }
-                s.enrolled -> client.checkin().also { if (it is PanelClient.Result.Failed) Log.w(TAG, "Check-in ($reason): ${it.message}") }
+                s.enrolled -> {
+                    client.checkin().also { if (it is PanelClient.Result.Failed) Log.w(TAG, "Check-in ($reason): ${it.message}") }
+                    // garante o aviso imediato ligado (ex.: logo depois do cadastro, ou se o laço parou)
+                    PanelPush.start(ctx)
+                }
                 else -> Unit
             }
         } catch (e: Exception) {

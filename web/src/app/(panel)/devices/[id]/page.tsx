@@ -40,7 +40,8 @@ export default async function DevicePage({ params }: { params: Promise<{ id: str
 
   return (
     <div className="stack">
-      <AutoRefresh seconds={10} />
+      {/* comando em andamento: acompanha de perto (o aparelho responde em ~1 s) */}
+      <AutoRefresh seconds={commands.some((c) => c.status === "pending" || c.status === "sent") ? 2 : 10} />
       <div className="row">
         <Link href="/" className="muted">
           ← Aparelhos

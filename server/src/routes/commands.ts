@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { Db } from "../db.js";
 import { authDevice } from "../deviceAuth.js";
 import { findArtifact, PackageName } from "./apps.js";
+import type { Waker } from "../wake.js";
 
 const KIOSK_PACKAGE = "com.pstarx.kiosk";
 
@@ -63,8 +64,8 @@ function commandJson(c: Record<string, any>) {
 }
 
 /** Painel: criar, listar e cancelar comandos; ver capturas de tela. Dentro do escopo autenticado. */
-export async function commandRoutes(app: FastifyInstance, opts: { db: Db }) {
-  const { db } = opts;
+export async function commandRoutes(app: FastifyInstance, opts: { db: Db; waker: Waker }) {
+  const { db, waker } = opts;
 
   app.post("/v1/admin/commands", async (req, reply) => {
     const body = Create.safeParse(req.body);
@@ -93,6 +94,8 @@ export async function commandRoutes(app: FastifyInstance, opts: { db: Db }) {
        SELECT d, $2, $3, $4, now() + make_interval(mins => $5) FROM unnest($1::uuid[]) AS d RETURNING id`,
       [found, type, payload, req.admin!.username, expiresMin],
     );
+    // aparelhos esperando no long polling recebem na hora (os outros, no próximo check-in)
+    waker.wake(found);
     req.log.info({ type, devices: found.length, by: req.admin!.username }, "comando criado");
     return { created: r.rowCount, ids: r.rows.map((x) => x.id) };
   });

@@ -1,7 +1,10 @@
 # Comandos e apps (fase 4)
 
-Tudo passa pelo check-in que o app já faz a cada 30 s. Não há conexão aberta com o aparelho: um comando chega no
-próximo contato, e o resultado volta no contato seguinte (o app antecipa esse contato assim que termina).
+Os comandos chegam em cerca de 1 s. O app (0.4.1 ou mais novo) mantém uma espera aberta na API
+(`GET /v1/device/wait`, long polling de até 50 s); quando o painel cria um comando ou muda a configuração do
+aparelho, a espera termina na hora e o app faz o check-in, recebe e executa. O resultado volta logo em seguida.
+O check-in a cada 30 s continua como reserva (app 0.4.0, rede instável, tela desligada por muito tempo — o Android
+corta a rede de apps em segundo plano no modo de economia).
 
 Exige o app **0.4.0** ou mais novo no aparelho. Aparelhos com a 0.3.x precisam ser atualizados uma vez (ADB, ou QR
 num aparelho resetado). A partir daí, o app se atualiza sozinho.

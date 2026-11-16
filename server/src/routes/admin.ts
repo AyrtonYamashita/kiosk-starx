@@ -8,6 +8,7 @@ import { provisioningPayload, readRelease } from "../release.js";
 import { appRepoRoutes } from "./apps.js";
 import { commandRoutes } from "./commands.js";
 import { configStatus, profileRoutes } from "./profiles.js";
+import type { Waker } from "../wake.js";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -42,8 +43,8 @@ export function onlineWindowSec(config: Config) {
   return config.checkinIntervalSec * 3;
 }
 
-export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: Config }) {
-  const { db, config } = opts;
+export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: Config; waker: Waker }) {
+  const { db, config, waker } = opts;
 
   async function requireAdmin(req: FastifyRequest, reply: FastifyReply) {
     const auth = req.headers.authorization;
@@ -79,8 +80,8 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
   app.register(async (priv) => {
     priv.addHook("preHandler", requireAdmin);
 
-    await priv.register(profileRoutes, { db });
-    await priv.register(commandRoutes, { db });
+    await priv.register(profileRoutes, { db, waker });
+    await priv.register(commandRoutes, { db, waker });
     await priv.register(appRepoRoutes, { db, config });
 
     priv.post("/v1/admin/logout", async (req) => {
