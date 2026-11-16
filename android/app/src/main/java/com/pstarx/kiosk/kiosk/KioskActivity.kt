@@ -33,6 +33,8 @@ import android.widget.TextView
 import com.pstarx.kiosk.config.KioskConfig
 import com.pstarx.kiosk.security.TapCounter
 import com.pstarx.kiosk.ui.PinActivity
+import com.pstarx.kiosk.ui.Theme
+import com.pstarx.kiosk.ui.Ui
 
 /**
  * Tela do kiosk: launcher padrão enquanto o kiosk está ligado, sempre em lock task.
@@ -151,18 +153,24 @@ class KioskActivity : Activity() {
         config = kiosk.config
         applyWindow()
         // redesenha só se algo visível mudou (evita recarregar o site a cada aviso)
-        val key = listOf(config.kiosk, config.appearance, config.security.exitCorner, config.security.exitTaps, appsVersion, kiosk.reloadNonce).toString()
+        val key = listOf(config.kiosk, config.appearance, config.security.exitCorner, config.security.exitTaps, appsVersion, kiosk.reloadNonce, systemBarsHidden).toString()
         if (key == renderedKey) return
         renderedKey = key
         root.removeAllViews()
         webView?.destroy()
         webView = null
-        root.setBackgroundColor(parseColor(config.appearance.backgroundColor, Color.rgb(16, 24, 40)))
-        when (config.kiosk.mode) {
-            KioskConfig.Mode.APPS -> root.addView(gridScreen())
-            KioskConfig.Mode.APP -> root.addView(singleAppScreen())
-            KioskConfig.Mode.WEB -> root.addView(webScreen())
+        root.setBackgroundColor(parseColor(config.appearance.backgroundColor, Theme.NIGHT))
+        val screen = when (config.kiosk.mode) {
+            KioskConfig.Mode.APPS -> gridScreen()
+            KioskConfig.Mode.APP -> singleAppScreen()
+            KioskConfig.Mode.WEB -> webScreen()
         }
+        // barra do Android escondida: a barra própria (rede, sinal, bateria, hora) fica no rodapé
+        root.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(screen, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
+            if (systemBarsHidden) addView(StatusFooter(this@KioskActivity), LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(Theme.FOOTER)))
+        })
         root.addView(cornerZone())
         if (previousMode == KioskConfig.Mode.APP && config.kiosk.mode != KioskConfig.Mode.APP) cancelCountdown()
     }
@@ -209,11 +217,9 @@ class KioskActivity : Activity() {
     private fun header(): View? {
         val title = config.appearance.title
         if (title.isBlank()) return null
-        return TextView(this).apply {
-            text = title
-            setTextColor(parseColor(config.appearance.textColor, Color.WHITE))
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
-            setPadding(dp(20), dp(20), dp(20), dp(8))
+        // título de página: 24/600, -0.02em
+        return Ui.text(this, title, Theme.Type.PAGE_TITLE, parseColor(config.appearance.textColor, Color.WHITE)).apply {
+            setPadding(dp(16), dp(24), dp(16), dp(8))
         }
     }
 
@@ -224,32 +230,38 @@ class KioskActivity : Activity() {
         header()?.let { column.addView(it) }
         val grid = GridLayout(this).apply {
             columnCount = columns
-            setPadding(dp(8), dp(8), dp(8), dp(8))
+            setPadding(dp(12), dp(8), dp(12), dp(16))
         }
-        // largura fixa por coluna: com menos apps que colunas, a grade não estica
-        val cellWidth = (resources.displayMetrics.widthPixels - dp(16)) / columns
+        // largura fixa por coluna: com menos apps que colunas, a grade não estica (gap de 8dp entre cartões)
+        val cellWidth = (resources.displayMetrics.widthPixels - dp(24)) / columns
         val pm = packageManager
         val apps = config.kiosk.apps.mapNotNull { pkg -> pm.getLaunchIntentForPackage(pkg)?.let { pkg to it } }
         for ((pkg, launch) in apps) {
             val info = runCatching { pm.getApplicationInfo(pkg, 0) }.getOrNull() ?: continue
+            // cartão do app: contorno de 1dp na cor do texto, raio 10, sem sombra; pressionado, um véu da mesma cor
+            val tile = Theme.box(this, Theme.withAlpha(text, 0.04f), Theme.R_CARD, Theme.withAlpha(text, 0.16f))
             val cell = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER_HORIZONTAL
-                setPadding(dp(4), dp(14), dp(4), dp(14))
+                setPadding(dp(6), dp(14), dp(6), dp(12))
                 isClickable = true
                 isFocusable = true
+                background = android.graphics.drawable.RippleDrawable(
+                    android.content.res.ColorStateList.valueOf(Theme.withAlpha(text, 0.12f)), tile, Theme.box(this@KioskActivity, Color.BLACK, Theme.R_CARD),
+                )
                 setOnClickListener { startApp(pkg, launch) }
             }
-            cell.addView(ImageView(this).apply { setImageDrawable(pm.getApplicationIcon(info)) }, LinearLayout.LayoutParams(dp(60), dp(60)))
-            cell.addView(TextView(this).apply {
-                this.text = pm.getApplicationLabel(info)
-                setTextColor(text)
+            cell.addView(ImageView(this).apply { setImageDrawable(pm.getApplicationIcon(info)) }, LinearLayout.LayoutParams(dp(52), dp(52)))
+            cell.addView(Ui.text(this, pm.getApplicationLabel(info), Theme.Type.CONTROL, text).apply {
                 gravity = Gravity.CENTER
                 maxLines = 2
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-                setPadding(0, dp(6), 0, 0)
+                ellipsize = android.text.TextUtils.TruncateAt.END
+                setPadding(0, dp(8), 0, 0)
             })
-            grid.addView(cell, GridLayout.LayoutParams().apply { width = cellWidth })
+            grid.addView(cell, GridLayout.LayoutParams().apply {
+                width = cellWidth - dp(8)
+                setMargins(dp(4), dp(4), dp(4), dp(4))
+            })
         }
         if (apps.isEmpty()) {
             column.addView(message("Nenhum app da grade está instalado.\nToque ${config.security.exitTaps}x no canto ${config.security.exitCorner.label.lowercase()} para configurar.", text))
@@ -330,11 +342,10 @@ class KioskActivity : Activity() {
         if (config.kiosk.mode == KioskConfig.Mode.WEB && sec > 0 && webView != null) handler.postDelayed(inactivity, sec * 1000L)
     }
 
-    private fun message(s: String, color: Int) = TextView(this).apply {
-        text = s
-        setTextColor(color)
+    /** Aviso centralizado na tela do kiosk: 13/600 (título de cartão), na cor do texto da aparência. */
+    private fun message(s: String, color: Int) = Ui.text(this, s, Theme.Type.CARD_TITLE, color).apply {
         gravity = Gravity.CENTER
-        setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
+        setLineSpacing(0f, 1.45f)
         setPadding(dp(24), dp(24), dp(24), dp(24))
     }
 
@@ -392,8 +403,12 @@ class KioskActivity : Activity() {
 
     // ---------------------------------------------------------------- utilidades
 
+    /** A barra do Android fica escondida (e a do rodapé aparece) sem "Barra de status" e sem "Notificações". */
+    private val systemBarsHidden: Boolean
+        get() = !config.display.showStatusBar && !config.security.allowNotifications
+
     private fun hideSystemBars() {
-        if (config.display.showStatusBar || config.security.allowNotifications) return
+        if (!systemBarsHidden) return
         if (Build.VERSION.SDK_INT >= 30) {
             window.insetsController?.let {
                 it.hide(WindowInsets.Type.systemBars())

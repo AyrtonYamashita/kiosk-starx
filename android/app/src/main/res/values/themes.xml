@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Telas claras (configurações): fundo #FAFAFA, Outfit, acento #135882 -->
+    <style name="Kiosk.Light" parent="@android:style/Theme.DeviceDefault.Light.NoActionBar">
+        <item name="android:fontFamily">@font/outfit</item>
+        <item name="android:colorPrimary">@color/p4</item>
+        <item name="android:colorPrimaryDark">@color/canvas</item>
+        <item name="android:colorAccent">@color/p4</item>
+        <item name="android:colorControlActivated">@color/p4</item>
+        <item name="android:textColorPrimary">@color/ink</item>
+        <item name="android:textColorSecondary">@color/mid</item>
+        <item name="android:textColorHint">@color/faint</item>
+        <item name="android:windowBackground">@color/canvas</item>
+        <item name="android:statusBarColor">@color/canvas</item>
+        <item name="android:navigationBarColor">@color/surface</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:alertDialogTheme">@style/Kiosk.Alert</item>
+    </style>
+
+    <!-- Janelas pequenas (PIN, mensagem do painel): cartão branco sobre o kiosk -->
+    <style name="Kiosk.Dialog" parent="@android:style/Theme.DeviceDefault.Light.Dialog.NoActionBar">
+        <item name="android:fontFamily">@font/outfit</item>
+        <item name="android:colorAccent">@color/p4</item>
+        <item name="android:colorControlActivated">@color/p4</item>
+        <item name="android:textColorPrimary">@color/ink</item>
+        <item name="android:textColorHint">@color/faint</item>
+        <item name="android:windowBackground">@drawable/dialog_card</item>
+        <item name="android:backgroundDimAmount">0.55</item>
+    </style>
+
+    <!-- Diálogos do sistema (AlertDialog) nas configurações -->
+    <style name="Kiosk.Alert" parent="@android:style/Theme.DeviceDefault.Light.Dialog.Alert">
+        <item name="android:fontFamily">@font/outfit</item>
+        <item name="android:colorAccent">@color/p4</item>
+        <item name="android:colorControlActivated">@color/p4</item>
+        <item name="android:textColorPrimary">@color/ink</item>
+        <item name="android:textColorSecondary">@color/mid</item>
+        <item name="android:windowBackground">@drawable/dialog_card</item>
+        <item name="android:buttonBarButtonStyle">@style/Kiosk.Alert.Button</item>
+    </style>
+    <style name="Kiosk.Alert.Button" parent="@android:style/Widget.Material.Light.Button.Borderless.Colored">
+        <item name="android:textColor">@color/p4</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:fontFamily">@font/outfit</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <!-- Tela do kiosk: fundo escuro da paleta até a configuração desenhar -->
+    <style name="Kiosk.Screen" parent="@android:style/Theme.DeviceDefault.NoActionBar">
+        <item name="android:fontFamily">@font/outfit</item>
+        <item name="android:colorAccent">@color/p4</item>
+        <item name="android:windowBackground">@color/p6</item>
+        <item name="android:statusBarColor">@color/p6</item>
+        <item name="android:navigationBarColor">@color/p6</item>
+    </style>
+</resources>

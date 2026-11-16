@@ -33,35 +33,44 @@ class PinActivity : Activity() {
             return
         }
         setFinishOnTouchOutside(false)
-        input = EditText(this).apply {
+        input = Ui.input(this, "••••", mono = true).apply {
             inputType = if (pinHash.numeric) InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
             else InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-            hint = "PIN"
             gravity = Gravity.CENTER
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
+            letterSpacing = 0.2f
             imeOptions = EditorInfo.IME_ACTION_DONE
             setOnEditorActionListener { _, _, _ -> check(); true }
         }
-        error = TextView(this).apply { setTextColor(Ui.DANGER); gravity = Gravity.CENTER }
-        ok = Button(this).apply { text = "Entrar"; setOnClickListener { check() } }
-        val cancel = Button(this).apply { text = "Cancelar"; setOnClickListener { finish() } }
+        // mensagem sob o campo: 10, vermelho escuro (a borda do campo fica vermelha junto)
+        error = Ui.text(this, "", Theme.Type.HELP, Theme.BAD_DEEP).apply { setPadding(0, Ui.dp(this@PinActivity, 6), 0, 0) }
+        ok = Ui.button(this, "Entrar", Ui.Variant.PRIMARY) { check() }
+        val cancel = Ui.button(this, "Cancelar") { finish() }
         val pad = Ui.dp(this, 24)
         setContentView(
             LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
-                setPadding(pad, pad, pad, pad / 2)
+                setPadding(pad, pad, pad, pad)
                 minimumWidth = Ui.dp(this@PinActivity, 300)
-                addView(TextView(this@PinActivity).apply { text = "Administração do kiosk"; setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f) })
-                addView(input)
+                addView(Ui.text(this@PinActivity, "Administração do kiosk", Theme.Type.SECTION_TITLE))
+                addView(Ui.text(this@PinActivity, "Digite o PIN para abrir as configurações.", Theme.Type.BODY, Theme.SOFT).apply {
+                    setPadding(0, Ui.dp(this@PinActivity, 4), 0, Ui.dp(this@PinActivity, 20))
+                })
+                addView(Ui.text(this@PinActivity, "PIN", Theme.Type.LABEL, Theme.MID).apply { setPadding(0, 0, 0, Ui.dp(this@PinActivity, 6)) })
+                addView(input, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
                 addView(error)
                 addView(LinearLayout(this@PinActivity).apply {
                     gravity = Gravity.END
+                    setPadding(0, Ui.dp(this@PinActivity, 20), 0, 0)
                     addView(cancel)
-                    addView(ok)
+                    addView(ok, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { marginStart = Ui.dp(this@PinActivity, 8) })
                 })
             },
         )
-        gate.lockedForMs().takeIf { it > 0 }?.let { error.text = "Muitas tentativas. Tente de novo em ${Ui.duration(it)}." }
+        gate.lockedForMs().takeIf { it > 0 }?.let {
+            error.text = "Muitas tentativas. Tente de novo em ${Ui.duration(it)}."
+            Ui.setFieldError(input, true)
+        }
     }
 
     private fun check() {
@@ -75,12 +84,14 @@ class PinActivity : Activity() {
                 if (isFinishing) return@runOnUiThread
                 ok.isEnabled = true
                 input.text.clear()
-                error.text = when (result) {
+                val msg = when (result) {
                     PinGate.Result.Ok, PinGate.Result.NoPin -> { openSettings(); "" }
                     is PinGate.Result.Locked -> "Muitas tentativas. Tente de novo em ${Ui.duration(result.remainingMs)}."
                     is PinGate.Result.Wrong -> if (result.lockedForMs > 0) "PIN incorreto. Bloqueado por ${Ui.duration(result.lockedForMs)}."
                     else "PIN incorreto (${result.freeAttemptsLeft} tentativa(s) antes do bloqueio)"
                 }
+                error.text = msg
+                Ui.setFieldError(input, msg.isNotEmpty())
             }
         }
     }

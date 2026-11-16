@@ -49,6 +49,9 @@ class SettingsActivity : Activity() {
     private lateinit var tabs: LinearLayout
     private lateinit var content: LinearLayout
     private lateinit var status: TextView
+    private lateinit var statusPill: LinearLayout
+    /** Cartão em que as próximas linhas entram (cada seção abre um novo). */
+    private var card: LinearLayout? = null
 
     private enum class Tab(val label: String) { GENERAL("Geral"), DISPLAY("Tela"), SECURITY("Segurança"), ADVANCED("Avançado") }
 
@@ -57,32 +60,44 @@ class SettingsActivity : Activity() {
         kiosk = KioskController.get(this)
         saved = kiosk.config
         draft = saved
-        window.decorView.setBackgroundColor(Color.WHITE)
+        window.decorView.setBackgroundColor(Theme.CANVAS)
+        val d = { v: Int -> Ui.dp(this, v) }
 
-        status = Ui.note(this, "").apply { setTextIsSelectable(false); setPadding(Ui.dp(this@SettingsActivity, 16), 0, Ui.dp(this@SettingsActivity, 16), Ui.dp(this@SettingsActivity, 8)) }
-        tabs = LinearLayout(this).apply { setPadding(Ui.dp(this@SettingsActivity, 12), 0, Ui.dp(this@SettingsActivity, 12), Ui.dp(this@SettingsActivity, 8)) }
-        content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-
-        val title = TextView(this).apply {
-            text = "Configurações do kiosk"
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
-            typeface = Typeface.DEFAULT_BOLD
-            setTextColor(Color.rgb(20, 20, 30))
-            setPadding(Ui.dp(this@SettingsActivity, 16), Ui.dp(this@SettingsActivity, 16), Ui.dp(this@SettingsActivity, 16), Ui.dp(this@SettingsActivity, 2))
+        status = Ui.text(this, "", Theme.Type.CAPTION, Theme.SOFT)
+        statusPill = LinearLayout(this)
+        tabs = LinearLayout(this)
+        content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(d(16), d(4), d(16), d(24))
         }
+
+        // cabeçalho de página: título 24/600 + pílula de estado; contexto 11 cinza
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(d(16), d(20), d(16), d(12))
+            addView(LinearLayout(this@SettingsActivity).apply {
+                gravity = Gravity.CENTER_VERTICAL
+                addView(Ui.text(this@SettingsActivity, "Configurações do kiosk", Theme.Type.PAGE_TITLE), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                addView(statusPill)
+            })
+            addView(status.apply { setPadding(0, d(4), 0, d(14)) })
+            addView(tabs)
+        }
+        // barra de ações: superfície branca com contorno de 1dp no topo
         val bottom = LinearLayout(this).apply {
-            gravity = Gravity.END
-            setPadding(Ui.dp(this@SettingsActivity, 8), Ui.dp(this@SettingsActivity, 4), Ui.dp(this@SettingsActivity, 8), Ui.dp(this@SettingsActivity, 4))
-            setBackgroundColor(Ui.SURFACE)
-            addView(Button(this@SettingsActivity).apply { text = "Fechar"; setOnClickListener { close() } })
-            addView(Button(this@SettingsActivity).apply { text = "Salvar"; setOnClickListener { save() } })
+            gravity = Gravity.END or Gravity.CENTER_VERTICAL
+            setPadding(d(16), d(10), d(16), d(10))
+            background = android.graphics.drawable.LayerDrawable(
+                arrayOf(android.graphics.drawable.ColorDrawable(Theme.LINE), android.graphics.drawable.ColorDrawable(Theme.SURFACE)),
+            ).apply { setLayerInset(1, 0, d(1).coerceAtLeast(1), 0, 0) }
+            addView(Ui.button(this@SettingsActivity, "Fechar") { close() })
+            addView(Ui.button(this@SettingsActivity, "Salvar", Ui.Variant.PRIMARY) { save() },
+                LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginStart = d(8) })
         }
         setContentView(LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            addView(title)
-            addView(status)
-            addView(HorizontalScrollView(this@SettingsActivity).apply { isHorizontalScrollBarEnabled = false; addView(tabs) })
-            addView(Ui.divider(this@SettingsActivity))
+            addView(header)
+            addView(View(this@SettingsActivity).apply { setBackgroundColor(Theme.RULE) }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, d(1).coerceAtLeast(1)))
             addView(ScrollView(this@SettingsActivity).apply { addView(content) }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
             addView(bottom)
         })
@@ -107,35 +122,36 @@ class SettingsActivity : Activity() {
 
     private fun updateStatus() {
         val meta = kiosk.store.meta
-        val state = when {
-            !kiosk.isDeviceOwner -> "⚠ não é Device Owner"
-            kiosk.enforced -> "kiosk ativo"
-            else -> "kiosk desligado"
+        val (label, tone) = when {
+            !kiosk.isDeviceOwner -> "não é Device Owner" to Ui.Tone.BAD
+            kiosk.enforced -> "kiosk ativo" to Ui.Tone.GOOD
+            else -> "kiosk desligado" to Ui.Tone.NEUTRAL
         }
-        status.text = "$state · configuração rev ${meta.revision}${meta.source?.let { " ($it)" } ?: ""}" +
+        statusPill.removeAllViews()
+        statusPill.addView(Ui.statusPill(this, label, tone))
+        status.text = "Configuração rev ${meta.revision}${meta.source?.let { " · origem $it" } ?: ""}" +
             if (draft != saved) " · alterações não salvas" else ""
+        status.setTextColor(if (draft != saved) Theme.WARN_DEEP else Theme.SOFT)
     }
 
     private fun render() {
         updateStatus()
         tabs.removeAllViews()
-        for (t in Tab.entries) {
-            tabs.addView(Ui.pill(this, t.label, t == tab) { tab = t; render() }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginEnd = Ui.dp(this@SettingsActivity, 8) })
-        }
+        tabs.addView(Ui.segmented(this, Tab.entries.map { it.label }, Tab.entries.indexOf(tab)) { i -> tab = Tab.entries[i]; render() })
         content.removeAllViews()
+        card = null
         if (!kiosk.isDeviceOwner) {
-            content.addView(Ui.note(
+            loose(Ui.banner(
                 this,
                 "O app não é Device Owner: o kiosk e as restrições não funcionam. Num aparelho sem contas, rode:\n" +
                     "adb shell dpm set-device-owner $packageName/.admin.AdminReceiver",
-                Ui.DANGER,
+                critical = true,
             ))
         }
         if (PanelStore.get(this).state.let { it.enrolled && it.appliedHash != null }) {
-            content.addView(Ui.note(
+            loose(Ui.banner(
                 this,
                 "Este aparelho segue a configuração do painel. O que você mudar aqui vale até o painel mudar o perfil ou reaplicar a configuração.",
-                Ui.PRIMARY,
             ))
         }
         when (tab) {
@@ -151,31 +167,53 @@ class SettingsActivity : Activity() {
         if (rerender) render() else updateStatus()
     }
 
-    private fun add(v: View) = content.addView(v)
+    /** Linha no cartão atual (abre um, se preciso); linhas do mesmo cartão são separadas por uma divisória. */
+    private fun add(v: View) {
+        val c = card ?: Ui.card(this).also {
+            card = it
+            content.addView(it, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                topMargin = if (content.childCount > 0 && content.getChildAt(content.childCount - 1) is TextView) 0 else Ui.dp(this@SettingsActivity, 12)
+            })
+        }
+        if (c.childCount > 0) c.addView(Ui.divider(this))
+        c.addView(v)
+    }
+
+    /** Rótulo de seção; as linhas seguintes vão para um cartão novo logo abaixo. */
+    private fun section(title: String) {
+        content.addView(Ui.section(this, title))
+        card = null
+    }
+
+    /** Fora dos cartões (avisos). */
+    private fun loose(v: View) {
+        content.addView(v, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = Ui.dp(this@SettingsActivity, 12) })
+        card = null
+    }
 
     // ---------------------------------------------------------------- Geral
 
     private fun general() {
         val k = draft.kiosk
         add(Ui.switchRow(this, "Kiosk ligado", "Desligado, o aparelho funciona normalmente", k.enabled) { on -> edit({ it.copy(kiosk = it.kiosk.copy(enabled = on)) }) })
-        add(Ui.section(this, "Modo"))
+        section("Modo")
         add(Ui.pills(this, KioskConfig.Mode.entries.map { it.label }, KioskConfig.Mode.entries.indexOf(k.mode)) { i ->
             edit({ it.copy(kiosk = it.kiosk.copy(mode = KioskConfig.Mode.entries[i])) }, rerender = true)
         })
         when (k.mode) {
             KioskConfig.Mode.APP -> {
-                add(Ui.section(this, "App único"))
+                section("App único")
                 add(Ui.row(this, "App", k.app?.let { "${label(it)} ($it)" } ?: "Nenhum: toque para escolher") { pickSingleApp() })
                 add(Ui.slider(this, "Reabrir o app depois de fechar", k.relaunchDelaySec, 0..30, " s") { v -> edit({ it.copy(kiosk = it.kiosk.copy(relaunchDelaySec = v)) }) })
                 add(Ui.note(this, "Se o app cair 5 vezes em 2 minutos, o kiosk espera 30 s antes de abrir de novo."))
             }
             KioskConfig.Mode.APPS -> {
-                add(Ui.section(this, "Apps da grade"))
+                section("Apps da grade")
                 add(Ui.row(this, "Escolher apps", if (k.apps.isEmpty()) "Nenhum" else k.apps.joinToString("\n") { "${label(it)} ($it)" }) { pickApps() })
                 add(Ui.note(this, "O botão Home volta para a grade."))
             }
             KioskConfig.Mode.WEB -> {
-                add(Ui.section(this, "Site"))
+                section("Site")
                 add(Ui.labeled(this, "URL", Ui.textField(this, "https://…", k.web.url) { v -> edit({ it.copy(kiosk = it.kiosk.copy(web = it.kiosk.web.copy(url = v.trim()))) }) }))
                 add(Ui.labeled(this, "Recarregar após erro (segundos, 0 = não)", Ui.textField(this, "15", k.web.reloadOnErrorSec.toString(), numeric = true) { v ->
                     edit({ it.copy(kiosk = it.kiosk.copy(web = it.kiosk.web.copy(reloadOnErrorSec = v.toIntOrNull()?.coerceIn(0, 3600) ?: 0))) })
@@ -240,13 +278,13 @@ class SettingsActivity : Activity() {
         })
         d.brightness?.let { b -> add(Ui.slider(this, "Brilho", b, 0..100, "%") { v -> edit({ it.copy(display = it.display.copy(brightness = v)) }) }) }
         add(Ui.switchRow(this, "Barra de status", "Hora, bateria e rede visíveis no kiosk", d.showStatusBar) { on -> edit({ it.copy(display = it.display.copy(showStatusBar = on)) }) })
-        add(Ui.section(this, "Orientação (grade e site)"))
+        section("Orientação (grade e site)")
         add(Ui.pills(this, KioskConfig.Orientation.entries.map { it.label }, KioskConfig.Orientation.entries.indexOf(d.orientation)) { i ->
             edit({ it.copy(display = it.display.copy(orientation = KioskConfig.Orientation.entries[i])) }, rerender = true)
         })
-        add(Ui.section(this, "Aparência"))
+        section("Aparência")
         add(Ui.labeled(this, "Título (aparece no topo da grade)", Ui.textField(this, "Ex.: Expedição", a.title) { v -> edit({ it.copy(appearance = it.appearance.copy(title = v.take(80))) }) }))
-        add(Ui.labeled(this, "Cor de fundo (#RRGGBB)", Ui.textField(this, "#101828", a.backgroundColor) { v ->
+        add(Ui.labeled(this, "Cor de fundo (#RRGGBB)", Ui.textField(this, "#001425", a.backgroundColor) { v ->
             if (COLOR.matches(v.trim())) edit({ it.copy(appearance = it.appearance.copy(backgroundColor = v.trim().uppercase())) })
         }))
         add(Ui.labeled(this, "Cor do texto (#RRGGBB)", Ui.textField(this, "#FFFFFF", a.textColor) { v ->
@@ -259,9 +297,9 @@ class SettingsActivity : Activity() {
 
     private fun security() {
         val s = draft.security
-        add(Ui.section(this, "Acesso às configurações"))
+        section("Acesso às configurações")
         add(Ui.row(this, if (s.pinHash == null) "Definir PIN" else "Trocar PIN", if (s.pinHash == null) "⚠ Sem PIN: qualquer pessoa abre esta tela" else "PIN definido") { changePin() })
-        if (s.pinHash != null) add(Ui.row(this, "Remover PIN", null) {
+        if (s.pinHash != null) add(Ui.dangerRow(this, "Remover PIN", null) {
             AlertDialog.Builder(this).setTitle("Remover o PIN?").setMessage("Qualquer pessoa poderá abrir as configurações.")
                 .setPositiveButton("Remover") { _, _ -> edit({ it.copy(security = it.security.copy(pinHash = null)) }, rerender = true) }
                 .setNegativeButton("Cancelar", null).show()
@@ -277,13 +315,13 @@ class SettingsActivity : Activity() {
         add(Ui.slider(this, "Toques no canto", s.exitTaps, 3..10, "") { v -> edit({ it.copy(security = it.security.copy(exitTaps = v)) }) })
         add(Ui.note(this, "Toques rápidos (em até 2 s) no canto escolhido abrem o pedido de PIN. Sobre outros apps, depende da permissão \"Sobrepor a outros apps\" (aba Avançado)."))
 
-        add(Ui.section(this, "Durante o kiosk"))
+        section("Durante o kiosk")
         add(Ui.switchRow(this, "Notificações", "Permite abrir a área de notificações", s.allowNotifications) { on -> edit({ it.copy(security = it.security.copy(allowNotifications = on)) }) })
         add(Ui.switchRow(this, "Menu do botão de energia", "Desligar/reiniciar pelo botão", s.allowPowerMenu) { on -> edit({ it.copy(security = it.security.copy(allowPowerMenu = on)) }) })
         add(Ui.switchRow(this, "Desativar tela de bloqueio", "Só funciona sem senha/padrão no aparelho", s.disableLockScreen) { on -> edit({ it.copy(security = it.security.copy(disableLockScreen = on)) }) })
         add(Ui.switchRow(this, "Atalhos do Android na administração", "Wi-Fi, Bluetooth e Configurações nesta tela", s.systemSettingsShortcuts) { on -> edit({ it.copy(security = it.security.copy(systemSettingsShortcuts = on)) }) })
 
-        add(Ui.section(this, "Restrições do aparelho (sempre)"))
+        section("Restrições do aparelho (sempre)")
         add(Ui.switchRow(this, "Bloquear reset de fábrica", "Pelas configurações do Android", s.blockFactoryReset) { on -> edit({ it.copy(security = it.security.copy(blockFactoryReset = on)) }) })
         add(Ui.switchRow(this, "Bloquear modo de segurança", null, s.blockSafeBoot) { on -> edit({ it.copy(security = it.security.copy(blockSafeBoot = on)) }) })
         add(Ui.switchRow(this, "Bloquear transferência de arquivos por USB", null, s.blockUsbFileTransfer) { on -> edit({ it.copy(security = it.security.copy(blockUsbFileTransfer = on)) }) })
@@ -292,8 +330,8 @@ class SettingsActivity : Activity() {
 
     private fun changePin() {
         val ctx = this
-        val p1 = EditText(ctx).apply { hint = "Novo PIN (mínimo 4)"; inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD }
-        val p2 = EditText(ctx).apply { hint = "Repita o PIN"; inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD }
+        val p1 = Ui.input(ctx, "Novo PIN (mínimo 4)").apply { inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD }
+        val p2 = Ui.input(ctx, "Repita o PIN").apply { inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD }
         val box = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(Ui.dp(ctx, 20), Ui.dp(ctx, 8), Ui.dp(ctx, 20), 0)
@@ -327,42 +365,45 @@ class SettingsActivity : Activity() {
 
     private fun advanced() {
         val meta = kiosk.store.meta
-        add(Ui.section(this, "Sobre"))
+        section("Sobre")
         add(Ui.note(this, "StarX Kiosk ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})\n" +
             "Device Owner: ${if (kiosk.isDeviceOwner) "sim" else "não"}\n" +
-            "Configuração: rev ${meta.revision}, ${meta.updatedAt ?: "nunca salva"}${meta.source?.let { ", origem $it" } ?: ""}", Color.rgb(20, 20, 30)))
+            "Configuração: rev ${meta.revision}, ${meta.updatedAt ?: "nunca salva"}${meta.source?.let { ", origem $it" } ?: ""}", Theme.INK).apply {
+                typeface = Theme.typeface(this@SettingsActivity, Theme.Font.MONO, 400)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 11.5f)
+            })
         add(Ui.row(this, "Informações do aparelho", "Serial, IMEI, bateria, rede, armazenamento") { deviceInfo() })
 
         panelSection()
 
-        add(Ui.section(this, "Gesto sobre outros apps"))
+        section("Gesto sobre outros apps")
         val overlay = CornerOverlay.canShow(this)
         add(Ui.row(this, "Permissão \"Sobrepor a outros apps\"", if (overlay) "Concedida" else "Não concedida: toque para abrir a tela do Android") {
             if (!overlay) startSafely(CornerOverlay.permissionIntent(this))
         })
         if (!overlay) add(Ui.note(this, "Ou por ADB: adb shell appops set $packageName SYSTEM_ALERT_WINDOW allow"))
 
-        add(Ui.section(this, "Arquivo de configuração"))
+        section("Arquivo de configuração")
         add(Ui.row(this, "Exportar", "Salva a configuração (com o hash do PIN) num arquivo .json") { exportConfig() })
         add(Ui.row(this, "Importar", "Carrega um .json exportado; confira e toque em Salvar") { importConfig() })
         add(Ui.row(this, "Ver JSON", "Configuração em edição (sem o hash do PIN)") { showJson() })
         add(Ui.row(this, "Configurar por ADB", "Comandos para aplicar a configuração pelo computador") { adbHelp() })
 
         if (draft.security.systemSettingsShortcuts) {
-            add(Ui.section(this, "Android"))
+            section("Android")
             add(Ui.row(this, "Wi-Fi", null) { startSafely(Intent(Settings.ACTION_WIFI_SETTINGS)) })
             add(Ui.row(this, "Bluetooth", null) { startSafely(Intent(Settings.ACTION_BLUETOOTH_SETTINGS)) })
             add(Ui.row(this, "Todas as configurações", null) { startSafely(Intent(Settings.ACTION_SETTINGS)) })
         }
 
-        add(Ui.section(this, "Aparelho"))
+        section("Aparelho")
         add(Ui.row(this, "Reiniciar o aparelho", null) {
             confirm("Reiniciar o aparelho?", "Reiniciar") {
                 runCatching { DeviceOwner.dpm(this).reboot(AdminReceiver.component(this)) }
                     .onFailure { toast("Não foi possível reiniciar: ${it.message}") }
             }
         })
-        add(Ui.row(this, "Remover Device Owner", "Desfaz o kiosk e as restrições. Para voltar, só com ADB ou reset de fábrica.") {
+        add(Ui.dangerRow(this, "Remover Device Owner", "Desfaz o kiosk e as restrições. Para voltar, só com ADB ou reset de fábrica.") {
             confirm("Remover o Device Owner?", "Remover") {
                 val err = kiosk.removeDeviceOwner()
                 if (err == null) { toast("Device Owner removido"); finish() } else toast("Falhou: $err")
@@ -374,7 +415,7 @@ class SettingsActivity : Activity() {
 
     private fun panelSection() {
         val s = PanelStore.get(this).state
-        add(Ui.section(this, "Painel"))
+        section("Painel")
         val status = when {
             s.enrolled -> buildString {
                 append("Conectado como \"${s.name ?: "?"}\"\n${s.serverUrl}\n")
@@ -385,7 +426,7 @@ class SettingsActivity : Activity() {
             s.removed -> "⚠ Este aparelho foi removido do painel. Cadastre de novo para voltar a aparecer."
             else -> "Não conectado a um painel."
         }
-        add(Ui.note(this, status, if (s.removed) Ui.DANGER else Color.rgb(20, 20, 30)))
+        add(Ui.note(this, status, if (s.removed) Theme.BAD_DEEP else Theme.INK))
         add(Ui.row(this, if (s.enrolled) "Cadastrar de novo" else "Conectar ao painel", "Endereço do painel e código de cadastro") { enrollDialog(s.serverUrl ?: s.pendingUrl) })
         if (s.enrolled) {
             add(Ui.row(this, "Enviar dados agora", null) {
@@ -397,7 +438,7 @@ class SettingsActivity : Activity() {
                     }
                 }
             })
-            add(Ui.row(this, "Desconectar do painel", "O aparelho para de enviar dados (continua aparecendo no painel como offline)") {
+            add(Ui.dangerRow(this, "Desconectar do painel", "O aparelho para de enviar dados (continua aparecendo no painel como offline)") {
                 confirm("Desconectar do painel?", "Desconectar") {
                     PanelStore.get(this).clear()
                     PanelSync.schedule(this)
@@ -409,8 +450,8 @@ class SettingsActivity : Activity() {
 
     private fun enrollDialog(currentUrl: String?) {
         val ctx = this
-        val url = EditText(ctx).apply { hint = "https://kiosk-api.empresa.com.br"; setText(currentUrl.orEmpty()); inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI }
-        val code = EditText(ctx).apply { hint = "Código (10 letras/números)"; inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS }
+        val url = Ui.input(ctx, "https://kiosk-api.empresa.com.br").apply { setText(currentUrl.orEmpty()); inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI }
+        val code = Ui.input(ctx, "Código (10 letras/números)").apply { inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS }
         val box = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(Ui.dp(ctx, 20), Ui.dp(ctx, 8), Ui.dp(ctx, 20), 0)
@@ -465,8 +506,9 @@ class SettingsActivity : Activity() {
         val json = KioskConfig.pretty(KioskConfig.redacted(draft.toJson()))
         val tv = TextView(this).apply {
             text = json
-            typeface = Typeface.MONOSPACE
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            typeface = Theme.typeface(this@SettingsActivity, Theme.Font.MONO, 400)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 11.5f)
+            setTextColor(Theme.INK)
             setTextIsSelectable(true)
             setPadding(Ui.dp(this@SettingsActivity, 16), Ui.dp(this@SettingsActivity, 8), Ui.dp(this@SettingsActivity, 16), 0)
         }
@@ -487,7 +529,7 @@ class SettingsActivity : Activity() {
             |Detalhes: docs/configuracao.md no projeto.
         """.trimMargin()
         AlertDialog.Builder(this).setTitle("Configurar por ADB")
-            .setView(ScrollView(this).apply { addView(Ui.note(this@SettingsActivity, text, Color.rgb(20, 20, 30)).apply { typeface = Typeface.MONOSPACE }) })
+            .setView(ScrollView(this).apply { addView(Ui.note(this@SettingsActivity, text, Theme.INK).apply { typeface = Theme.typeface(this@SettingsActivity, Theme.Font.MONO, 400); setTextSize(TypedValue.COMPLEX_UNIT_SP, 11.5f) }) })
             .setPositiveButton("OK", null).show()
     }
 

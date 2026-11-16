@@ -14,7 +14,7 @@ type PinMode = "device" | "keep" | "set" | "none";
 const DEFAULTS: Cfg = {
   kiosk: { enabled: true, mode: "apps", app: null, apps: [], relaunchDelaySec: 3, web: { url: "", reloadOnErrorSec: 15, inactivityReturnSec: 0, allowZoom: true } },
   display: { keepScreenOn: true, brightness: null, orientation: "auto", showStatusBar: false },
-  appearance: { title: "", backgroundColor: "#101828", textColor: "#FFFFFF", columns: 4 },
+  appearance: { title: "", backgroundColor: "#001425", textColor: "#FFFFFF", columns: 4 },
   security: {
     exitCorner: "bottom_right",
     exitTaps: 5,

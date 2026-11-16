@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Espelho de ui/Theme.kt para o tema XML (diálogos do sistema, cursor, seleção). -->
+<resources>
+    <color name="p1">#98CEFF</color>
+    <color name="p2">#6EA5D4</color>
+    <color name="p3">#447EAA</color>
+    <color name="p4">#135882</color>
+    <color name="p5">#003659</color>
+    <color name="p6">#001425</color>
+    <color name="ink">#141414</color>
+    <color name="mid">#595959</color>
+    <color name="faint">#A6A6A6</color>
+    <color name="line">#DDDDDD</color>
+    <color name="canvas">#FAFAFA</color>
+    <color name="surface">#FFFFFF</color>
+</resources>

@@ -1,12 +1,10 @@
 package com.pstarx.kiosk.ui
 
 import android.app.Activity
-import android.graphics.Typeface
 import android.os.Bundle
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.ViewGroup
-import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -32,28 +30,26 @@ class MessageActivity : Activity() {
         val title = intent.getStringExtra(EXTRA_TITLE) ?: "Mensagem"
         val text = intent.getStringExtra(EXTRA_TEXT).orEmpty()
         val pad = Ui.dp(this, 20)
-
-        val column = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(pad, pad, pad, pad)
-        }
-        column.addView(TextView(this).apply {
-            this.text = title
-            typeface = Typeface.DEFAULT_BOLD
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
+        // cartão: cabeçalho com título 13/600 e contexto, corpo 12.5, ação primária
+        val column = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        column.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(pad, Ui.dp(this@MessageActivity, 14), pad, Ui.dp(this@MessageActivity, 14))
+            addView(Ui.text(this@MessageActivity, title, Theme.Type.SECTION_TITLE), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            addView(Ui.statusPill(this@MessageActivity, "painel", Ui.Tone.BLUE))
         })
+        column.addView(Ui.divider(this).apply { setBackgroundColor(Theme.RULE) })
         column.addView(ScrollView(this).apply {
-            addView(TextView(this@MessageActivity).apply {
-                this.text = text
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
-                setPadding(0, Ui.dp(this@MessageActivity, 12), 0, Ui.dp(this@MessageActivity, 16))
+            addView(Ui.text(this@MessageActivity, text, Theme.Type.CONTROL).apply {
+                typeface = Theme.typeface(this@MessageActivity, Theme.Font.SANS, 400)
+                setLineSpacing(0f, 1.4f)
+                setPadding(pad, Ui.dp(this@MessageActivity, 16), pad, Ui.dp(this@MessageActivity, 16))
             })
         }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-        column.addView(Button(this).apply {
-            this.text = "OK"
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
-            setOnClickListener { acknowledge() }
-        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { gravity = Gravity.END })
+        column.addView(Ui.button(this, "OK", Ui.Variant.PRIMARY) { acknowledge() }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            setMargins(pad, 0, pad, pad)
+        })
         setContentView(column)
         window.setLayout((resources.displayMetrics.widthPixels * 0.9).toInt(), ViewGroup.LayoutParams.WRAP_CONTENT)
     }
