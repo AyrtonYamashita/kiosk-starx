@@ -167,7 +167,7 @@ export function DeviceCommands({ device, commands, screenshots, repo }: { device
             <img
               src={`/screenshots/${latest.id}`}
               alt={`Tela de ${device.name}`}
-              style={{ maxHeight: 420, maxWidth: "100%", border: "1px solid var(--border)", borderRadius: 8 }}
+              style={{ maxHeight: 420, maxWidth: "100%", border: "1px solid var(--line)", borderRadius: 8 }}
             />
           </a>
           {screenshots.length > 1 && (
