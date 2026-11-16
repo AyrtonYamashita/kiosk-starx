@@ -83,6 +83,10 @@ data class KioskConfig(
          * ativa); o primeiro toque devolve o brilho. 0 = desligado. Ligado, a tela fica sempre ligada.
          */
         val dimAfterSec: Int = 0,
+        /** Aviso de bateria fraca na tela, sem carregar, a partir deste nível (%). 0 = sem aviso. */
+        val lowBatteryPercent: Int = 15,
+        /** Texto do aviso de bateria fraca (para o colaborador trocar a bateria). */
+        val lowBatteryMessage: String = "Troque a bateria antes de continuar a operação.",
         /** Orientação das telas do kiosk (grade e site). Não vale para apps de terceiros. */
         val orientation: Orientation = Orientation.AUTO,
         /** Barra de status com hora/bateria/rede durante o kiosk. */
@@ -165,6 +169,8 @@ data class KioskConfig(
                 .put("keepScreenOn", display.keepScreenOn)
                 .put("brightness", display.brightness ?: JSONObject.NULL)
                 .put("dimAfterSec", display.dimAfterSec)
+                .put("lowBatteryPercent", display.lowBatteryPercent)
+                .put("lowBatteryMessage", display.lowBatteryMessage)
                 .put("orientation", display.orientation.wire)
                 .put("showStatusBar", display.showStatusBar),
         )
@@ -235,6 +241,8 @@ data class KioskConfig(
                     keepScreenOn = r.bool(disp, "display.keepScreenOn", d.display.keepScreenOn),
                     brightness = r.intOrNull(disp, "display.brightness", 0..100),
                     dimAfterSec = r.int(disp, "display.dimAfterSec", d.display.dimAfterSec, 0..86_400),
+                    lowBatteryPercent = r.int(disp, "display.lowBatteryPercent", d.display.lowBatteryPercent, 0..50),
+                    lowBatteryMessage = r.str(disp, "display.lowBatteryMessage", d.display.lowBatteryMessage).take(200).ifBlank { d.display.lowBatteryMessage },
                     orientation = r.enum(disp, "display.orientation", d.display.orientation, Orientation::of),
                     showStatusBar = r.bool(disp, "display.showStatusBar", d.display.showStatusBar),
                 ),

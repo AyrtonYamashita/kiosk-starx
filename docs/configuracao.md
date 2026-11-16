@@ -24,7 +24,7 @@ Toda alteração ganha um número de **revisão** e a origem (`local`, `adb`, `p
     "relaunchDelaySec": 3,
     "web": { "url": "", "reloadOnErrorSec": 15, "inactivityReturnSec": 0, "allowZoom": true, "reloadButton": false }
   },
-  "display": { "keepScreenOn": true, "brightness": null, "dimAfterSec": 0, "orientation": "auto", "showStatusBar": false },
+  "display": { "keepScreenOn": true, "brightness": null, "dimAfterSec": 0, "lowBatteryPercent": 15, "lowBatteryMessage": "Troque a bateria antes de continuar a operação.", "orientation": "auto", "showStatusBar": false },
   "appearance": { "title": "", "backgroundColor": "#001425", "textColor": "#FFFFFF", "columns": 4 },
   "security": {
     "pin": "1234",
@@ -53,6 +53,8 @@ Toda alteração ganha um número de **revisão** e a origem (`local`, `adb`, `p
 | `kiosk.web.inactivityReturnSec` | 0–86400 | Volta para a URL inicial depois desse tempo sem toque (0 = nunca). |
 | `kiosk.web.reloadButton` | true/false | Botão de recarregar na tela do kiosk (no rodapé, ou flutuante quando a barra do Android aparece). |
 | `display.dimAfterSec` | 0–86400 | Sem toque por esse tempo, o brilho cai para 1%; a tela nunca apaga e o primeiro toque devolve o brilho (0 = desligado). Ligado, a tela fica sempre ligada. |
+| `display.lowBatteryPercent` | 0–50 | Aviso de bateria fraca na tela (sem carregar) a partir desse nível; repete a cada 5% a menos e fecha ao carregar (0 = sem aviso). |
+| `display.lowBatteryMessage` | texto até 200 | Mensagem do aviso (ex.: pedir para trocar a bateria antes de continuar). |
 | `display.keepScreenOn` | true/false | Tela sempre ligada durante o kiosk (o valor original volta quando o kiosk desliga). |
 | `display.brightness` | null ou 0–100 | Brilho fixo em %. `null` = não mexe. |
 | `display.orientation` | `auto`, `portrait`, `landscape` | Orientação da grade e do site. **Não vale para apps de terceiros.** |

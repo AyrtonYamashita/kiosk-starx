@@ -25,3 +25,18 @@ class ManagedAppsTest {
         assertEquals(Artifact("com.exemplo.coletor", 2, "/v1/device/apps/x/apk", "abcd", 1234), a)
     }
 }
+
+class BatteryWarnTest {
+    private fun warn(level: Int, charging: Boolean = false, threshold: Int = 15, last: Int? = null) =
+        com.pstarx.kiosk.kiosk.BatteryWatch.shouldWarn(level, charging, threshold, last)
+
+    @org.junit.Test
+    fun avisaNoLimiteERepeteACada5() {
+        org.junit.Assert.assertFalse(warn(16))
+        org.junit.Assert.assertTrue(warn(15))
+        org.junit.Assert.assertFalse(warn(13, last = 15))
+        org.junit.Assert.assertTrue(warn(10, last = 15))
+        org.junit.Assert.assertFalse(warn(5, charging = true, last = 10))
+        org.junit.Assert.assertFalse(warn(5, threshold = 0))
+    }
+}

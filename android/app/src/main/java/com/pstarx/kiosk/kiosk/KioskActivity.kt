@@ -181,7 +181,7 @@ class KioskActivity : Activity() {
             addView(screen, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
             if (systemBarsHidden) {
                 addView(
-                    StatusFooter(this@KioskActivity, onReload = if (showReloadButton) ({ reloadPage() }) else null),
+                    StatusFooter(this@KioskActivity, onReload = if (showReloadButton) ({ reloadPage() }) else null, lowPercent = config.display.lowBatteryPercent),
                     LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(Theme.FOOTER)),
                 )
             }

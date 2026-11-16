@@ -279,6 +279,11 @@ class SettingsActivity : Activity() {
         add(Ui.labeled(this, "Escurecer após inatividade (segundos, 0 = não escurece)", Ui.textField(this, "0", d.dimAfterSec.toString(), numeric = true) { v ->
             edit({ it.copy(display = it.display.copy(dimAfterSec = v.toIntOrNull()?.coerceIn(0, 86_400) ?: 0)) })
         }, help = "Sem toque por esse tempo, o brilho cai para 1% e a tela nunca apaga (os comandos do painel continuam chegando na hora). O primeiro toque devolve o brilho."))
+        section("Bateria")
+        add(Ui.slider(this, "Avisar bateria fraca em", d.lowBatteryPercent, 0..50, "%") { v -> edit({ it.copy(display = it.display.copy(lowBatteryPercent = v)) }) })
+        add(Ui.labeled(this, "Mensagem do aviso", Ui.textField(this, "Troque a bateria…", d.lowBatteryMessage) { v ->
+            edit({ it.copy(display = it.display.copy(lowBatteryMessage = v.take(200))) })
+        }, help = "0% desliga o aviso. Ele aparece por cima de qualquer tela, repete a cada 5% a menos e some ao carregar."))
         add(Ui.switchRow(this, "Brilho fixo", "Desligado, o brilho fica como está no aparelho", d.brightness != null) { on ->
             edit({ it.copy(display = it.display.copy(brightness = if (on) 80 else null)) }, rerender = true)
         })

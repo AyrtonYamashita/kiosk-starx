@@ -35,5 +35,7 @@ class KioskApp : Application() {
         PanelSync.schedule(this)
         // aviso imediato do painel (comandos e configuração chegam em ~1 s, não em até 30 s)
         com.pstarx.kiosk.panel.PanelPush.start(this)
+        // aviso de bateria fraca (o processo vive enquanto o kiosk for o launcher)
+        com.pstarx.kiosk.kiosk.BatteryWatch.start(this)
     }
 }

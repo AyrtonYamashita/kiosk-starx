@@ -13,7 +13,15 @@ type PinMode = "device" | "keep" | "set" | "none";
 
 const DEFAULTS: Cfg = {
   kiosk: { enabled: true, mode: "apps", app: null, apps: [], relaunchDelaySec: 3, web: { url: "", reloadOnErrorSec: 15, inactivityReturnSec: 0, allowZoom: true, reloadButton: false } },
-  display: { keepScreenOn: true, brightness: null, dimAfterSec: 0, orientation: "auto", showStatusBar: false },
+  display: {
+    keepScreenOn: true,
+    brightness: null,
+    dimAfterSec: 0,
+    lowBatteryPercent: 15,
+    lowBatteryMessage: "Troque a bateria antes de continuar a operação.",
+    orientation: "auto",
+    showStatusBar: false,
+  },
   appearance: { title: "", backgroundColor: "#001425", textColor: "#FFFFFF", columns: 4 },
   security: {
     exitCorner: "bottom_right",
@@ -230,6 +238,20 @@ export function ConfigEditor({ name, initial, catalog, hasExistingPin }: { name:
               brilho. Ligado, a tela fica sempre ligada.
             </span>
           </label>
+          <h2 style={{ marginTop: 8 }}>Bateria</h2>
+          <div className="grid">
+            <label>
+              Avisar bateria fraca em (%, 0 = sem aviso)
+              <input type="number" min={0} max={50} value={d.lowBatteryPercent ?? 15} onChange={(e) => set("display.lowBatteryPercent", Number(e.target.value))} />
+            </label>
+            <label>
+              Mensagem do aviso
+              <input value={d.lowBatteryMessage ?? ""} maxLength={200} onChange={(e) => set("display.lowBatteryMessage", e.target.value)} />
+            </label>
+          </div>
+          <span className="muted small">
+            Sem carregar e com a bateria nesse nível, o aviso abre por cima de qualquer tela do coletor; repete a cada 5% a menos e fecha sozinho ao começar a carregar.
+          </span>
           <label className="inline">
             <input type="checkbox" checked={d.brightness !== null} onChange={(e) => set("display.brightness", e.target.checked ? 80 : null)} />
             Brilho fixo

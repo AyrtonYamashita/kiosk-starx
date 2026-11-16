@@ -83,6 +83,14 @@
             android:exported="false"
             android:theme="@style/Kiosk.Dialog" />
 
+        <!-- aviso de bateria fraca -->
+        <activity
+            android:name=".ui.LowBatteryActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:theme="@style/Kiosk.Dialog" />
+
         <!-- ícone na gaveta de apps -->
         <activity
             android:name=".ui.MainActivity"

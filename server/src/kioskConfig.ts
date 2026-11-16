@@ -46,6 +46,8 @@ export const KioskConfigInput = z
         keepScreenOn: z.boolean(),
         brightness: z.number().int().min(0).max(100).nullable(),
         dimAfterSec: z.number().int().min(0).max(86_400),
+        lowBatteryPercent: z.number().int().min(0).max(50),
+        lowBatteryMessage: z.string().trim().min(1).max(200),
         orientation: z.enum(["auto", "portrait", "landscape"]),
         showStatusBar: z.boolean(),
       })
