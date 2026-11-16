@@ -69,8 +69,11 @@ class KioskController private constructor(context: Context) {
         try {
             DeviceOwner.grantSelfPermissions(ctx)
             DeviceOwner.ensureLocationEnabled(ctx)
+            // brilho "de verdade" antes de mexer na tela (senão o 1% do escurecimento viraria o valor original)
+            ScreenDimmer.restore(ctx)
             applySecurity(c)
             if (c.kiosk.enabled) enforce(c, bringToFront = trigger == "config") else release(wasEnforced)
+            ScreenDimmer.configure(ctx, c.display.dimAfterSec, active = c.kiosk.enabled)
         } catch (e: Exception) {
             Log.e(TAG, "Falha aplicando a configuração ($trigger)", e)
         }
@@ -236,7 +239,8 @@ class KioskController private constructor(context: Context) {
     /** Tela sempre ligada / brilho fixo enquanto o kiosk estiver ativo. Desligado, volta ao valor original. */
     private fun applyScreen(c: KioskConfig) {
         val cr = ctx.contentResolver
-        if (c.display.keepScreenOn) {
+        // escurecer por inatividade exige a tela sempre ligada (ela só fica a 1%, nunca apaga)
+        if (c.display.keepScreenOn || c.display.dimAfterSec > 0) {
             saveOriginal(Settings.System.SCREEN_OFF_TIMEOUT, Settings.System.getString(cr, Settings.System.SCREEN_OFF_TIMEOUT))
             dpm.setSystemSetting(admin, Settings.System.SCREEN_OFF_TIMEOUT, Int.MAX_VALUE.toString())
         }
@@ -251,7 +255,7 @@ class KioskController private constructor(context: Context) {
 
     private fun restoreScreen(keep: KioskConfig?) {
         val restore = buildList {
-            if (keep?.display?.keepScreenOn != true) add(Settings.System.SCREEN_OFF_TIMEOUT)
+            if (keep?.display?.keepScreenOn != true && (keep?.display?.dimAfterSec ?: 0) <= 0) add(Settings.System.SCREEN_OFF_TIMEOUT)
             if (keep?.display?.brightness == null) {
                 add(Settings.System.SCREEN_BRIGHTNESS)
                 add(Settings.System.SCREEN_BRIGHTNESS_MODE)

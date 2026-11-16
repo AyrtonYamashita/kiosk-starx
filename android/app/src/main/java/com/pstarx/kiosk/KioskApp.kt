@@ -12,6 +12,8 @@ import com.pstarx.kiosk.panel.PanelSync
 class KioskApp : Application() {
     override fun onCreate() {
         super.onCreate()
+        // o processo pode ter morrido com a tela a 1%: devolve o brilho (a configuração religa o escurecimento)
+        com.pstarx.kiosk.kiosk.ScreenDimmer.restore(this)
         // captura de tela remota: precisa saber qual tela deste app está na frente
         registerActivityLifecycleCallbacks(com.pstarx.kiosk.commands.ScreenCapture.tracker)
         // apps instalados/removidos: o app do kiosk pode ter chegado (ou sumido); a grade precisa redesenhar.

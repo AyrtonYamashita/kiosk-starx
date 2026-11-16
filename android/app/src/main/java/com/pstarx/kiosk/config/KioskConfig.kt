@@ -69,6 +69,8 @@ data class KioskConfig(
         /** Volta para a URL inicial depois de um tempo sem toque (0 = nunca). */
         val inactivityReturnSec: Int = 0,
         val allowZoom: Boolean = true,
+        /** Botão de recarregar a página na tela do kiosk (para o operador sair de um erro sem chamar ninguém). */
+        val reloadButton: Boolean = false,
     )
 
     data class Display(
@@ -76,6 +78,11 @@ data class KioskConfig(
         val keepScreenOn: Boolean = true,
         /** Brilho fixo em % (null = não mexe no brilho). */
         val brightness: Int? = null,
+        /**
+         * Sem toque por esse tempo (s), o brilho cai para 1% — a tela nunca apaga (a conexão com o painel continua
+         * ativa); o primeiro toque devolve o brilho. 0 = desligado. Ligado, a tela fica sempre ligada.
+         */
+        val dimAfterSec: Int = 0,
         /** Orientação das telas do kiosk (grade e site). Não vale para apps de terceiros. */
         val orientation: Orientation = Orientation.AUTO,
         /** Barra de status com hora/bateria/rede durante o kiosk. */
@@ -148,7 +155,8 @@ data class KioskConfig(
                         .put("url", kiosk.web.url)
                         .put("reloadOnErrorSec", kiosk.web.reloadOnErrorSec)
                         .put("inactivityReturnSec", kiosk.web.inactivityReturnSec)
-                        .put("allowZoom", kiosk.web.allowZoom),
+                        .put("allowZoom", kiosk.web.allowZoom)
+                        .put("reloadButton", kiosk.web.reloadButton),
                 ),
         )
         .put(
@@ -156,6 +164,7 @@ data class KioskConfig(
             JSONObject()
                 .put("keepScreenOn", display.keepScreenOn)
                 .put("brightness", display.brightness ?: JSONObject.NULL)
+                .put("dimAfterSec", display.dimAfterSec)
                 .put("orientation", display.orientation.wire)
                 .put("showStatusBar", display.showStatusBar),
         )
@@ -219,11 +228,13 @@ data class KioskConfig(
                         reloadOnErrorSec = r.int(w, "kiosk.web.reloadOnErrorSec", d.kiosk.web.reloadOnErrorSec, 0..3600),
                         inactivityReturnSec = r.int(w, "kiosk.web.inactivityReturnSec", d.kiosk.web.inactivityReturnSec, 0..86_400),
                         allowZoom = r.bool(w, "kiosk.web.allowZoom", d.kiosk.web.allowZoom),
+                        reloadButton = r.bool(w, "kiosk.web.reloadButton", d.kiosk.web.reloadButton),
                     ),
                 ),
                 display = Display(
                     keepScreenOn = r.bool(disp, "display.keepScreenOn", d.display.keepScreenOn),
                     brightness = r.intOrNull(disp, "display.brightness", 0..100),
+                    dimAfterSec = r.int(disp, "display.dimAfterSec", d.display.dimAfterSec, 0..86_400),
                     orientation = r.enum(disp, "display.orientation", d.display.orientation, Orientation::of),
                     showStatusBar = r.bool(disp, "display.showStatusBar", d.display.showStatusBar),
                 ),

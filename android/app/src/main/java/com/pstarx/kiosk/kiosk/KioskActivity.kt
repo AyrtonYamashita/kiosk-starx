@@ -127,8 +127,18 @@ class KioskActivity : Activity() {
         if (wv != null && wv.canGoBack()) wv.goBack()
     }
 
+    /** Toque que só acordou a tela escurecida: o gesto inteiro é ignorado (não clica no site nem na grade). */
+    private var swallowGesture = false
+
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
-        if (ev.actionMasked == MotionEvent.ACTION_DOWN) restartInactivity()
+        if (ev.actionMasked == MotionEvent.ACTION_DOWN) {
+            restartInactivity()
+            swallowGesture = ScreenDimmer.onUserActivity()
+        }
+        if (swallowGesture) {
+            if (ev.actionMasked == MotionEvent.ACTION_UP || ev.actionMasked == MotionEvent.ACTION_CANCEL) swallowGesture = false
+            return true
+        }
         return super.dispatchTouchEvent(ev)
     }
 
@@ -169,8 +179,15 @@ class KioskActivity : Activity() {
         root.addView(LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             addView(screen, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
-            if (systemBarsHidden) addView(StatusFooter(this@KioskActivity), LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(Theme.FOOTER)))
+            if (systemBarsHidden) {
+                addView(
+                    StatusFooter(this@KioskActivity, onReload = if (showReloadButton) ({ reloadPage() }) else null),
+                    LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(Theme.FOOTER)),
+                )
+            }
         })
+        // sem o rodapé, o atalho de recarregar fica flutuando num canto de baixo (o oposto ao do gesto)
+        if (showReloadButton && !systemBarsHidden) root.addView(floatingReload())
         root.addView(cornerZone())
         if (previousMode == KioskConfig.Mode.APP && config.kiosk.mode != KioskConfig.Mode.APP) cancelCountdown()
     }
@@ -185,7 +202,7 @@ class KioskActivity : Activity() {
             KioskConfig.Orientation.PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
             KioskConfig.Orientation.LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         }
-        if (config.display.keepScreenOn) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        if (config.display.keepScreenOn || config.display.dimAfterSec > 0) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }
 
@@ -312,14 +329,20 @@ class KioskActivity : Activity() {
                 return scheme != "http" && scheme != "https"
             }
 
+            override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
+                webError = false
+            }
+
             override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
                 if (!request.isForMainFrame) return
+                webError = true
                 Log.w(TAG, "Erro ao carregar ${request.url}: ${error.description}")
                 scheduleReload(view)
             }
 
             override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, error: SslError) {
                 Log.w(TAG, "Certificado inválido em ${error.url}")
+                webError = true
                 handler.cancel()
                 scheduleReload(view)
             }
@@ -328,6 +351,42 @@ class KioskActivity : Activity() {
         webView = wv
         restartInactivity()
         return wv
+    }
+
+    /** Última carga da página principal falhou (o atalho então volta à URL inicial em vez de repetir a página com erro). */
+    private var webError = false
+
+    private val showReloadButton: Boolean
+        get() = config.kiosk.mode == KioskConfig.Mode.WEB && config.kiosk.web.reloadButton && config.kiosk.web.url.isNotBlank()
+
+    /** Atalho do operador: recarrega a página atual; se ela deu erro (ou não há página), volta à URL inicial. */
+    private fun reloadPage() {
+        val wv = webView ?: return
+        Log.i(TAG, "Recarregar pela tela (erro=$webError)")
+        if (webError || wv.url.isNullOrBlank()) wv.loadUrl(config.kiosk.web.url) else wv.reload()
+        restartInactivity()
+    }
+
+    /** Botão redondo de 40dp, superfície escura da paleta com contorno de 1dp, ícone de recarregar. */
+    private fun floatingReload(): View {
+        val bottomLeftTaken = config.security.exitCorner == KioskConfig.Corner.BOTTOM_LEFT
+        return ImageView(this).apply {
+            setImageResource(com.pstarx.kiosk.R.drawable.ic_reload)
+            imageTintList = android.content.res.ColorStateList.valueOf(Theme.NIGHT_INK)
+            scaleType = ImageView.ScaleType.CENTER_INSIDE
+            setPadding(dp(10), dp(10), dp(10), dp(10))
+            contentDescription = "Recarregar página"
+            background = android.graphics.drawable.RippleDrawable(
+                android.content.res.ColorStateList.valueOf(Theme.withAlpha(Theme.P1, 0.3f)),
+                Theme.box(this@KioskActivity, Theme.withAlpha(Theme.NIGHT_SURFACE, 0.9f), Theme.R_PILL, Theme.P3),
+                null,
+            )
+            elevation = Theme.dpf(this@KioskActivity, 2f)
+            setOnClickListener { reloadPage() }
+            layoutParams = FrameLayout.LayoutParams(dp(40), dp(40), Gravity.BOTTOM or if (bottomLeftTaken) Gravity.END else Gravity.START).apply {
+                setMargins(dp(16), dp(16), dp(16), dp(16))
+            }
+        }
     }
 
     private fun scheduleReload(view: WebView) {

@@ -24,6 +24,8 @@ class MessageActivity : Activity() {
         super.onCreate(savedInstanceState)
         setShowWhenLocked(true)
         setTurnScreenOn(true)
+        // mensagem do painel: a tela escurecida volta ao brilho normal para ser lida
+        com.pstarx.kiosk.kiosk.ScreenDimmer.onUserActivity()
         setFinishOnTouchOutside(false)
         commandId = intent.getStringExtra(EXTRA_ID)
         shownReported = savedInstanceState?.getBoolean("shown") ?: false

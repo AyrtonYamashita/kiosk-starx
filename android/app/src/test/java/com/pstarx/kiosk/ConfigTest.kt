@@ -32,9 +32,9 @@ class ConfigTest {
                 app = "com.exemplo.app",
                 apps = listOf("com.a.b", "com.c.d"),
                 relaunchDelaySec = 7,
-                web = KioskConfig.Web("https://intranet.local/painel", 30, 120, false),
+                web = KioskConfig.Web("https://intranet.local/painel", 30, 120, false, reloadButton = true),
             ),
-            display = KioskConfig.Display(false, 55, KioskConfig.Orientation.LANDSCAPE, true),
+            display = KioskConfig.Display(false, 55, dimAfterSec = 90, orientation = KioskConfig.Orientation.LANDSCAPE, showStatusBar = true),
             appearance = KioskConfig.Appearance("Expedição", "#000000", "#FFEEDD", 5),
             security = KioskConfig.Security(
                 pinHash = fastHash("4321"),

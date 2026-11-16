@@ -34,6 +34,7 @@ export const KioskConfigInput = z
             reloadOnErrorSec: z.number().int().min(0).max(3600),
             inactivityReturnSec: z.number().int().min(0).max(86_400),
             allowZoom: z.boolean(),
+            reloadButton: z.boolean(),
           })
           .partial()
           .strict(),
@@ -44,6 +45,7 @@ export const KioskConfigInput = z
       .object({
         keepScreenOn: z.boolean(),
         brightness: z.number().int().min(0).max(100).nullable(),
+        dimAfterSec: z.number().int().min(0).max(86_400),
         orientation: z.enum(["auto", "portrait", "landscape"]),
         showStatusBar: z.boolean(),
       })

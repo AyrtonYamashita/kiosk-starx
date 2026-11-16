@@ -12,8 +12,8 @@ type Cfg = Record<string, any>;
 type PinMode = "device" | "keep" | "set" | "none";
 
 const DEFAULTS: Cfg = {
-  kiosk: { enabled: true, mode: "apps", app: null, apps: [], relaunchDelaySec: 3, web: { url: "", reloadOnErrorSec: 15, inactivityReturnSec: 0, allowZoom: true } },
-  display: { keepScreenOn: true, brightness: null, orientation: "auto", showStatusBar: false },
+  kiosk: { enabled: true, mode: "apps", app: null, apps: [], relaunchDelaySec: 3, web: { url: "", reloadOnErrorSec: 15, inactivityReturnSec: 0, allowZoom: true, reloadButton: false } },
+  display: { keepScreenOn: true, brightness: null, dimAfterSec: 0, orientation: "auto", showStatusBar: false },
   appearance: { title: "", backgroundColor: "#001425", textColor: "#FFFFFF", columns: 4 },
   security: {
     exitCorner: "bottom_right",
@@ -199,6 +199,7 @@ export function ConfigEditor({ name, initial, catalog, hasExistingPin }: { name:
                 </label>
               </div>
               {check("kiosk.web.allowZoom", "Permitir zoom")}
+              {check("kiosk.web.reloadButton", "Botão de recarregar a página", "atalho na tela do kiosk para o operador sair de um erro")}
             </>
           )}
 
@@ -221,6 +222,14 @@ export function ConfigEditor({ name, initial, catalog, hasExistingPin }: { name:
       {tab === "Tela" && (
         <div className="stack">
           {check("display.keepScreenOn", "Manter a tela ligada", "durante o kiosk")}
+          <label>
+            Escurecer após inatividade (s, 0 = não escurece)
+            <input type="number" min={0} max={86400} value={d.dimAfterSec ?? 0} onChange={(e) => set("display.dimAfterSec", Number(e.target.value))} style={{ maxWidth: 200 }} />
+            <span className="muted small" style={{ fontWeight: 400 }}>
+              Sem toque por esse tempo, o brilho cai para 1% — a tela nunca apaga (a conexão com o painel continua ativa e os comandos chegam na hora). O primeiro toque devolve o
+              brilho. Ligado, a tela fica sempre ligada.
+            </span>
+          </label>
           <label className="inline">
             <input type="checkbox" checked={d.brightness !== null} onChange={(e) => set("display.brightness", e.target.checked ? 80 : null)} />
             Brilho fixo

@@ -32,7 +32,7 @@ import kotlin.concurrent.thread
  * Mesmo vocabulário do console: fundo da paleta mais escura com contorno de 1dp (sem sombra), rótulo em Outfit,
  * dado de máquina (SSID, dBm, %, hora) em IBM Plex Mono, cor só como estado (bateria verde → âmbar → vermelho).
  */
-class StatusFooter(context: Context) : LinearLayout(context) {
+class StatusFooter(context: Context, onReload: (() -> Unit)? = null) : LinearLayout(context) {
     private val main = Handler(Looper.getMainLooper())
     private val info = DeviceInfo(context)
     private val bars = SignalBars(context)
@@ -77,6 +77,27 @@ class StatusFooter(context: Context) : LinearLayout(context) {
         ).apply { setLayerInset(1, 0, Theme.dp(context, 1).coerceAtLeast(1), 0, 0) } // contorno de 1dp no topo
         contentDescription = "Barra de status"
 
+        // atalho de recarregar a página (modo site, quando ligado no perfil): botão compacto à esquerda
+        if (onReload != null) {
+            addView(LinearLayout(context).apply {
+                orientation = HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(Theme.dp(context, 8), 0, Theme.dp(context, 10), 0)
+                background = android.graphics.drawable.RippleDrawable(
+                    android.content.res.ColorStateList.valueOf(Theme.withAlpha(Theme.P1, 0.3f)),
+                    Theme.box(context, Theme.NIGHT_SURFACE, Theme.R_NAV),
+                    null,
+                )
+                contentDescription = "Recarregar página"
+                isClickable = true
+                setOnClickListener { onReload() }
+                addView(android.widget.ImageView(context).apply {
+                    setImageResource(com.pstarx.kiosk.R.drawable.ic_reload)
+                    imageTintList = android.content.res.ColorStateList.valueOf(Theme.NIGHT_INK)
+                }, LayoutParams(Theme.dp(context, 13), Theme.dp(context, 13)).apply { marginEnd = Theme.dp(context, 6) })
+                addView(Ui.text(context, "Recarregar", Type.LABEL, Theme.NIGHT_INK))
+            }, LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, Theme.dp(context, 22)).apply { marginEnd = Theme.dp(context, 12) })
+        }
         addView(bars, LayoutParams(Theme.dp(context, 14), Theme.dp(context, 11)).apply { marginEnd = Theme.dp(context, 8) })
         addView(network.apply { isSingleLine = true; ellipsize = android.text.TextUtils.TruncateAt.END }, LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginEnd = Theme.dp(context, 6) })
         addView(signal)

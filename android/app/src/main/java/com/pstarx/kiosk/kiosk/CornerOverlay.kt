@@ -56,8 +56,13 @@ object CornerOverlay {
         val counter = TapCounter(taps)
         val v = View(ctx).apply {
             setOnTouchListener { _, ev ->
-                if (ev.actionMasked == MotionEvent.ACTION_DOWN && counter.onTap(SystemClock.uptimeMillis())) {
-                    PinActivity.open(ctx)
+                when (ev.actionMasked) {
+                    // toque em qualquer outro ponto da tela (outro app na frente): conta como atividade
+                    MotionEvent.ACTION_OUTSIDE -> ScreenDimmer.onUserActivity()
+                    MotionEvent.ACTION_DOWN -> {
+                        // tela escurecida: o toque só acorda (não conta para o gesto)
+                        if (!ScreenDimmer.onUserActivity() && counter.onTap(SystemClock.uptimeMillis())) PinActivity.open(ctx)
+                    }
                 }
                 true
             }
@@ -67,7 +72,7 @@ object CornerOverlay {
             size,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
             PixelFormat.TRANSLUCENT,
         ).apply {
             gravity = when (corner) {

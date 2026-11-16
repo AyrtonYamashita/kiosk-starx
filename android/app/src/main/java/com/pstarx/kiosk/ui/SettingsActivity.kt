@@ -222,6 +222,9 @@ class SettingsActivity : Activity() {
                     edit({ it.copy(kiosk = it.kiosk.copy(web = it.kiosk.web.copy(inactivityReturnSec = v.toIntOrNull()?.coerceIn(0, 86_400) ?: 0))) })
                 }))
                 add(Ui.switchRow(this, "Permitir zoom", null, k.web.allowZoom) { on -> edit({ it.copy(kiosk = it.kiosk.copy(web = it.kiosk.web.copy(allowZoom = on))) }) })
+                add(Ui.switchRow(this, "Botão de recarregar a página", "Atalho na tela do kiosk para sair de um erro", k.web.reloadButton) { on ->
+                    edit({ it.copy(kiosk = it.kiosk.copy(web = it.kiosk.web.copy(reloadButton = on))) })
+                })
             }
         }
     }
@@ -273,6 +276,9 @@ class SettingsActivity : Activity() {
         val d = draft.display
         val a = draft.appearance
         add(Ui.switchRow(this, "Manter a tela ligada", "Durante o kiosk", d.keepScreenOn) { on -> edit({ it.copy(display = it.display.copy(keepScreenOn = on)) }) })
+        add(Ui.labeled(this, "Escurecer após inatividade (segundos, 0 = não escurece)", Ui.textField(this, "0", d.dimAfterSec.toString(), numeric = true) { v ->
+            edit({ it.copy(display = it.display.copy(dimAfterSec = v.toIntOrNull()?.coerceIn(0, 86_400) ?: 0)) })
+        }, help = "Sem toque por esse tempo, o brilho cai para 1% e a tela nunca apaga (os comandos do painel continuam chegando na hora). O primeiro toque devolve o brilho."))
         add(Ui.switchRow(this, "Brilho fixo", "Desligado, o brilho fica como está no aparelho", d.brightness != null) { on ->
             edit({ it.copy(display = it.display.copy(brightness = if (on) 80 else null)) }, rerender = true)
         })
