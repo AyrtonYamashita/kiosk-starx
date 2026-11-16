@@ -12,18 +12,24 @@ export const dynamic = "force-dynamic";
 
 export default async function DevicePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  // tudo em paralelo: cada ida à API custa uma viagem até a VPS
   let d: DeviceDetail;
+  let profiles: Profile[], commands: Command[], screenshots: Screenshot[], repo: RepoApp[];
   try {
-    d = await api<DeviceDetail>(`/v1/admin/devices/${id}`);
+    const [detail, p, c, r] = await Promise.all([
+      api<DeviceDetail>(`/v1/admin/devices/${id}`),
+      api<{ profiles: Profile[] }>("/v1/admin/profiles"),
+      api<{ commands: Command[]; screenshots: Screenshot[] }>(`/v1/admin/devices/${id}/commands`),
+      api<{ apps: RepoApp[] }>("/v1/admin/apps"),
+    ]);
+    d = detail;
+    profiles = p.profiles;
+    ({ commands, screenshots } = c);
+    repo = r.apps;
   } catch (e) {
     if (e instanceof ApiError && e.status === 404) notFound();
     throw e;
   }
-  const [{ profiles }, { commands, screenshots }, { apps: repo }] = await Promise.all([
-    api<{ profiles: Profile[] }>("/v1/admin/profiles"),
-    api<{ commands: Command[]; screenshots: Screenshot[] }>(`/v1/admin/devices/${id}/commands`),
-    api<{ apps: RepoApp[] }>("/v1/admin/apps"),
-  ]);
   const hw = d.info?.hardware ?? {};
   const bat = d.info?.battery ?? {};
   const net = d.info?.network ?? {};

@@ -292,6 +292,10 @@ span.alert { display: inline-flex; padding: 6px 10px; }
 pre.json { background: var(--canvas); border: 1px solid var(--line); border-radius: var(--radius-field); padding: 12px; overflow: auto; max-height: 480px; margin: 0; }
 .code-big { font-family: var(--font-mono); font-size: 28px; line-height: 36px; letter-spacing: 0.08em; font-weight: 500; }
 
+/* esqueleto de carregamento: bloco na cor da divisória, "respirando" */
+.skeleton { border-radius: var(--radius-chip); background: var(--rule); opacity: .45; animation: respirar 1.6s ease-in-out infinite; }
+@keyframes respirar { 50% { opacity: .9; } }
+
 @media (max-width: 640px) {
   .hide-sm { display: none; }
 }

@@ -9,17 +9,21 @@ export const dynamic = "force-dynamic";
 export default async function ProfilePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ salvo?: string }> }) {
   const { id } = await params;
   const { salvo } = await searchParams;
-  let profile: Profile;
+  let profile: Profile, apps: CatalogApp[], repo: RepoApp[];
   try {
-    profile = await api<Profile>(`/v1/admin/profiles/${id}`);
+    // em paralelo: cada ida à API custa uma viagem até a VPS
+    const [p, catalog, r] = await Promise.all([
+      api<Profile>(`/v1/admin/profiles/${id}`),
+      api<{ apps: CatalogApp[] }>("/v1/admin/apps-catalog"),
+      api<{ apps: RepoApp[] }>("/v1/admin/apps"),
+    ]);
+    profile = p;
+    apps = catalog.apps;
+    repo = r.apps;
   } catch (e) {
     if (e instanceof ApiError && e.status === 404) notFound();
     throw e;
   }
-  const [{ apps }, { apps: repo }] = await Promise.all([
-    api<{ apps: CatalogApp[] }>("/v1/admin/apps-catalog"),
-    api<{ apps: RepoApp[] }>("/v1/admin/apps"),
-  ]);
   return (
     <div className="stack">
       <Link href="/profiles" className="muted">
