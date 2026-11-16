@@ -13,7 +13,7 @@ export default async function DevicesPage() {
   ]);
   const online = devices.filter((d) => d.online).length;
   return (
-    <div className="stack">
+    <div className="stack wide">
       <AutoRefresh seconds={15} />
       <div className="row">
         <h1 style={{ margin: 0 }}>Aparelhos</h1>
