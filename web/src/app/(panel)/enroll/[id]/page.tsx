@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { api, type Enrollment, type Release } from "@/lib/api";
 import { revokeEnrollment } from "@/lib/actions";
 import { dateTime, enrollmentStatus as statusBadge } from "@/lib/format";
+import { AdbInstall } from "./AdbInstall";
 import { QrGenerator } from "./QrGenerator";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +14,24 @@ export default async function EnrollmentPage({ params }: { params: Promise<{ id:
   const e = enrollments.find((x) => x.id === id);
   if (!e) notFound();
   const active = e.status === "active";
+  const apkUrl = release ? `${e.serverUrl}/apks/${release.file}` : "<APK>";
+  const configB64 = e.initialConfig ? Buffer.from(JSON.stringify(e.initialConfig)).toString("base64") : null;
+  const wifiScript = [
+    "# 1) ligar a conexão (troque IP e portas pelos do coletor)",
+    "#    Android 11+: Opções do desenvolvedor → Depuração por Wi-Fi → Parear com código",
+    "adb pair <IP>:<PORTA-DE-PAREAMENTO>",
+    "adb connect <IP>:<PORTA>",
+    "#    Android 10 (ex.: Chainway C6000): uma vez com o cabo USB, depois pode tirar o cabo",
+    "#    adb tcpip 5555   e então   adb connect <IP>:5555",
+    "",
+    "# 2) instalar e configurar",
+    `curl -fLo starx-kiosk.apk ${apkUrl}`,
+    "adb install -r starx-kiosk.apk",
+    "adb shell dpm set-device-owner com.pstarx.kiosk/.admin.AdminReceiver",
+    "adb shell appops set com.pstarx.kiosk SYSTEM_ALERT_WINDOW allow",
+    ...(configB64 ? [`adb shell am broadcast -n com.pstarx.kiosk/.adb.AdbConfigReceiver -a com.pstarx.kiosk.CONFIG --es pin <PIN> --es config_b64 ${configB64}`] : []),
+    `adb shell am broadcast -n com.pstarx.kiosk/.adb.AdbConfigReceiver -a com.pstarx.kiosk.CONFIG --es pin <PIN> --es enroll_url ${e.serverUrl} --es enroll_code ${e.code}`,
+  ].join("\n");
   const adb = `adb shell am broadcast -n com.pstarx.kiosk/.adb.AdbConfigReceiver -a com.pstarx.kiosk.CONFIG --es pin <PIN> --es enroll_url ${e.serverUrl} --es enroll_code ${e.code}`;
 
   return (
@@ -63,6 +82,31 @@ export default async function EnrollmentPage({ params }: { params: Promise<{ id:
           </pre>
         </section>
       </div>
+
+      <section className="card stack">
+        <h2>Instalar por cabo USB (direto do navegador)</h2>
+        {!release ? (
+          <div className="alert warn">Nenhum APK publicado no servidor ainda.</div>
+        ) : !active ? (
+          <div className="alert warn">Este código não está ativo.</div>
+        ) : (
+          <AdbInstall enrollment={e} release={release} />
+        )}
+      </section>
+
+      <section className="card stack">
+        <h2>Instalar por depuração Wi-Fi (comandos)</h2>
+        <p className="small" style={{ margin: 0 }}>
+          O navegador não consegue abrir a conexão de ADB por Wi-Fi (só por USB). Rode estes comandos num computador com o{" "}
+          <a href="https://developer.android.com/tools/releases/platform-tools" target="_blank" rel="noreferrer">
+            ADB
+          </a>{" "}
+          instalado, na mesma rede do coletor. Troque &lt;PIN&gt; pelo PIN de administrador que o aparelho vai ter.
+        </p>
+        <pre className="json mono small" style={{ whiteSpace: "pre-wrap" }}>
+          {wifiScript}
+        </pre>
+      </section>
 
       {e.initialConfig ? (
         <section className="card stack">

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useActionState, useState } from "react";
 import { bulkAssignProfile, sendCommand } from "@/lib/actions";
 import type { DeviceSummary, Profile } from "@/lib/api";
-import { ago, configStatusLabel, kioskModeLabel, networkLabel } from "@/lib/format";
+import { ago, configStatusLabel, kioskModeLabel, networkLabel, uptime } from "@/lib/format";
 
 function Battery({ b }: { b: DeviceSummary["battery"] }) {
   if (!b || b.level === null || b.level === undefined) return <span className="muted">—</span>;
@@ -122,8 +122,10 @@ export function DevicesTable({
               </th>
               <th>Aparelho</th>
               <th>Status</th>
+              <th>Usuário</th>
               <th>Bateria</th>
               <th className="hide-sm">Rede</th>
+              <th className="hide-sm">Ligado há</th>
               <th className="hide-sm">Kiosk / perfil</th>
               <th className="hide-sm">App</th>
             </tr>
@@ -151,17 +153,48 @@ export function DevicesTable({
                     <div className="muted small">{ago(d.lastSeenAt)}</div>
                   </td>
                   <td>
+                    {d.loggedUser ? (
+                      <span className="mono">{d.loggedUser}</span>
+                    ) : (
+                      <span className="muted small" title="Integração futura: o usuário logado no sistema aberto no kiosk">
+                        —
+                      </span>
+                    )}
+                  </td>
+                  <td>
                     <Battery b={d.battery} />
                   </td>
                   <td className="hide-sm">
                     {d.network ? (
                       <>
-                        {networkLabel[d.network.type] ?? d.network.type}
-                        {d.network.ssid ? ` · ${d.network.ssid}` : ""}
-                        <div className="muted small mono">{d.network.ip ?? ""}</div>
+                        {d.network.type === "wifi" ? (
+                          <>
+                            <span className="mono">{d.network.ssid ?? "(rede oculta)"}</span>
+                          </>
+                        ) : (
+                          networkLabel[d.network.type] ?? d.network.type
+                        )}
+                        <div className="muted small mono">
+                          {d.network.ip ?? ""}
+                          {d.network.type === "wifi" && d.network.rssi !== null ? ` · ${d.network.rssi} dBm` : ""}
+                        </div>
+                        {d.network.mac && <div className="muted small mono">MAC {d.network.mac}</div>}
                       </>
                     ) : (
                       <span className="muted">—</span>
+                    )}
+                  </td>
+                  <td className="hide-sm">
+                    {d.uptimeMs === null ? (
+                      <span className="muted">—</span>
+                    ) : (
+                      <>
+                        {/* online: soma o tempo desde o último contato; offline: o que era no último contato */}
+                        <span className="mono" suppressHydrationWarning>
+                          {uptime(d.uptimeMs + (d.online && d.infoUpdatedAt ? Math.max(0, Date.now() - new Date(d.infoUpdatedAt).getTime()) : 0))}
+                        </span>
+                        {!d.online && <div className="muted small">no último contato</div>}
+                      </>
                     )}
                   </td>
                   <td className="hide-sm">

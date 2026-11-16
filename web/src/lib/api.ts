@@ -72,7 +72,12 @@ export interface DeviceSummary {
   lastIp: string | null;
   online: boolean;
   battery: { level: number | null; charging: boolean; temperatureC?: number | null } | null;
-  network: { type: string; ssid: string | null; rssi: number | null; ip: string | null } | null;
+  network: { type: string; ssid: string | null; rssi: number | null; ip: string | null; mac: string | null } | null;
+  /** Tempo ligado no último contato (ms). */
+  uptimeMs: number | null;
+  infoUpdatedAt: string | null;
+  /** Usuário logado no sistema aberto no kiosk (integração futura com o site). */
+  loggedUser: string | null;
   kioskActive: boolean | null;
   kioskMode: string | null;
   kioskEnabled: boolean | null;
@@ -188,6 +193,7 @@ export interface Release {
   versionName: string;
   file: string;
   sizeBytes: number;
+  sha256: string;
   builtAt: string;
 }
 

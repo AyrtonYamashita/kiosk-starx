@@ -67,6 +67,8 @@ class KioskController private constructor(context: Context) {
         val c = config
         val wasEnforced = enforced
         try {
+            DeviceOwner.grantSelfPermissions(ctx)
+            DeviceOwner.ensureLocationEnabled(ctx)
             applySecurity(c)
             if (c.kiosk.enabled) enforce(c, bringToFront = trigger == "config") else release(wasEnforced)
         } catch (e: Exception) {

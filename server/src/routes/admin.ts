@@ -107,6 +107,7 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
       const r = await db.query(
         `SELECT d.id, d.name, d.serial, d.manufacturer, d.model, d.android_version, d.app_version, d.enrolled_at, d.last_seen_at, d.last_ip,
                 d.info->'battery' AS battery, d.info->'network' AS network, d.info->'app' AS app, d.config_revision, d.config_source,
+                (d.info->>'uptimeMs')::bigint AS uptime_ms, d.info_updated_at, d.info->'session' AS session,
                 d.config->'kiosk'->>'mode' AS kiosk_mode, (d.config->'kiosk'->>'enabled')::boolean AS kiosk_enabled,
                 d.last_seen_at > now() - make_interval(secs => $1) AS online,
                 d.profile_id, p.name AS profile_name, p.config AS profile_config, d.config_overrides, d.config_nonce, d.applied_hash, d.failed_hash
@@ -128,7 +129,20 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
           lastIp: d.last_ip,
           online: d.online === true,
           battery: d.battery ?? null,
-          network: d.network ? { type: d.network.type, ssid: d.network.wifi?.ssid ?? null, rssi: d.network.wifi?.rssi ?? null, ip: d.network.ipAddresses?.[0] ?? null } : null,
+          network: d.network
+            ? {
+                type: d.network.type,
+                ssid: d.network.wifi?.ssid ?? null,
+                rssi: d.network.wifi?.rssi ?? null,
+                ip: d.network.ipAddresses?.[0] ?? null,
+                mac: d.network.wifiMac ?? null,
+              }
+            : null,
+          // tempo ligado no último contato (o painel soma o tempo desde então, se o aparelho está online)
+          uptimeMs: d.uptime_ms !== null ? Number(d.uptime_ms) : null,
+          infoUpdatedAt: d.info_updated_at,
+          // usuário logado no sistema aberto no kiosk: reservado para a integração com o site (info.session.user)
+          loggedUser: typeof d.session?.user === "string" && d.session.user ? d.session.user : null,
           kioskActive: d.app?.kioskActive ?? null,
           kioskMode: d.kiosk_mode,
           kioskEnabled: d.kiosk_enabled,

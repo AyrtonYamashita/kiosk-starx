@@ -21,6 +21,31 @@ object DeviceOwner {
         if (Build.VERSION.SDK_INT >= 33) add(Manifest.permission.POST_NOTIFICATIONS)
     }
 
+    /**
+     * Localização ligada: sem ela o Android não informa o nome da rede Wi-Fi (SSID), que aparece no painel e na barra
+     * do rodapé. Device Owner liga sem pedir nada na tela.
+     */
+    fun ensureLocationEnabled(context: Context) {
+        if (!isDeviceOwner(context)) return
+        if (context.getSystemService(android.location.LocationManager::class.java).isLocationEnabled) return
+        try {
+            if (Build.VERSION.SDK_INT >= 30) {
+                dpm(context).setLocationEnabled(AdminReceiver.component(context), true)
+            } else {
+                // Android 10: setLocationEnabled não existe; LOCATION_MODE é permitido ao Device Owner
+                @Suppress("DEPRECATION")
+                dpm(context).setSecureSetting(
+                    AdminReceiver.component(context),
+                    android.provider.Settings.Secure.LOCATION_MODE,
+                    android.provider.Settings.Secure.LOCATION_MODE_HIGH_ACCURACY.toString(),
+                )
+            }
+            Log.i(TAG, "Localização ligada (nome da rede Wi-Fi)")
+        } catch (e: Exception) {
+            Log.w(TAG, "Não foi possível ligar a localização: ${e.message}")
+        }
+    }
+
     fun grantSelfPermissions(context: Context) {
         if (!isDeviceOwner(context)) return
         val dpm = dpm(context)

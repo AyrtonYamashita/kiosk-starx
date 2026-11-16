@@ -121,6 +121,10 @@ export default async function DevicePage({ params }: { params: Promise<{ id: str
         <section className="card">
           <h2>Kiosk</h2>
           <dl className="kv">
+            <dt>Usuário logado</dt>
+            <dd>
+              {d.info?.session?.user ? <span className="mono">{d.info.session.user}</span> : <span className="muted">— (integração futura com o site)</span>}
+            </dd>
             <dt>App StarX</dt>
             <dd>
               {d.appVersion ?? "—"} {app.isDeviceOwner === false && <span className="badge danger">não é Device Owner</span>}

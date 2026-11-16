@@ -227,3 +227,19 @@ describe("repositório de apps", () => {
     expect((await t.api("GET", "/v1/admin/apps")).json.apps).toEqual([]);
   });
 });
+
+describe("lista de aparelhos", () => {
+  it("traz MAC, rede, tempo ligado e o usuário logado (integração futura)", async () => {
+    const i = info("CMD1");
+    await checkin({
+      info: { ...i, uptimeMs: 3_600_000, network: { ...i.network, wifiMac: "aa:bb:cc:dd:ee:ff" }, session: { user: "joao.silva" } },
+    });
+    const d = (await t.api("GET", "/v1/admin/devices")).json.devices.find((x: { id: string }) => x.id === deviceId);
+    expect(d.network).toMatchObject({ ssid: "LOJA", mac: "aa:bb:cc:dd:ee:ff", ip: "192.168.0.10" });
+    expect(d.uptimeMs).toBe(3_600_000);
+    expect(d.loggedUser).toBe("joao.silva");
+    await checkin();
+    const e = (await t.api("GET", "/v1/admin/devices")).json.devices.find((x: { id: string }) => x.id === deviceId);
+    expect(e.loggedUser).toBeNull();
+  });
+});
