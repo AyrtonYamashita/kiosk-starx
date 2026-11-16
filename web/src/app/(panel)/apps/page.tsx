@@ -1,13 +1,17 @@
 import Link from "next/link";
-import { api, type RepoApp } from "@/lib/api";
+import { api, type KioskRelease as KR, type RepoApp } from "@/lib/api";
 import { bytes, dateTime } from "@/lib/format";
 import { DeleteApp, DeleteVersion, RenameApp } from "./AppForms";
+import { KioskRelease } from "./KioskRelease";
 import { UploadApk } from "./UploadApk";
 
 export const dynamic = "force-dynamic";
 
 export default async function AppsPage() {
-  const { apps, maxApkMb } = await api<{ apps: RepoApp[]; maxApkMb: number }>("/v1/admin/apps");
+  const [{ apps, maxApkMb }, kiosk] = await Promise.all([
+    api<{ apps: RepoApp[]; maxApkMb: number }>("/v1/admin/apps"),
+    api<KR>("/v1/admin/kiosk-release"),
+  ]);
   return (
     <div className="stack">
       <h1>Apps</h1>
@@ -17,7 +21,12 @@ export default async function AppsPage() {
       </p>
 
       <section className="card stack">
-        <h2>Enviar APK</h2>
+        <h2>App do kiosk (StarX Kiosk)</h2>
+        <KioskRelease data={kiosk} />
+      </section>
+
+      <section className="card stack">
+        <h2>Enviar APK ao repositório</h2>
         <UploadApk maxApkMb={maxApkMb} />
       </section>
 

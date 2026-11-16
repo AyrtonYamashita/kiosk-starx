@@ -55,3 +55,26 @@ export function provisioningPayload(release: Release, o: QrOptions): Record<stri
   }
   return payload;
 }
+
+// ---------------------------------------------------------------- publicação pelo painel
+
+/** Versão enviada pelo painel e ainda não publicada (mesmo formato do release.json). */
+export function readPending(apkDir: string): Release | null {
+  const file = path.join(apkDir, "pending.json");
+  if (!fs.existsSync(file)) return null;
+  const parsed = Release.safeParse(JSON.parse(fs.readFileSync(file, "utf8")));
+  if (!parsed.success || !fs.existsSync(path.join(apkDir, parsed.data.file))) return null;
+  return parsed.data;
+}
+
+/** Grava o JSON por troca atômica (quem lê nunca vê o arquivo pela metade). */
+export function writeJsonAtomic(file: string, data: unknown) {
+  const tmp = `${file}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(data, null, 2) + "\n");
+  fs.renameSync(tmp, file);
+}
+
+/** SHA-256 do certificado (hex, como o leitor de APK devolve) → formato do QR (base64url). */
+export function certChecksum(certSha256Hex: string): string {
+  return Buffer.from(certSha256Hex, "hex").toString("base64url");
+}

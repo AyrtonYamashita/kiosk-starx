@@ -9,7 +9,7 @@ type Status = { kind: "idle" } | { kind: "sending"; pct: number } | { kind: "ok"
  * Envio de APK: o painel pede um token de uso único e o navegador manda o arquivo direto para a API
  * (a Vercel recusa corpos acima de 4,5 MB).
  */
-export function UploadApk({ maxApkMb }: { maxApkMb: number }) {
+export function UploadApk({ maxApkMb, target = "repo" }: { maxApkMb: number; target?: "repo" | "kiosk" }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [label, setLabel] = useState("");
   const [status, setStatus] = useState<Status>({ kind: "idle" });
@@ -22,7 +22,8 @@ export function UploadApk({ maxApkMb }: { maxApkMb: number }) {
     setStatus({ kind: "sending", pct: 0 });
     const t = await uploadToken();
     if ("error" in t) return setStatus({ kind: "error", text: t.error });
-    const url = label.trim() ? `${t.uploadUrl}?label=${encodeURIComponent(label.trim())}` : t.uploadUrl;
+    const base = target === "kiosk" ? t.kioskUploadUrl : t.uploadUrl;
+    const url = target === "repo" && label.trim() ? `${base}?label=${encodeURIComponent(label.trim())}` : base;
     // XMLHttpRequest: o fetch não informa o progresso do envio
     const xhr = new XMLHttpRequest();
     xhr.open("POST", url);
@@ -42,7 +43,9 @@ export function UploadApk({ maxApkMb }: { maxApkMb: number }) {
       }
       setStatus({
         kind: "ok",
-        text: body.alreadyExisted
+        text: target === "kiosk"
+          ? `Recebida a ${body.pending.versionName} (${body.pending.versionCode}). Confira e toque em Publicar.`
+          : body.alreadyExisted
           ? `${body.packageName} ${body.versionName ?? ""} (${body.versionCode}) já estava no repositório.`
           : `Enviado: ${body.packageName} ${body.versionName ?? ""} (${body.versionCode}).`,
       });
@@ -57,25 +60,27 @@ export function UploadApk({ maxApkMb }: { maxApkMb: number }) {
     <form onSubmit={submit} className="stack">
       <div className="grid">
         <label>
-          Arquivo APK (até {maxApkMb} MB)
+          {target === "kiosk" ? "APK de release do StarX Kiosk" : `Arquivo APK (até ${maxApkMb} MB)`}
           <input ref={fileRef} type="file" accept=".apk,application/vnd.android.package-archive" required />
         </label>
-        <label>
-          Nome no painel (opcional)
-          <input value={label} onChange={(e) => setLabel(e.target.value)} maxLength={80} placeholder="o nome que os aparelhos mostram, ou o pacote" />
-        </label>
+        {target === "repo" && (
+          <label>
+            Nome no painel (opcional)
+            <input value={label} onChange={(e) => setLabel(e.target.value)} maxLength={80} placeholder="o nome que os aparelhos mostram, ou o pacote" />
+          </label>
+        )}
       </div>
       <div className="row">
         <button className="primary" disabled={status.kind === "sending"}>
-          {status.kind === "sending" ? `Enviando… ${status.pct}%` : "Enviar APK"}
+          {status.kind === "sending" ? `Enviando… ${status.pct}%` : target === "kiosk" ? "Enviar versão" : "Enviar APK"}
         </button>
         {status.kind === "ok" && <span className="alert ok small">{status.text}</span>}
         {status.kind === "error" && <span className="alert error small">{status.text}</span>}
       </div>
-      <span className="muted small">
+      {target === "repo" && <span className="muted small">
         O pacote e a versão vêm do próprio APK. Uma versão nova do mesmo app precisa ter versionCode maior e a mesma assinatura. Os aparelhos com perfis que mantêm o app
         recebem a versão nova sozinhos no próximo contato.
-      </span>
+      </span>}
     </form>
   );
 }

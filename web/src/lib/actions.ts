@@ -263,9 +263,9 @@ export async function cancelCommand(form: FormData) {
 }
 
 /** Token de uso único para o navegador mandar o APK direto para a API (a Vercel não aceita arquivos grandes). */
-export async function uploadToken(): Promise<{ token: string; uploadUrl: string; maxApkMb: number } | { error: string }> {
+export async function uploadToken(): Promise<{ token: string; uploadUrl: string; kioskUploadUrl: string; maxApkMb: number } | { error: string }> {
   try {
-    return await api<{ token: string; uploadUrl: string; maxApkMb: number }>("/v1/admin/apps/upload-token", { method: "POST" });
+    return await api<{ token: string; uploadUrl: string; kioskUploadUrl: string; maxApkMb: number }>("/v1/admin/apps/upload-token", { method: "POST" });
   } catch (e) {
     return { error: message(e) };
   }
@@ -303,4 +303,26 @@ export async function deleteAppVersion(_: FormState, form: FormData): Promise<Fo
   }
   revalidatePath("/apps");
   return { ok: "Versão removida." };
+}
+
+// ---------------------------------------------------------------- app do kiosk
+
+export async function publishKiosk(_: FormState): Promise<FormState> {
+  try {
+    const r = await api<{ release: { versionName: string; versionCode: number } }>("/v1/admin/kiosk-release/publish", { method: "POST" });
+    revalidatePath("/apps");
+    return { ok: `Publicada a ${r.release.versionName} (${r.release.versionCode}). Os aparelhos com 0.4.0 ou mais nova se atualizam no próximo contato.` };
+  } catch (e) {
+    return { error: message(e) };
+  }
+}
+
+export async function discardKiosk(_: FormState): Promise<FormState> {
+  try {
+    await api("/v1/admin/kiosk-release/pending", { method: "DELETE" });
+    revalidatePath("/apps");
+    return { ok: "Versão pendente descartada." };
+  } catch (e) {
+    return { error: message(e) };
+  }
 }

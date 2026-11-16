@@ -45,6 +45,12 @@ As migrações rodam sozinhas na subida. Faça um `pg_dump` antes de versões co
 
 ### APK do QR e atualização automática do app
 
+**Pelo painel (recomendado):** Apps → "App do kiosk" → envie o APK de release (`./gradlew assembleRelease`, versionCode
+maior). Ele fica pendente; o botão **Publicar** troca o `release.json`. O painel recusa APK com outra assinatura ou que
+não seja mais novo que o publicado.
+
+**Pelo terminal:**
+
 O QR manda o aparelho baixar o app de `PUBLIC_URL/apks/`. Para publicar uma versão:
 
 ```bash

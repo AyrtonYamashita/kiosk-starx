@@ -63,8 +63,8 @@ Enquanto o app não chega, a tela do kiosk mostra "aguardando a instalação".
 
 ## Atualização do próprio app do kiosk
 
-Quando um APK novo do StarX Kiosk é publicado na API (`publishApk` → `deploy/data/apks`, veja
-[deploy/README.md](../deploy/README.md)), os aparelhos com versão mais velha baixam e se atualizam no próximo
+Quando um APK novo do StarX Kiosk é publicado — no painel, em Apps → "App do kiosk" (enviar e depois Publicar), ou
+pelo terminal (`publishApk` → `deploy/data/apks`, veja [deploy/README.md](../deploy/README.md)) — os aparelhos com versão mais velha baixam e se atualizam no próximo
 contato. A atualização substitui o app sem tirar o Device Owner nem a configuração. O kiosk volta sozinho, e a
 versão nova aparece no painel no check-in seguinte. Para desligar: `AUTO_UPDATE_APP=false` no `.env` da VPS.
 

@@ -213,3 +213,12 @@ export interface Enrollment {
   status: "active" | "expired" | "exhausted" | "revoked";
   serverUrl: string;
 }
+
+export interface KioskRelease {
+  release: Release | null;
+  pending: Release | null;
+  pendingUploadedBy: string | null;
+  autoUpdate: boolean;
+  maxApkMb: number;
+  devices: { versionName: string | null; versionCode: number | null; devices: number }[];
+}
