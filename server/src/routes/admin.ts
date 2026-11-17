@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { Config } from "../config.js";
-import { hashPassword, newEnrollmentCode, newToken, sha256, verifyPassword } from "../crypto.js";
+import { hashPassword, needsRehash, newEnrollmentCode, newToken, sha256, verifyPassword } from "../crypto.js";
 import type { Db } from "../db.js";
 import { redactConfig } from "../kioskConfig.js";
 import { provisioningPayload, readRelease } from "../release.js";
@@ -103,7 +103,7 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
       ])
     ).rows[0];
     // conta inexistente gasta o mesmo tempo (hash falso): a resposta não revela quais contas existem
-    const passwordOk = admin ? await verifyPassword(body.data.password, admin.password_hash) : await verifyPassword(body.data.password, DUMMY_HASH).then(() => false);
+    const passwordOk = admin ? await verifyPassword(body.data.password, admin.password_hash) : await verifyPassword(body.data.password, await DUMMY_HASH_PROMISE()).then(() => false);
     const ok = passwordOk && !admin.disabled_at;
     if (!ok) {
       const reason = !admin ? "unknown_account" : admin.disabled_at ? "disabled" : "bad_password";
@@ -119,6 +119,11 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
 
     await clearLock(db, "account", accountKey);
     await clearLock(db, "ip", ipKey);
+    // senha antiga (scrypt): regrava em Argon2id agora que a senha certa está em mãos
+    if (needsRehash(admin.password_hash)) {
+      await db.query("UPDATE admins SET password_hash = $2 WHERE id = $1", [admin.id, await hashPassword(body.data.password)]);
+      await audit(db, req, "password_rehashed", { adminId: admin.id, details: { to: "argon2id" } });
+    }
     // sessão nova a cada login (rotação): o token anterior do navegador, se houver, o painel descarta
     const token = newToken();
     const expires = new Date(Date.now() + config.sessionTtlHours * 3600_000);
@@ -373,8 +378,10 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
   }
 }
 
-// hash fixo para gastar o mesmo tempo quando o usuário não existe (não revela quais usuários existem)
-const DUMMY_HASH = "scrypt$16384$8$1$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+// hash falso (Argon2id, mesmos parâmetros) para gastar o mesmo tempo quando a conta não existe: o tempo de resposta
+// não revela quais contas existem. Calculado uma vez, na primeira tentativa.
+let dummyHash: Promise<string> | null = null;
+const DUMMY_HASH_PROMISE = () => (dummyHash ??= hashPassword(newToken()));
 
 export async function ensureAdmin(db: Db, config: Config, log: { info: (msg: string) => void }) {
   const count = Number((await db.query("SELECT count(*) FROM admins")).rows[0].count);

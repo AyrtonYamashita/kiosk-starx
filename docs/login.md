@@ -28,3 +28,15 @@
 
 A migração só acrescenta colunas e tabelas: voltar a imagem anterior da API funciona com o banco novo. As sessões
 continuam válidas nas duas versões.
+
+## 1.2 — Argon2id
+
+- Senhas novas em **Argon2id** (formato PHC, 19 MiB, t=2, p=1 — mínimo recomendado pela OWASP), biblioteca
+  `@node-rs/argon2` (binário pronto para o Alpine da imagem).
+- Hashes antigos em scrypt continuam entrando; no próximo login certo a senha é regravada em Argon2id (evento
+  `password_rehashed` na auditoria). Senha errada não regrava nada.
+- Conta inexistente gasta o mesmo tempo (hash falso também em Argon2id).
+
+**Deploy:** só a imagem da API (sem migração). **Rollback:** voltar a imagem anterior **não** lê Argon2id — quem já
+tiver entrado depois da 1.2 ficaria sem login. Antes de um rollback, redefina essas senhas (página Usuários) ou
+mantenha a 1.2.
