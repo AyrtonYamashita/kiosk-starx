@@ -72,6 +72,7 @@ export const KioskConfigInput = z
         blockUsbFileTransfer: z.boolean(),
         blockDebugging: z.boolean(),
         systemSettingsShortcuts: z.boolean(),
+        reportLocation: z.boolean(),
       })
       .partial()
       .strict(),

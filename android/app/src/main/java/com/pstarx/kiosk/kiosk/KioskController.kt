@@ -74,6 +74,7 @@ class KioskController private constructor(context: Context) {
             applySecurity(c)
             if (c.kiosk.enabled) enforce(c, bringToFront = trigger == "config") else release(wasEnforced)
             ScreenDimmer.configure(ctx, c.display.dimAfterSec, active = c.kiosk.enabled)
+            com.pstarx.kiosk.device.LocationTracker.configure(ctx, c.security.reportLocation)
         } catch (e: Exception) {
             Log.e(TAG, "Falha aplicando a configuração ($trigger)", e)
         }

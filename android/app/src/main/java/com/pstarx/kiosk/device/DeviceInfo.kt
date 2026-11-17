@@ -38,6 +38,8 @@ class DeviceInfo(private val context: Context) {
         put("network", network())
         put("screenOn", context.getSystemService(PowerManager::class.java).isInteractive)
         put("uptimeMs", SystemClock.elapsedRealtime())
+        // última posição conhecida (null se desligado no perfil ou ainda sem posição)
+        put("location", LocationTracker.snapshot() ?: JSONObject.NULL)
         put("app", app())
         if (includeApps) put("apps", apps())
     }

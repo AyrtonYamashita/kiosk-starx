@@ -7,6 +7,7 @@ import { DeleteDevice, RenameDevice } from "./DeviceForms";
 import { AppsTable } from "./AppsTable";
 import { DeviceCommands, ManagedAppsStatus } from "./DeviceCommands";
 import { DeviceConfig } from "./DeviceConfig";
+import { DeviceLocation } from "./DeviceLocation";
 
 export const dynamic = "force-dynamic";
 
@@ -174,6 +175,11 @@ export default async function DevicePage({ params }: { params: Promise<{ id: str
           </dl>
         </section>
       </div>
+
+      <section className="card stack">
+        <h2>Localização</h2>
+        <DeviceLocation location={d.info?.location ?? null} enabled={d.config?.security?.reportLocation !== false} />
+      </section>
 
       <section className="card stack">
         <h2>Comandos</h2>

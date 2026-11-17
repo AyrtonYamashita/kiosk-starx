@@ -16,6 +16,19 @@ class KioskApp : Application() {
         com.pstarx.kiosk.kiosk.ScreenDimmer.restore(this)
         // captura de tela remota: precisa saber qual tela deste app está na frente
         registerActivityLifecycleCallbacks(com.pstarx.kiosk.commands.ScreenCapture.tracker)
+        // orientação do kiosk em TODAS as telas do app (PIN, configurações, mensagem, bateria), não só na do kiosk
+        registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
+            override fun onActivityCreated(activity: android.app.Activity, savedInstanceState: android.os.Bundle?) {
+                val k = KioskController.get(activity)
+                if (k.enforced) runCatching { activity.requestedOrientation = k.config.display.orientation.activityInfo }
+            }
+            override fun onActivityStarted(activity: android.app.Activity) = Unit
+            override fun onActivityResumed(activity: android.app.Activity) = Unit
+            override fun onActivityPaused(activity: android.app.Activity) = Unit
+            override fun onActivityStopped(activity: android.app.Activity) = Unit
+            override fun onActivitySaveInstanceState(activity: android.app.Activity, outState: android.os.Bundle) = Unit
+            override fun onActivityDestroyed(activity: android.app.Activity) = Unit
+        })
         // apps instalados/removidos: o app do kiosk pode ter chegado (ou sumido); a grade precisa redesenhar.
         // Broadcast implícito: só por registro dinâmico (o processo vive enquanto a tela do kiosk for o launcher).
         val filter = IntentFilter().apply {

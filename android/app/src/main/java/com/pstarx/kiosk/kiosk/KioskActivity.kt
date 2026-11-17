@@ -197,11 +197,7 @@ class KioskActivity : Activity() {
         get() = config.kioskPackages().count { packageManager.getLaunchIntentForPackage(it) != null }
 
     private fun applyWindow() {
-        requestedOrientation = when (config.display.orientation) {
-            KioskConfig.Orientation.AUTO -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-            KioskConfig.Orientation.PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
-            KioskConfig.Orientation.LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-        }
+        requestedOrientation = config.display.orientation.activityInfo
         if (config.display.keepScreenOn || config.display.dimAfterSec > 0) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }

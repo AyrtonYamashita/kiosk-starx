@@ -28,10 +28,14 @@ data class KioskConfig(
         }
     }
 
-    enum class Orientation(val wire: String, val label: String) {
-        AUTO("auto", "Automática"),
-        PORTRAIT("portrait", "Retrato"),
-        LANDSCAPE("landscape", "Paisagem");
+    /**
+     * Orientação das telas do app. Retrato e paisagem são FIXOS: as variantes "sensor" deixariam o Android girar
+     * 180° (tela de cabeça para baixo ao virar o coletor).
+     */
+    enum class Orientation(val wire: String, val label: String, val activityInfo: Int) {
+        AUTO("auto", "Automática", android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED),
+        PORTRAIT("portrait", "Retrato", android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT),
+        LANDSCAPE("landscape", "Paisagem", android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
 
         companion object {
             fun of(wire: String?) = entries.firstOrNull { it.wire == wire }
@@ -117,6 +121,8 @@ data class KioskConfig(
         val blockDebugging: Boolean = false,
         /** Atalhos de Wi-Fi/Bluetooth/configurações do Android no menu de administração. */
         val systemSettingsShortcuts: Boolean = true,
+        /** Envia a localização do aparelho ao painel (GPS/rede do Android). */
+        val reportLocation: Boolean = true,
     )
 
     data class PinHash(val algo: String, val iterations: Int, val salt: String, val hash: String, val numeric: Boolean) {
@@ -195,7 +201,8 @@ data class KioskConfig(
                 .put("blockSafeBoot", security.blockSafeBoot)
                 .put("blockUsbFileTransfer", security.blockUsbFileTransfer)
                 .put("blockDebugging", security.blockDebugging)
-                .put("systemSettingsShortcuts", security.systemSettingsShortcuts),
+                .put("systemSettingsShortcuts", security.systemSettingsShortcuts)
+                .put("reportLocation", security.reportLocation),
         )
 
     /** Resultado da leitura: a configuração (sempre válida) e o que foi corrigido. */
@@ -264,6 +271,7 @@ data class KioskConfig(
                     blockUsbFileTransfer = r.bool(sec, "security.blockUsbFileTransfer", d.security.blockUsbFileTransfer),
                     blockDebugging = r.bool(sec, "security.blockDebugging", d.security.blockDebugging),
                     systemSettingsShortcuts = r.bool(sec, "security.systemSettingsShortcuts", d.security.systemSettingsShortcuts),
+                    reportLocation = r.bool(sec, "security.reportLocation", d.security.reportLocation),
                 ),
             )
             return Parsed(config, r.warnings + semanticWarnings(config))

@@ -34,6 +34,7 @@ const DEFAULTS: Cfg = {
     blockUsbFileTransfer: false,
     blockDebugging: false,
     systemSettingsShortcuts: true,
+    reportLocation: true,
   },
 };
 
@@ -133,6 +134,7 @@ const FIELD_LABEL: Record<string, string> = {
   "security.pinHash": "PIN",
   "security.exitCorner": "Canto do gesto",
   "security.exitTaps": "Toques no canto",
+  "security.reportLocation": "Enviar localização",
 };
 
 const TABS = ["Kiosk", "Tela", "Segurança", "JSON"] as const;
@@ -430,6 +432,7 @@ export function ConfigEditor({
           {check("security.allowPowerMenu", "Menu do botão de energia", "desligar/reiniciar")}
           {check("security.disableLockScreen", "Desativar tela de bloqueio", "só funciona sem senha/padrão no aparelho")}
           {check("security.systemSettingsShortcuts", "Atalhos do Android na administração", "Wi-Fi, Bluetooth, Configurações")}
+          {check("security.reportLocation", "Enviar a localização ao painel", "GPS/rede do Android; aparece no mapa da página do aparelho")}
           <h2 style={{ marginTop: 8 }}>Restrições do aparelho (sempre)</h2>
           {check("security.blockFactoryReset", "Bloquear reset de fábrica")}
           {check("security.blockSafeBoot", "Bloquear modo de segurança")}

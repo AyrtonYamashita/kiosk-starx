@@ -330,6 +330,7 @@ class SettingsActivity : Activity() {
         add(Ui.switchRow(this, "Notificações", "Permite abrir a área de notificações", s.allowNotifications) { on -> edit({ it.copy(security = it.security.copy(allowNotifications = on)) }) })
         add(Ui.switchRow(this, "Menu do botão de energia", "Desligar/reiniciar pelo botão", s.allowPowerMenu) { on -> edit({ it.copy(security = it.security.copy(allowPowerMenu = on)) }) })
         add(Ui.switchRow(this, "Desativar tela de bloqueio", "Só funciona sem senha/padrão no aparelho", s.disableLockScreen) { on -> edit({ it.copy(security = it.security.copy(disableLockScreen = on)) }) })
+        add(Ui.switchRow(this, "Enviar a localização ao painel", "GPS/rede do Android; o painel mostra no mapa", s.reportLocation) { on -> edit({ it.copy(security = it.security.copy(reportLocation = on)) }) })
         add(Ui.switchRow(this, "Atalhos do Android na administração", "Wi-Fi, Bluetooth e Configurações nesta tela", s.systemSettingsShortcuts) { on -> edit({ it.copy(security = it.security.copy(systemSettingsShortcuts = on)) }) })
 
         section("Restrições do aparelho (sempre)")

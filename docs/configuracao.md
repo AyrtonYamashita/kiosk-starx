@@ -55,6 +55,7 @@ Toda alteração ganha um número de **revisão** e a origem (`local`, `adb`, `p
 | `display.dimAfterSec` | 0–86400 | Sem toque por esse tempo, o brilho cai para 1%; a tela nunca apaga e o primeiro toque devolve o brilho (0 = desligado). Ligado, a tela fica sempre ligada. |
 | `display.lowBatteryPercent` | 0–50 | Aviso de bateria fraca na tela (sem carregar) a partir desse nível; repete a cada 5% a menos e fecha ao carregar (0 = sem aviso). |
 | `display.lowBatteryMessage` | texto até 200 | Mensagem do aviso (ex.: pedir para trocar a bateria antes de continuar). |
+| `security.reportLocation` | true/false | Envia a localização (GPS/rede do Android, sem serviços do Google) a cada contato; o painel mostra no mapa. |
 | `display.keepScreenOn` | true/false | Tela sempre ligada durante o kiosk (o valor original volta quando o kiosk desliga). |
 | `display.brightness` | null ou 0–100 | Brilho fixo em %. `null` = não mexe. |
 | `display.orientation` | `auto`, `portrait`, `landscape` | Orientação da grade e do site. **Não vale para apps de terceiros.** |
