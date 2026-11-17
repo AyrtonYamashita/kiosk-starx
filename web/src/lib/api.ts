@@ -77,7 +77,7 @@ export type LoginResult =
       mfaRequired: true;
       token: string;
       expiresAt: string;
-      methods: ("email" | "recovery")[];
+      methods: ("totp" | "email" | "recovery")[];
       emailHint: string | null;
       codeSent: boolean;
       retryAfterSec: number;
@@ -336,6 +336,7 @@ export async function apiMfa<T>(token: string, path: string, body?: unknown): Pr
 export interface MfaInfo {
   required: boolean;
   email: string | null;
+  totp: { enabled: boolean; since: string | null };
   recoveryCodesLeft: number;
   trustDays: number;
   trustedDevices: { id: string; ip: string | null; userAgent: string | null; createdAt: string; lastUsedAt: string; expiresAt: string }[];

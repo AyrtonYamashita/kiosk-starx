@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { generateRecoveryCodes, revokeTrustedDevice } from "@/lib/actions";
 import type { MfaInfo } from "@/lib/api";
+import { TotpSection } from "./TotpSection";
 
 function device(ua: string | null): string {
   if (!ua) return "—";
@@ -18,19 +19,18 @@ export function MfaCard({ info }: { info: MfaInfo }) {
   const [state, generate, pending] = useActionState(generateRecoveryCodes, undefined);
   return (
     <div className="stack">
-      <dl className="kv">
-        <dt>Segundo fator</dt>
-        <dd>
-          {info.required ? <span className="badge ok">obrigatório</span> : <span className="badge off">ainda opcional</span>} código por e-mail para{" "}
-          <span className="mono">{info.email ?? "— (sem e-mail: peça ao administrador)"}</span>
-        </dd>
-        <dt>Códigos de recuperação</dt>
-        <dd>
-          <span className="mono">{info.recoveryCodesLeft}</span> disponíveis
-          <div className="muted small">Para entrar quando o e-mail não estiver acessível. Cada um vale uma vez.</div>
-        </dd>
-      </dl>
+      <span className="small" style={{ overflowWrap: "anywhere" }}>
+        {info.required ? <span className="badge ok">obrigatório</span> : <span className="badge off">ainda opcional</span>} Código por e-mail para{" "}
+        <span className="mono">{info.email ?? "— (sem e-mail: peça ao administrador)"}</span>
+      </span>
 
+      <strong className="small">App autenticador</strong>
+      <TotpSection enabled={info.totp.enabled} since={info.totp.since} />
+
+      <strong className="small">Códigos de recuperação</strong>
+      <span className="muted small">
+        <span className="mono">{info.recoveryCodesLeft}</span> disponíveis. Para entrar sem o e-mail nem o app. Cada um vale uma vez.
+      </span>
       {state?.codes ? (
         <div className="alert warn" style={{ flexDirection: "column", alignItems: "stretch" }}>
           <strong>Guarde estes códigos agora: eles não aparecem de novo.</strong>

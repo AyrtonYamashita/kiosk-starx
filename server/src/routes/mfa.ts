@@ -2,9 +2,10 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { audit, lockedFor, lockKey, recordFailure } from "../auth.js";
 import type { Config } from "../config.js";
-import { newToken, sha256 } from "../crypto.js";
+import { newToken, sha256, verifyPassword } from "../crypto.js";
 import type { Db } from "../db.js";
 import { browserLabel, codeHmac, formatCode, hmacEqual, maskEmail, newCode, normalizeCode, otpEmail, type Mailer } from "../mfa.js";
+import { decryptSecret, encryptSecret, newTotpSecret, otpauthUri, verifyTotp } from "../totp.js";
 
 /**
  * Segundo fator (1.3a): código por e-mail, códigos de recuperação e "confiar neste navegador".
@@ -81,6 +82,7 @@ export function mfaDeps(db: Db, config: Config, mailer: Mailer) {
       if (t) return null; // navegador confiável: pula o segundo fator
     }
     const recoveryLeft = Number((await db.query("SELECT count(*) FROM recovery_codes WHERE admin_id = $1 AND used_at IS NULL", [admin.id])).rows[0].count);
+    const hasTotp = !!(await db.query("SELECT 1 FROM admin_totp WHERE admin_id = $1 AND confirmed_at IS NOT NULL", [admin.id])).rowCount;
     const token = newToken();
     const s = (
       await db.query(
@@ -91,7 +93,8 @@ export function mfaDeps(db: Db, config: Config, mailer: Mailer) {
     ).rows[0];
     let codeSent = false;
     let retryAfterSec = 0;
-    if (admin.email) {
+    // com app autenticador o e-mail não sai sozinho: só se a pessoa pedir ("Receber código por e-mail")
+    if (admin.email && !hasTotp) {
       retryAfterSec = await sendBlockedFor(db, admin.id, req.ip);
       if (!retryAfterSec) {
         await sendEmailCode(req, admin, s.id);
@@ -102,7 +105,7 @@ export function mfaDeps(db: Db, config: Config, mailer: Mailer) {
       mfaRequired: true,
       token,
       expiresAt: s.expires_at,
-      methods: [...(admin.email ? ["email"] : []), ...(recoveryLeft ? ["recovery"] : [])],
+      methods: [...(hasTotp ? ["totp"] : []), ...(admin.email ? ["email"] : []), ...(recoveryLeft ? ["recovery"] : [])],
       emailHint: admin.email ? maskEmail(admin.email) : null,
       codeSent,
       retryAfterSec,
@@ -127,7 +130,7 @@ async function partialSession(db: Db, req: FastifyRequest) {
 }
 
 const Verify = z.object({
-  method: z.enum(["email", "recovery"]),
+  method: z.enum(["totp", "email", "recovery"]),
   code: z.string().min(4).max(40),
   trustDevice: z.boolean().optional().default(false),
 });
@@ -174,6 +177,15 @@ export async function mfaPublicRoutes(app: FastifyInstance, opts: { db: Db; conf
           otp.id,
           MAX_ATTEMPTS_PER_CODE,
         ]);
+      }
+    } else if (body.data.method === "totp") {
+      const t = (await db.query("SELECT secret_enc, last_step FROM admin_totp WHERE admin_id = $1 AND confirmed_at IS NOT NULL", [s.admin_id])).rows[0];
+      if (!t) return reply.code(400).send({ error: "no_totp", message: "app autenticador não ativado nesta conta" });
+      const step = verifyTotp(decryptSecret(config.authSecret, t.secret_enc), code, t.last_step === null ? null : Number(t.last_step));
+      // grava o passo só se ainda for o mais novo (duas conferências simultâneas do mesmo código: só uma passa)
+      if (step !== null) {
+        const r = await db.query("UPDATE admin_totp SET last_step = $2 WHERE admin_id = $1 AND (last_step IS NULL OR last_step < $2)", [s.admin_id, step]);
+        ok = !!r.rowCount;
       }
     } else {
       const hash = codeHmac(config.authSecret, code);
@@ -234,9 +246,11 @@ export async function mfaAccountRoutes(app: FastifyInstance, opts: { db: Db; con
       "SELECT id, ip, user_agent, created_at, last_used_at, expires_at FROM trusted_devices WHERE admin_id = $1 AND expires_at > now() ORDER BY last_used_at DESC",
       [req.admin!.id],
     );
+    const totp = (await db.query("SELECT confirmed_at FROM admin_totp WHERE admin_id = $1 AND confirmed_at IS NOT NULL", [req.admin!.id])).rows[0];
     return {
       required: config.authRequire2fa,
       email: req.admin!.email,
+      totp: { enabled: !!totp, since: totp?.confirmed_at ?? null },
       recoveryCodesLeft: left,
       trustDays: config.trustDays,
       trustedDevices: devices.rows.map((d) => ({ id: d.id, ip: d.ip, userAgent: d.user_agent, createdAt: d.created_at, lastUsedAt: d.last_used_at, expiresAt: d.expires_at })),
@@ -261,6 +275,61 @@ export async function mfaAccountRoutes(app: FastifyInstance, opts: { db: Db; con
     return { ok: true };
   });
 
+  /** Confere a senha atual (ativar/desativar o app). Erro conta no bloqueio da conta, como no login. */
+  async function checkPassword(req: FastifyRequest, reply: FastifyReply, password: unknown): Promise<boolean> {
+    const key = lockKey("account", req.admin!.username);
+    const blocked = await lockedFor(db, "account", key);
+    if (blocked) {
+      retry(reply, blocked, `Muitas tentativas. Tente de novo em ${blocked < 60 ? `${blocked} s` : `${Math.ceil(blocked / 60)} min`}.`);
+      return false;
+    }
+    const row = (await db.query("SELECT password_hash FROM admins WHERE id = $1", [req.admin!.id])).rows[0];
+    if (typeof password === "string" && password && row && (await verifyPassword(password, row.password_hash))) return true;
+    await recordFailure(db, "account", key);
+    await audit(db, req, "password_check_failed", { adminId: req.admin!.id });
+    reply.code(400).send({ error: "invalid_password", message: "senha atual incorreta" });
+    return false;
+  }
+
+  /** Ativar o app, passo 1: senha atual → chave nova (QR Code). Só vale depois de confirmada com um código. */
+  app.post("/v1/admin/mfa/totp/setup", async (req, reply) => {
+    const { password } = (req.body ?? {}) as { password?: unknown };
+    if (!(await checkPassword(req, reply, password))) return reply;
+    if ((await db.query("SELECT 1 FROM admin_totp WHERE admin_id = $1 AND confirmed_at IS NOT NULL", [req.admin!.id])).rowCount)
+      return reply.code(409).send({ error: "already_enabled", message: "o app autenticador já está ativo: desative antes de trocar" });
+    const secret = newTotpSecret();
+    await db.query(
+      `INSERT INTO admin_totp (admin_id, secret_enc) VALUES ($1, $2)
+       ON CONFLICT (admin_id) DO UPDATE SET secret_enc = EXCLUDED.secret_enc, confirmed_at = NULL, last_step = NULL, created_at = now()`,
+      [req.admin!.id, encryptSecret(config.authSecret, secret)],
+    );
+    return { secret, uri: otpauthUri(secret, req.admin!.email ?? req.admin!.username) };
+  });
+
+  /** Ativar o app, passo 2: o primeiro código do app confirma que a chave foi lida. */
+  app.post("/v1/admin/mfa/totp/confirm", async (req, reply) => {
+    const { code } = (req.body ?? {}) as { code?: unknown };
+    const t = (
+      await db.query("SELECT secret_enc FROM admin_totp WHERE admin_id = $1 AND confirmed_at IS NULL AND created_at > now() - interval '30 minutes'", [
+        req.admin!.id,
+      ])
+    ).rows[0];
+    if (!t) return reply.code(400).send({ error: "no_setup", message: "comece a ativação de novo" });
+    const step = typeof code === "string" ? verifyTotp(decryptSecret(config.authSecret, t.secret_enc), code, null) : null;
+    if (step === null) return reply.code(400).send({ error: "invalid_code", message: "código incorreto: confira o relógio do celular e digite o código atual" });
+    await db.query("UPDATE admin_totp SET confirmed_at = now(), last_step = $2 WHERE admin_id = $1", [req.admin!.id, step]);
+    await audit(db, req, "totp_enabled", { adminId: req.admin!.id });
+    return { ok: true };
+  });
+
+  app.post("/v1/admin/mfa/totp/disable", async (req, reply) => {
+    const { password } = (req.body ?? {}) as { password?: unknown };
+    if (!(await checkPassword(req, reply, password))) return reply;
+    const r = await db.query("DELETE FROM admin_totp WHERE admin_id = $1", [req.admin!.id]);
+    if (r.rowCount) await audit(db, req, "totp_disabled", { adminId: req.admin!.id });
+    return { ok: true };
+  });
+
   /** Admin: zera o 2FA de alguém (perdeu o acesso): códigos de recuperação, navegadores confiáveis e sessões. */
   app.post("/v1/admin/users/:id/reset-mfa", async (req, reply) => {
     if (req.admin!.role !== "admin") return reply.code(403).send({ error: "forbidden", message: "só administradores" });
@@ -269,6 +338,7 @@ export async function mfaAccountRoutes(app: FastifyInstance, opts: { db: Db; con
     if (!(await db.query("SELECT 1 FROM admins WHERE id = $1", [id])).rowCount) return reply.code(404).send({ error: "not_found" });
     await db.query("DELETE FROM recovery_codes WHERE admin_id = $1", [id]);
     await db.query("DELETE FROM trusted_devices WHERE admin_id = $1", [id]);
+    await db.query("DELETE FROM admin_totp WHERE admin_id = $1", [id]);
     if (id !== req.admin!.id) await db.query("DELETE FROM sessions WHERE admin_id = $1", [id]);
     await audit(db, req, "mfa_reset", { adminId: req.admin!.id, details: { userId: id } });
     return { ok: true };

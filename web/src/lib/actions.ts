@@ -470,3 +470,42 @@ export async function resetUserMfa(_: FormState, form: FormData): Promise<FormSt
   revalidatePath("/users");
   return { ok: "2FA zerado: códigos de recuperação e navegadores confiáveis apagados; sessões encerradas." };
 }
+
+// ---------------------------------------------------------------- app autenticador (fase 1.3b)
+
+export type TotpSetupState = { secret?: string; svg?: string; error?: string } | undefined;
+
+/** Passo 1: senha atual → chave nova e QR Code (o SVG é gerado aqui, a partir do otpauth:// da API). */
+export async function setupTotp(_: TotpSetupState, form: FormData): Promise<TotpSetupState> {
+  try {
+    const r = await api<{ secret: string; uri: string }>("/v1/admin/mfa/totp/setup", {
+      method: "POST",
+      body: { password: String(form.get("password") ?? "") },
+    });
+    const svg = await QRCode.toString(r.uri, { type: "svg", errorCorrectionLevel: "M", margin: 2 });
+    return { secret: r.secret, svg };
+  } catch (e) {
+    return { error: message(e) };
+  }
+}
+
+/** Passo 2: o primeiro código do app confirma a ativação. */
+export async function confirmTotp(_: FormState, form: FormData): Promise<FormState> {
+  try {
+    await api("/v1/admin/mfa/totp/confirm", { method: "POST", body: { code: String(form.get("code") ?? "") } });
+  } catch (e) {
+    return { error: message(e) };
+  }
+  revalidatePath("/account");
+  return { ok: "App autenticador ativado. No próximo login o código será pedido pelo app." };
+}
+
+export async function disableTotp(_: FormState, form: FormData): Promise<FormState> {
+  try {
+    await api("/v1/admin/mfa/totp/disable", { method: "POST", body: { password: String(form.get("password") ?? "") } });
+  } catch (e) {
+    return { error: message(e) };
+  }
+  revalidatePath("/account");
+  return { ok: "App autenticador desativado. O código volta a ser enviado por e-mail." };
+}

@@ -81,3 +81,24 @@ Variáveis (`deploy/.env`): `AUTH_REQUIRE_2FA`, `AUTH_SECRET` (32+ caracteres, o
 - Problema com e-mail ou com a tela: `AUTH_REQUIRE_2FA=false` e `docker compose up -d api` (volta ao login só com senha,
   sem perder nada).
 - Voltar a imagem anterior: a migração 005 só adiciona colunas/tabelas, a versão 1.2 continua funcionando com elas.
+
+## 1.3b — app autenticador (TOTP), opcional
+
+- **Ativar** (Conta → Verificação em duas etapas → App autenticador): senha atual → QR Code e chave para digitar →
+  primeiro código de 6 dígitos confirma. Sem confirmar (ou depois de 30 min), não vale.
+- **Login de quem ativou**: o código é pedido pelo app e o e-mail **não** sai sozinho; "Sem o celular? Receber código por
+  e-mail" envia na hora (mesmos limites de envio). Códigos de recuperação continuam valendo.
+- **Padrão**: RFC 6238 (HMAC-SHA1, 6 dígitos, 30 s), aceita ±1 passo (relógio do celular até ~30 s fora). Implementação
+  própria (`server/src/totp.ts`), testada com o vetor oficial do RFC.
+- **Segurança**: a chave fica criptografada no banco (AES-256-GCM, chave derivada do `AUTH_SECRET` via HKDF) — trocar o
+  `AUTH_SECRET` invalida todos os apps (cada pessoa ativa de novo). O passo usado é gravado: o mesmo código, ou um
+  anterior, não entra de novo. Erros contam nos 5 por etapa e no bloqueio da conta. Senha errada ao ativar/desativar
+  também conta no bloqueio.
+- **Desativar**: pede a senha atual. "Zerar 2FA" (admin) também remove o app.
+- **Auditoria**: `totp_enabled`, `totp_disabled`, `password_check_failed`; `mfa_success` com `method: "totp"`.
+
+### Deploy (1.3b)
+
+1. Backup do banco. 2. Subir a API (migração `006_totp.sql`, só adiciona a tabela `admin_totp`) e publicar o painel.
+Nenhuma variável nova. Rollback: voltar a imagem anterior (a tabela a mais não atrapalha; quem ativou o app volta a
+receber o código por e-mail).
