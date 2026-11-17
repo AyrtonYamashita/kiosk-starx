@@ -1,19 +1,32 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
+import { ConfigEditor } from "@/components/ConfigEditor";
 import { reapplyConfig, setDeviceConfig } from "@/lib/actions";
-import type { DeviceDetail, Profile } from "@/lib/api";
+import type { CatalogApp, DeviceDetail, Profile } from "@/lib/api";
 import { ago, configStatusLabel } from "@/lib/format";
 
-const OVERRIDES_EXAMPLE = `{
-  "kiosk": { "web": { "url": "https://outro-site.exemplo.com" } },
-  "appearance": { "title": "Doca 3" }
-}`;
-
-export function DeviceConfig({ device, profiles }: { device: DeviceDetail; profiles: Pick<Profile, "id" | "name">[] }) {
+/**
+ * Configuração do aparelho pelo painel: o perfil e, por cima dele, os ajustes só deste aparelho. O editor abre com
+ * o perfil já aplicado; o que for mudado aqui (ex.: só o site) vira ajuste do aparelho, e o resto segue o perfil.
+ */
+export function DeviceConfig({
+  device,
+  profiles,
+  catalog,
+}: {
+  device: DeviceDetail;
+  profiles: Pick<Profile, "id" | "name" | "config">[];
+  catalog: CatalogApp[];
+}) {
   const [state, action, pending] = useActionState(setDeviceConfig, undefined);
+  const [profileId, setProfileId] = useState(device.profileId ?? "");
   const [cls, label, hint] = configStatusLabel[device.configStatus];
+  const profile = profiles.find((p) => p.id === profileId) ?? null;
+  // trocar o perfil no seletor redesenha o editor com o novo perfil como base (os ajustes continuam por cima)
+  const editorKey = `${profileId}:${device.appliedAt ?? ""}`;
+
   return (
     <div className="stack">
       <div className="row">
@@ -28,42 +41,39 @@ export function DeviceConfig({ device, profiles }: { device: DeviceDetail; profi
 
       <form action={action} className="stack">
         <input type="hidden" name="id" value={device.id} />
-        <label>
-          Perfil
-          <select name="profileId" defaultValue={device.profileId ?? ""}>
-            <option value="">— Sem perfil (o aparelho usa a configuração feita nele)</option>
-            {profiles.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        {device.profileId && (
-          <Link href={`/profiles/${device.profileId}`} className="small">
-            Editar o perfil {device.profileName}
-          </Link>
-        )}
-        <details open={!!device.overrides}>
-          <summary className="small">Ajustes só deste aparelho (opcional)</summary>
-          <label style={{ marginTop: 8 }}>
-            <span className="muted small">
-              JSON mesclado por cima do perfil: só o que muda para este aparelho. Vazio = igual ao perfil. Exemplo:
-            </span>
-            <textarea
-              name="overrides"
-              className="mono"
-              defaultValue={device.overrides ? JSON.stringify(device.overrides, null, 2) : ""}
-              placeholder={OVERRIDES_EXAMPLE}
-              spellCheck={false}
-            />
+        <div className="row" style={{ alignItems: "flex-end" }}>
+          <label style={{ flex: 1, minWidth: 260 }}>
+            Perfil
+            <select name="profileId" value={profileId} onChange={(e) => setProfileId(e.target.value)}>
+              <option value="">— Sem perfil (o aparelho usa só os ajustes abaixo)</option>
+              {profiles.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
           </label>
-        </details>
+          {profile && (
+            <Link href={`/profiles/${profile.id}`} className="small" style={{ paddingBottom: 9 }}>
+              Editar o perfil {profile.name} (vale para todos os aparelhos dele)
+            </Link>
+          )}
+        </div>
+
+        <ConfigEditor
+          key={editorKey}
+          name="overrides"
+          base={profile?.config ?? null}
+          initial={device.overrides}
+          catalog={catalog}
+          hasExistingPin={profile?.config?.security?.pinHash === "<definido>" || (device.overrides as Record<string, any> | null)?.security?.pinHash === "<definido>"}
+        />
+
         {state?.error && <div className="alert error">{state.error}</div>}
         {state?.ok && <div className="alert ok">{state.ok}</div>}
         <div className="row">
           <button className="primary" disabled={pending}>
-            {pending ? "Salvando…" : "Salvar configuração"}
+            {pending ? "Salvando…" : "Salvar configuração deste aparelho"}
           </button>
         </div>
       </form>

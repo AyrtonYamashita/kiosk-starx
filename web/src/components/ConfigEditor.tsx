@@ -74,14 +74,93 @@ function output(cfg: Cfg, pinMode: PinMode, pin: string): Cfg {
   return out;
 }
 
+// ---------------------------------------------------------------- ajustes de um aparelho (só o que difere do perfil)
+
+const isObj = (v: unknown): v is Cfg => !!v && typeof v === "object" && !Array.isArray(v);
+
+/** Folhas de `cur` diferentes de `base` (listas comparadas inteiras, como no merge do app). */
+function diff(cur: unknown, base: unknown): unknown {
+  if (isObj(cur) && isObj(base)) {
+    const out: Cfg = {};
+    for (const k of new Set([...Object.keys(cur), ...Object.keys(base)])) {
+      if (!(k in cur)) continue;
+      const d = diff(cur[k], base[k]);
+      if (d !== undefined) out[k] = d;
+    }
+    return Object.keys(out).length ? out : undefined;
+  }
+  return JSON.stringify(cur) === JSON.stringify(base) ? undefined : cur;
+}
+
+function paths(obj: Cfg, prefix = ""): string[] {
+  return Object.entries(obj).flatMap(([k, v]) => (isObj(v) ? paths(v, `${prefix}${k}.`) : [`${prefix}${k}`]));
+}
+
+function withoutPin(cfg: Cfg): Cfg {
+  const c = structuredClone(cfg);
+  delete c.schema;
+  if (c.security) {
+    delete c.security.pin;
+    delete c.security.pinHash;
+  }
+  return c;
+}
+
+/** Nome legível de cada campo (para a lista "diferente do perfil"). */
+const FIELD_LABEL: Record<string, string> = {
+  "kiosk.enabled": "Kiosk ligado",
+  "kiosk.mode": "Modo",
+  "kiosk.app": "App único",
+  "kiosk.apps": "Apps da grade",
+  "kiosk.relaunchDelaySec": "Reabrir o app",
+  "kiosk.web.url": "Site (URL)",
+  "kiosk.web.reloadOnErrorSec": "Recarregar após erro",
+  "kiosk.web.inactivityReturnSec": "Voltar à página inicial",
+  "kiosk.web.allowZoom": "Zoom",
+  "kiosk.web.reloadButton": "Botão de recarregar",
+  "display.keepScreenOn": "Manter a tela ligada",
+  "display.brightness": "Brilho",
+  "display.dimAfterSec": "Escurecer após inatividade",
+  "display.lowBatteryPercent": "Aviso de bateria fraca",
+  "display.lowBatteryMessage": "Mensagem de bateria fraca",
+  "display.orientation": "Orientação",
+  "display.showStatusBar": "Barra de status",
+  "appearance.title": "Título",
+  "appearance.backgroundColor": "Cor de fundo",
+  "appearance.textColor": "Cor do texto",
+  "appearance.columns": "Colunas da grade",
+  "security.pin": "PIN",
+  "security.pinHash": "PIN",
+  "security.exitCorner": "Canto do gesto",
+  "security.exitTaps": "Toques no canto",
+};
+
 const TABS = ["Kiosk", "Tela", "Segurança", "JSON"] as const;
 type Tab = (typeof TABS)[number];
 
-export function ConfigEditor({ name, initial, catalog, hasExistingPin }: { name: string; initial: Cfg | null; catalog: CatalogApp[]; hasExistingPin: boolean }) {
+/**
+ * `base` (opcional): configuração do perfil. Com ela, o editor mostra perfil + `initial` (os ajustes do aparelho) e o
+ * campo oculto recebe só o que difere do perfil — mudar o site de um aparelho grava só `kiosk.web.url`.
+ */
+export function ConfigEditor({
+  name,
+  initial,
+  catalog,
+  hasExistingPin,
+  base,
+}: {
+  name: string;
+  initial: Cfg | null;
+  catalog: CatalogApp[];
+  hasExistingPin: boolean;
+  base?: Cfg | null;
+}) {
+  const overrideMode = base !== undefined;
+  const baseFull = useMemo(() => withoutPin(deepMerge(DEFAULTS, base ?? {})), [base]);
   const [cfg, setCfg] = useState<Cfg>(() => {
-    const base = deepMerge(DEFAULTS, initial ?? {});
-    delete base.schema;
-    return base;
+    const start = deepMerge(DEFAULTS, overrideMode ? deepMerge(base ?? {}, initial ?? {}) : (initial ?? {}));
+    delete start.schema;
+    return start;
   });
   const [pinMode, setPinMode] = useState<PinMode>(() => initialPinMode(initial));
   const [pin, setPin] = useState("");
@@ -90,7 +169,21 @@ export function ConfigEditor({ name, initial, catalog, hasExistingPin }: { name:
   const [jsonError, setJsonError] = useState<string | null>(null);
 
   const set = (path: string, value: unknown) => setCfg((c) => setPath(c, path, value));
-  const out = useMemo(() => output(cfg, pinMode, pin), [cfg, pinMode, pin]);
+  const full = useMemo(() => output(cfg, pinMode, pin), [cfg, pinMode, pin]);
+  // ajustes do aparelho: só o que difere do perfil (o PIN só se for trocado/removido aqui)
+  const changes = useMemo(() => {
+    if (!overrideMode) return null;
+    const d = (diff(withoutPin(cfg), baseFull) as Cfg | undefined) ?? {};
+    if (pinMode !== "device") {
+      d.security = { ...(d.security ?? {}) };
+      if (pinMode === "set") d.security.pin = pin;
+      if (pinMode === "none") d.security.pinHash = null;
+      if (pinMode === "keep") d.security.pinHash = "<definido>";
+    }
+    return d;
+  }, [overrideMode, cfg, baseFull, pinMode, pin]);
+  const out = changes ?? full;
+  const changedFields = changes ? [...new Set(paths(changes).map((p) => FIELD_LABEL[p] ?? p))] : [];
   const k = cfg.kiosk;
   const d = cfg.display;
   const a = cfg.appearance;
@@ -100,7 +193,7 @@ export function ConfigEditor({ name, initial, catalog, hasExistingPin }: { name:
 
   function openTab(t: Tab) {
     if (t === "JSON") {
-      const view = structuredClone(out);
+      const view = structuredClone(full);
       if (view.security?.pin) view.security.pin = "••••";
       setJsonText(JSON.stringify(view, null, 2));
       setJsonError(null);
@@ -147,6 +240,32 @@ export function ConfigEditor({ name, initial, catalog, hasExistingPin }: { name:
   return (
     <div className="stack">
       <input type="hidden" name={name} value={JSON.stringify(out)} />
+      {overrideMode && (
+        <div className={changedFields.length ? "alert warn" : "alert ok"} style={{ alignItems: "center" }}>
+          <span style={{ flex: 1 }}>
+            {changedFields.length ? (
+              <>
+                Diferente do perfil neste aparelho: <strong>{changedFields.join(", ")}</strong>. O resto segue o perfil (e acompanha quando ele mudar).
+              </>
+            ) : (
+              <>Igual ao perfil. Mude só o que este aparelho precisa diferente (ex.: o site) — o resto continua seguindo o perfil.</>
+            )}
+          </span>
+          {changedFields.length > 0 && (
+            <button
+              type="button"
+              className="link-button"
+              onClick={() => {
+                setCfg(structuredClone(baseFull));
+                setPinMode("device");
+                setPin("");
+              }}
+            >
+              voltar tudo ao perfil
+            </button>
+          )}
+        </div>
+      )}
       <datalist id="catalog-apps">
         {userApps.map((c) => (
           <option key={c.package} value={c.package}>
@@ -279,7 +398,7 @@ export function ConfigEditor({ name, initial, catalog, hasExistingPin }: { name:
           <label>
             PIN de administrador
             <select value={pinMode} onChange={(e) => setPinMode(e.target.value as PinMode)}>
-              <option value="device">Não mexer no PIN dos aparelhos</option>
+              <option value="device">{overrideMode ? "Seguir o PIN do perfil" : "Não mexer no PIN dos aparelhos"}</option>
               {hasExistingPin && <option value="keep">Manter o PIN definido neste perfil</option>}
               <option value="set">{hasExistingPin ? "Trocar o PIN" : "Definir um PIN"}</option>
               <option value="none">Sem PIN (qualquer um abre a administração)</option>

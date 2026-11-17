@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AutoRefresh } from "@/components/AutoRefresh";
-import { api, ApiError, type Command, type DeviceDetail, type Profile, type RepoApp, type Screenshot } from "@/lib/api";
+import { api, ApiError, type CatalogApp, type Command, type DeviceDetail, type Profile, type RepoApp, type Screenshot } from "@/lib/api";
 import { ago, bytes, dateTime, kioskModeLabel, networkLabel, uptime } from "@/lib/format";
 import { DeleteDevice, RenameDevice } from "./DeviceForms";
 import { AppsTable } from "./AppsTable";
@@ -14,18 +14,20 @@ export default async function DevicePage({ params }: { params: Promise<{ id: str
   const { id } = await params;
   // tudo em paralelo: cada ida à API custa uma viagem até a VPS
   let d: DeviceDetail;
-  let profiles: Profile[], commands: Command[], screenshots: Screenshot[], repo: RepoApp[];
+  let profiles: Profile[], commands: Command[], screenshots: Screenshot[], repo: RepoApp[], catalog: CatalogApp[];
   try {
-    const [detail, p, c, r] = await Promise.all([
+    const [detail, p, c, r, cat] = await Promise.all([
       api<DeviceDetail>(`/v1/admin/devices/${id}`),
       api<{ profiles: Profile[] }>("/v1/admin/profiles"),
       api<{ commands: Command[]; screenshots: Screenshot[] }>(`/v1/admin/devices/${id}/commands`),
       api<{ apps: RepoApp[] }>("/v1/admin/apps"),
+      api<{ apps: CatalogApp[] }>("/v1/admin/apps-catalog"),
     ]);
     d = detail;
     profiles = p.profiles;
     ({ commands, screenshots } = c);
     repo = r.apps;
+    catalog = cat.apps;
   } catch (e) {
     if (e instanceof ApiError && e.status === 404) notFound();
     throw e;
@@ -180,7 +182,7 @@ export default async function DevicePage({ params }: { params: Promise<{ id: str
 
       <section className="card stack">
         <h2>Configuração pelo painel</h2>
-        <DeviceConfig device={d} profiles={profiles.map((p) => ({ id: p.id, name: p.name }))} />
+        <DeviceConfig device={d} profiles={profiles.map((p) => ({ id: p.id, name: p.name, config: p.config }))} catalog={catalog} />
       </section>
 
       <section className="card stack">
