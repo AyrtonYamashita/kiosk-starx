@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import QRCode from "qrcode";
-import { api, ApiError, apiLogin, SESSION_COOKIE, type CommandType, type Enrollment } from "./api";
+import { api, ApiError, apiLogin, apiRevokeToken, SESSION_COOKIE, type CommandType, type Enrollment } from "./api";
 
 export type FormState = { error?: string; ok?: string } | undefined;
 
@@ -19,6 +19,9 @@ function message(e: unknown): string {
 export async function login(_: FormState, form: FormData): Promise<FormState> {
   const result = await apiLogin(String(form.get("username") ?? ""), String(form.get("password") ?? ""));
   if ("error" in result) return { error: result.error };
+  // rotação: a sessão que o navegador tinha antes é encerrada no servidor
+  const previous = (await cookies()).get(SESSION_COOKIE)?.value;
+  if (previous) await apiRevokeToken(previous);
   (await cookies()).set(SESSION_COOKIE, result.token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
@@ -325,4 +328,57 @@ export async function discardKiosk(_: FormState): Promise<FormState> {
   } catch (e) {
     return { error: message(e) };
   }
+}
+
+// ---------------------------------------------------------------- sessões, usuários e segurança (fase 1.1)
+
+export async function revokeSession(form: FormData) {
+  await api(`/v1/admin/sessions/${String(form.get("id"))}`, { method: "DELETE" });
+  revalidatePath("/account");
+  revalidatePath("/users");
+}
+
+export async function createUser(_: FormState, form: FormData): Promise<FormState> {
+  const password = String(form.get("password") ?? "");
+  if (password !== String(form.get("confirm") ?? "")) return { error: "As senhas não conferem." };
+  try {
+    await api("/v1/admin/users", {
+      method: "POST",
+      body: {
+        username: String(form.get("username") ?? ""),
+        email: String(form.get("email") ?? ""),
+        role: String(form.get("role") ?? "operator"),
+        password,
+      },
+    });
+  } catch (e) {
+    return { error: message(e) };
+  }
+  revalidatePath("/users");
+  return { ok: "Usuário criado. Passe a senha inicial por um canal seguro." };
+}
+
+export async function updateUser(_: FormState, form: FormData): Promise<FormState> {
+  const id = String(form.get("id"));
+  const body: Record<string, unknown> = {};
+  const email = String(form.get("email") ?? "").trim();
+  if (email) body.email = email;
+  const role = String(form.get("role") ?? "");
+  if (role) body.role = role;
+  const disabled = String(form.get("disabled") ?? "");
+  if (disabled) body.disabled = disabled === "1";
+  const password = String(form.get("password") ?? "");
+  if (password) body.password = password;
+  try {
+    await api(`/v1/admin/users/${id}`, { method: "PATCH", body });
+  } catch (e) {
+    return { error: message(e) };
+  }
+  revalidatePath("/users");
+  return { ok: "Salvo." };
+}
+
+export async function unlock(form: FormData) {
+  await api("/v1/admin/security/unlock", { method: "POST", body: { kind: String(form.get("kind")), key: String(form.get("key")) } });
+  revalidatePath("/users");
 }

@@ -1,5 +1,5 @@
 import "server-only";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 export const SESSION_COOKIE = "kiosk_session";
@@ -8,6 +8,22 @@ function apiUrl(): string {
   const url = process.env.API_URL;
   if (!url) throw new Error("API_URL não definida (veja web/.env.example)");
   return url.replace(/\/+$/, "");
+}
+
+/**
+ * IP e navegador de quem está usando o painel, repassados à API assinados com PANEL_SECRET (sem isso a API veria o
+ * IP da Vercel em todo login, e o limite/bloqueio por IP valeria para todos juntos).
+ */
+async function clientHeaders(): Promise<Record<string, string>> {
+  const secret = process.env.PANEL_SECRET;
+  if (!secret) return {};
+  const h = await headers();
+  const ip = (h.get("x-real-ip") ?? h.get("x-forwarded-for")?.split(",")[0] ?? "").trim();
+  return {
+    "x-panel-secret": secret,
+    ...(ip ? { "x-client-ip": ip } : {}),
+    "x-client-ua": (h.get("user-agent") ?? "").slice(0, 300),
+  };
 }
 
 export class ApiError extends Error {
@@ -28,6 +44,7 @@ export async function api<T>(path: string, init: { method?: string; body?: unkno
     headers: {
       authorization: `Bearer ${token}`,
       ...(init.body !== undefined ? { "content-type": "application/json" } : {}),
+      ...(await clientHeaders()),
     },
     body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
     cache: "no-store",
@@ -39,17 +56,26 @@ export async function api<T>(path: string, init: { method?: string; body?: unkno
   return json as T;
 }
 
+/** Encerra no servidor uma sessão pelo token (rotação: a sessão anterior do navegador não fica viva). */
+export async function apiRevokeToken(token: string): Promise<void> {
+  await fetch(`${apiUrl()}/v1/admin/logout`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}`, ...(await clientHeaders()) },
+    cache: "no-store",
+  }).catch(() => undefined);
+}
+
 /** Login: não usa o cookie (ainda não existe). */
 export async function apiLogin(username: string, password: string): Promise<{ token: string; expiresAt: string } | { error: string }> {
   try {
     const res = await fetch(`${apiUrl()}/v1/admin/login`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...(await clientHeaders()) },
       body: JSON.stringify({ username, password }),
       cache: "no-store",
     });
     const json = await res.json().catch(() => null);
-    if (res.status === 429) return { error: "Muitas tentativas. Aguarde um minuto." };
+    if (res.status === 429) return { error: json?.message ?? "Muitas tentativas. Tente de novo mais tarde." };
     if (!res.ok) return { error: json?.message ?? "Não foi possível entrar." };
     return json;
   } catch {
@@ -221,4 +247,57 @@ export interface KioskRelease {
   autoUpdate: boolean;
   maxApkMb: number;
   devices: { versionName: string | null; versionCode: number | null; devices: number }[];
+}
+
+// ---------------------------------------------------------------- conta, usuários e segurança
+
+export type Role = "admin" | "operator";
+
+export interface Me {
+  id: string;
+  username: string;
+  email: string | null;
+  role: Role;
+}
+
+export interface SessionInfo {
+  id: string;
+  username: string;
+  createdAt: string;
+  lastUsedAt: string;
+  expiresAt: string;
+  ip: string | null;
+  userAgent: string | null;
+  current: boolean;
+}
+
+export interface UserInfo {
+  id: string;
+  username: string;
+  email: string | null;
+  role: Role;
+  disabled: boolean;
+  createdAt: string;
+  passwordChangedAt: string | null;
+  lastLoginAt: string | null;
+  activeSessions: number;
+  lockedUntil: string | null;
+}
+
+export interface Lockout {
+  kind: "ip" | "account";
+  key: string;
+  level: number;
+  lockedUntil: string;
+}
+
+export interface AuthEvent {
+  id: number;
+  event: string;
+  username: string | null;
+  identifier: string | null;
+  ip: string | null;
+  userAgent: string | null;
+  details: Record<string, unknown> | null;
+  createdAt: string;
 }

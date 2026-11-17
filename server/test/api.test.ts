@@ -25,7 +25,8 @@ const config: Config = {
   adminUsername: "admin",
   adminPassword: "senha-de-teste-123",
   checkinIntervalSec: 60,
-  sessionDays: 7,
+  sessionTtlHours: 48,
+  sessionIdleHours: 8,
   trustProxy: false,
   logLevel: "silent",
 };

@@ -34,7 +34,9 @@ export async function setupApi() {
     adminUsername: "admin",
     adminPassword: "senha-de-teste-123",
     checkinIntervalSec: 60,
-    sessionDays: 7,
+    sessionTtlHours: 48,
+    sessionIdleHours: 8,
+    panelSecret: "segredo-do-painel-de-teste",
     trustProxy: false,
     logLevel: "silent",
   };

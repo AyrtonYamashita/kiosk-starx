@@ -8,15 +8,29 @@ import { provisioningPayload, readRelease } from "../release.js";
 import { appRepoRoutes } from "./apps.js";
 import { commandRoutes } from "./commands.js";
 import { configStatus, profileRoutes } from "./profiles.js";
+import { securityRoutes } from "./security.js";
+import { audit, clearLock, lockedFor, lockKey, recordFailure } from "../auth.js";
 import type { Waker } from "../wake.js";
 
 declare module "fastify" {
   interface FastifyRequest {
-    admin?: { id: string; username: string; sessionId: string };
+    admin?: { id: string; username: string; email: string | null; role: "admin" | "operator"; sessionId: string };
   }
 }
 
-const Login = z.object({ username: z.string().min(1).max(64), password: z.string().min(1).max(256) });
+/** Login por usuário ou e-mail. */
+const Login = z.object({ username: z.string().trim().min(1).max(200), password: z.string().min(1).max(256) });
+
+/** 429 com Retry-After e mensagem genérica (não diz se a conta existe). */
+function tooMany(reply: FastifyReply, sec: number) {
+  reply.header("retry-after", String(sec));
+  const min = Math.ceil(sec / 60);
+  return reply.code(429).send({
+    error: "too_many_attempts",
+    message: `Muitas tentativas. Tente de novo em ${sec < 60 ? `${sec} s` : `${min} min`}.`,
+    retryAfterSec: sec,
+  });
+}
 const ChangePassword = z.object({ current: z.string().min(1), next: z.string().min(10).max(256) });
 const Rename = z.object({ name: z.string().trim().min(1).max(80) });
 const CreateCode = z.object({
@@ -49,14 +63,22 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
   async function requireAdmin(req: FastifyRequest, reply: FastifyReply) {
     const auth = req.headers.authorization;
     if (!auth?.startsWith("Bearer ")) return reply.code(401).send({ error: "unauthorized" });
+    const tokenHash = sha256(auth.slice(7));
+    // vale até a validade máxima (2 dias) e enquanto não ficar parada além do limite de inatividade (8 h)
     const r = await db.query(
       `UPDATE sessions s SET last_used_at = now() FROM admins a
-       WHERE s.token_hash = $1 AND s.expires_at > now() AND a.id = s.admin_id
-       RETURNING s.id AS session_id, a.id, a.username`,
-      [sha256(auth.slice(7))],
+       WHERE s.token_hash = $1 AND s.expires_at > now() AND s.last_used_at > now() - make_interval(hours => $2)
+         AND a.id = s.admin_id AND a.disabled_at IS NULL
+       RETURNING s.id AS session_id, a.id, a.username, a.email, a.role`,
+      [tokenHash, config.sessionIdleHours],
     );
-    if (!r.rows[0]) return reply.code(401).send({ error: "unauthorized" });
-    req.admin = { id: r.rows[0].id, username: r.rows[0].username, sessionId: r.rows[0].session_id };
+    if (!r.rows[0]) {
+      // sessão vencida por inatividade/validade: sai do banco (logout no servidor)
+      await db.query("DELETE FROM sessions WHERE token_hash = $1", [tokenHash]);
+      return reply.code(401).send({ error: "unauthorized" });
+    }
+    const a = r.rows[0];
+    req.admin = { id: a.id, username: a.username, email: a.email, role: a.role, sessionId: a.session_id };
   }
 
   // ---------------------------------------------------------------- sessão
@@ -64,17 +86,52 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
   app.post("/v1/admin/login", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (req, reply) => {
     const body = Login.safeParse(req.body);
     if (!body.success) return reply.code(400).send({ error: "invalid_body" });
-    const admin = (await db.query("SELECT id, password_hash FROM admins WHERE username = $1", [body.data.username])).rows[0];
-    const ok = admin ? await verifyPassword(body.data.password, admin.password_hash) : await verifyPassword(body.data.password, DUMMY_HASH).then(() => false);
+    const identifier = body.data.username;
+    const ipKey = lockKey("ip", req.ip);
+    const accountKey = lockKey("account", identifier);
+
+    // bloqueado (IP ou conta): nem confere a senha
+    const blocked = Math.max(await lockedFor(db, "ip", ipKey), await lockedFor(db, "account", accountKey));
+    if (blocked > 0) {
+      await audit(db, req, "login_blocked", { identifier, details: { retryAfterSec: blocked } });
+      return tooMany(reply, blocked);
+    }
+
+    const admin = (
+      await db.query("SELECT id, password_hash, disabled_at FROM admins WHERE username = $1 OR lower(email) = lower($1) ORDER BY username = $1 DESC LIMIT 1", [
+        identifier,
+      ])
+    ).rows[0];
+    // conta inexistente gasta o mesmo tempo (hash falso): a resposta não revela quais contas existem
+    const passwordOk = admin ? await verifyPassword(body.data.password, admin.password_hash) : await verifyPassword(body.data.password, DUMMY_HASH).then(() => false);
+    const ok = passwordOk && !admin.disabled_at;
     if (!ok) {
-      req.log.warn({ username: body.data.username }, "login recusado");
+      const reason = !admin ? "unknown_account" : admin.disabled_at ? "disabled" : "bad_password";
+      const lockIp = await recordFailure(db, "ip", ipKey);
+      const lockAccount = await recordFailure(db, "account", accountKey);
+      await audit(db, req, "login_failure", { adminId: admin?.id ?? null, identifier, details: { reason } });
+      if (lockIp || lockAccount) {
+        await audit(db, req, "lockout", { adminId: admin?.id ?? null, identifier, details: { ipSec: lockIp, accountSec: lockAccount } });
+      }
+      req.log.warn({ identifier, reason }, "login recusado");
       return reply.code(401).send({ error: "invalid_credentials", message: "usuário ou senha incorretos" });
     }
+
+    await clearLock(db, "account", accountKey);
+    await clearLock(db, "ip", ipKey);
+    // sessão nova a cada login (rotação): o token anterior do navegador, se houver, o painel descarta
     const token = newToken();
-    const expires = new Date(Date.now() + config.sessionDays * 86_400_000);
-    await db.query("INSERT INTO sessions (admin_id, token_hash, expires_at) VALUES ($1, $2, $3)", [admin.id, sha256(token), expires]);
-    await db.query("DELETE FROM sessions WHERE expires_at < now()");
-    return { token, expiresAt: expires.toISOString() };
+    const expires = new Date(Date.now() + config.sessionTtlHours * 3600_000);
+    await db.query("INSERT INTO sessions (admin_id, token_hash, expires_at, ip, user_agent) VALUES ($1, $2, $3, $4, $5)", [
+      admin.id,
+      sha256(token),
+      expires,
+      req.ip,
+      (req.headers["user-agent"] ?? "").toString().slice(0, 300) || null,
+    ]);
+    await db.query("DELETE FROM sessions WHERE expires_at < now() OR last_used_at < now() - make_interval(hours => $1)", [config.sessionIdleHours]);
+    await audit(db, req, "login_success", { adminId: admin.id, identifier });
+    return { token, expiresAt: expires.toISOString(), idleHours: config.sessionIdleHours };
   });
 
   app.register(async (priv) => {
@@ -86,19 +143,28 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
 
     priv.post("/v1/admin/logout", async (req) => {
       await db.query("DELETE FROM sessions WHERE id = $1", [req.admin!.sessionId]);
+      await audit(db, req, "logout", { adminId: req.admin!.id });
       return { ok: true };
     });
 
-    priv.get("/v1/admin/me", async (req) => ({ id: req.admin!.id, username: req.admin!.username }));
+    priv.get("/v1/admin/me", async (req) => ({
+      id: req.admin!.id,
+      username: req.admin!.username,
+      email: req.admin!.email,
+      role: req.admin!.role,
+    }));
+
+    await priv.register(securityRoutes, { db, config });
 
     priv.post("/v1/admin/password", async (req, reply) => {
       const body = ChangePassword.safeParse(req.body);
       if (!body.success) return reply.code(400).send({ error: "invalid_body", message: "a nova senha precisa ter pelo menos 10 caracteres" });
       const row = (await db.query("SELECT password_hash FROM admins WHERE id = $1", [req.admin!.id])).rows[0];
       if (!(await verifyPassword(body.data.current, row.password_hash))) return reply.code(400).send({ error: "invalid_password", message: "senha atual incorreta" });
-      await db.query("UPDATE admins SET password_hash = $2 WHERE id = $1", [req.admin!.id, await hashPassword(body.data.next)]);
+      await db.query("UPDATE admins SET password_hash = $2, password_changed_at = now() WHERE id = $1", [req.admin!.id, await hashPassword(body.data.next)]);
       // derruba as outras sessões
       await db.query("DELETE FROM sessions WHERE admin_id = $1 AND id <> $2", [req.admin!.id, req.admin!.sessionId]);
+      await audit(db, req, "password_changed", { adminId: req.admin!.id });
       return { ok: true };
     });
 

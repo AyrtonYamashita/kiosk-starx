@@ -20,7 +20,14 @@ export interface Config {
   adminUsername?: string;
   adminPassword?: string;
   checkinIntervalSec: number;
-  sessionDays: number;
+  /** Sessão do painel: validade máxima (h) e expiração por inatividade (h). */
+  sessionTtlHours: number;
+  sessionIdleHours: number;
+  /**
+   * Segredo compartilhado com o servidor do painel (Vercel): com ele, a API confia no IP e no navegador reais que o
+   * painel repassa (X-Client-IP / X-Client-UA). Sem ele, o IP visto é o da Vercel.
+   */
+  panelSecret?: string;
   /** Atrás do Caddy: usa X-Forwarded-For para o IP do aparelho. */
   trustProxy: boolean;
   logLevel: string;
@@ -49,7 +56,9 @@ export function loadConfig(): Config {
     adminUsername: process.env.ADMIN_USERNAME,
     adminPassword: process.env.ADMIN_PASSWORD,
     checkinIntervalSec: Number(process.env.CHECKIN_INTERVAL_SEC ?? 60),
-    sessionDays: Number(process.env.SESSION_DAYS ?? 7),
+    sessionTtlHours: Number(process.env.SESSION_TTL_HOURS ?? 48),
+    sessionIdleHours: Number(process.env.SESSION_IDLE_HOURS ?? 8),
+    panelSecret: process.env.PANEL_SECRET || undefined,
     trustProxy: (process.env.TRUST_PROXY ?? "true") === "true",
     logLevel: process.env.LOG_LEVEL ?? "info",
   };

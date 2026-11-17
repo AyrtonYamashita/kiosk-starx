@@ -8,7 +8,7 @@ export function LoginForm() {
   return (
     <form action={action} className="stack">
       <label>
-        Usuário
+        Usuário ou e-mail
         <input name="username" autoComplete="username" required autoFocus />
       </label>
       <label>

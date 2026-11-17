@@ -1,6 +1,7 @@
 import fastifyRateLimit from "@fastify/rate-limit";
 import fastifyStatic from "@fastify/static";
 import Fastify from "fastify";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import type { Config } from "./config.js";
 import type { Db } from "./db.js";
@@ -9,6 +10,12 @@ import { deviceAppRoutes, uploadRoutes } from "./routes/apps.js";
 import { deviceScreenshotRoutes } from "./routes/commands.js";
 import { deviceRoutes } from "./routes/device.js";
 import { Waker } from "./wake.js";
+
+function safeEqual(a: string, b: string): boolean {
+  const x = Buffer.from(a);
+  const y = Buffer.from(b);
+  return x.length === y.length && crypto.timingSafeEqual(x, y);
+}
 
 export async function buildApp(config: Config, db: Db, waker = new Waker()) {
   const app = Fastify({
@@ -24,6 +31,17 @@ export async function buildApp(config: Config, db: Db, waker = new Waker()) {
     if (config.trustProxy && typeof cf === "string" && /^[0-9a-fA-F:.]{3,45}$/.test(cf)) {
       Object.defineProperty(req, "ip", { value: cf, configurable: true });
     }
+  });
+
+  // Painel (servidor na Vercel) repassa o IP e o navegador de quem está usando, assinados com PANEL_SECRET.
+  // Vale para o rate limit, o bloqueio por IP, a auditoria e a lista de sessões.
+  app.addHook("onRequest", async (req) => {
+    const secret = req.headers["x-panel-secret"];
+    if (!config.panelSecret || typeof secret !== "string" || !safeEqual(secret, config.panelSecret)) return;
+    const ip = req.headers["x-client-ip"];
+    if (typeof ip === "string" && /^[0-9a-fA-F:.]{3,45}$/.test(ip)) Object.defineProperty(req, "ip", { value: ip, configurable: true });
+    const ua = req.headers["x-client-ua"];
+    if (typeof ua === "string") req.headers["user-agent"] = ua.slice(0, 300);
   });
 
   await app.register(fastifyRateLimit, { global: false });
