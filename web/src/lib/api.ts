@@ -77,7 +77,7 @@ export type LoginResult =
       mfaRequired: true;
       token: string;
       expiresAt: string;
-      methods: ("totp" | "email" | "recovery")[];
+      methods: ("passkey" | "totp" | "email" | "recovery")[];
       emailHint: string | null;
       codeSent: boolean;
       retryAfterSec: number;
@@ -337,7 +337,20 @@ export interface MfaInfo {
   required: boolean;
   email: string | null;
   totp: { enabled: boolean; since: string | null };
+  passkeys: { id: string; name: string; synced: boolean; createdAt: string; lastUsedAt: string | null }[];
   recoveryCodesLeft: number;
   trustDays: number;
   trustedDevices: { id: string; ip: string | null; userAgent: string | null; createdAt: string; lastUsedAt: string; expiresAt: string }[];
+}
+
+/** Chamada sem sessão (login com passkey): só os cabeçalhos do cliente. */
+export async function apiAnon<T>(path: string, body?: unknown): Promise<{ status: number; json: T & { message?: string; error?: string } }> {
+  const res = await fetch(`${apiUrl()}${path}`, {
+    method: "POST",
+    headers: { ...(body !== undefined ? { "content-type": "application/json" } : {}), ...(await clientHeaders()) },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+    cache: "no-store",
+  });
+  const json = await res.json().catch(() => ({}));
+  return { status: res.status, json };
 }

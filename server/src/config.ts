@@ -38,6 +38,9 @@ export interface Config {
   mailFrom: string;
   otpTtlMin: number;
   trustDays: number;
+  /** Passkeys: domínio (RP ID) e endereços do painel aceitos. Produção: pstarx.com e https://kiosk.pstarx.com. */
+  webauthnRpId: string;
+  webauthnOrigins: string[];
   /** Atrás do Caddy: usa X-Forwarded-For para o IP do aparelho. */
   trustProxy: boolean;
   logLevel: string;
@@ -83,6 +86,11 @@ export function loadConfig(): Config {
     mailFrom: process.env.MAIL_FROM ?? "StarX Kiosk <no-reply@pstarx.com>",
     otpTtlMin: Number(process.env.OTP_TTL_MIN ?? 10),
     trustDays: Number(process.env.TRUST_DAYS ?? 30),
+    webauthnRpId: process.env.WEBAUTHN_RP_ID ?? "localhost",
+    webauthnOrigins: (process.env.WEBAUTHN_ORIGINS ?? process.env.PANEL_ORIGINS ?? "http://localhost:3000")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
     trustProxy: (process.env.TRUST_PROXY ?? "true") === "true",
     logLevel: process.env.LOG_LEVEL ?? "info",
   };

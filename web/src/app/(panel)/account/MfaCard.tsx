@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import { generateRecoveryCodes, revokeTrustedDevice } from "@/lib/actions";
 import type { MfaInfo } from "@/lib/api";
 import { TotpSection } from "./TotpSection";
+import { PasskeysSection } from "./PasskeysSection";
 
 function device(ua: string | null): string {
   if (!ua) return "—";
@@ -24,12 +25,15 @@ export function MfaCard({ info }: { info: MfaInfo }) {
         <span className="mono">{info.email ?? "— (sem e-mail: peça ao administrador)"}</span>
       </span>
 
+      <strong className="small">Passkeys ({info.passkeys.length})</strong>
+      <PasskeysSection passkeys={info.passkeys} />
+
       <strong className="small">App autenticador</strong>
       <TotpSection enabled={info.totp.enabled} since={info.totp.since} />
 
       <strong className="small">Códigos de recuperação</strong>
       <span className="muted small">
-        <span className="mono">{info.recoveryCodesLeft}</span> disponíveis. Para entrar sem o e-mail nem o app. Cada um vale uma vez.
+        <span className="mono">{info.recoveryCodesLeft}</span> disponíveis. Para entrar sem passkey, e-mail ou app. Cada um vale uma vez.
       </span>
       {state?.codes ? (
         <div className="alert warn" style={{ flexDirection: "column", alignItems: "stretch" }}>

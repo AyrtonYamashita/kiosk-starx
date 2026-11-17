@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import QRCode from "qrcode";
-import { api, ApiError, apiLogin, apiMfa, apiRevokeToken, MFA_COOKIE, MFA_INFO_COOKIE, SESSION_COOKIE, TRUST_COOKIE, type CommandType, type Enrollment } from "./api";
+import { api, ApiError, apiAnon, apiLogin, apiMfa, apiRevokeToken, MFA_COOKIE, MFA_INFO_COOKIE, SESSION_COOKIE, TRUST_COOKIE, type CommandType, type Enrollment } from "./api";
 
 export type FormState = { error?: string; ok?: string } | undefined;
 
@@ -508,4 +508,84 @@ export async function disableTotp(_: FormState, form: FormData): Promise<FormSta
   }
   revalidatePath("/account");
   return { ok: "App autenticador desativado. O código volta a ser enviado por e-mail." };
+}
+
+// ---------------------------------------------------------------- passkeys (fase 1.3c)
+// Chamadas a partir do navegador (componentes cliente): o navegador faz a cerimônia WebAuthn no meio.
+
+type PasskeyOptions = { challengeId: string; options: Record<string, unknown> };
+export type PasskeyStep = { ok?: boolean; error?: string; challengeId?: string; options?: Record<string, unknown> };
+
+/** Sessão normal no cookie (rotação: a anterior do navegador sai) e fim da etapa 2, se houver. */
+async function startSession(r: { token: string; expiresAt: string; trustToken?: string | null; trustExpiresAt?: string | null }) {
+  const jar = await cookies();
+  const previous = jar.get(SESSION_COOKIE)?.value;
+  if (previous) await apiRevokeToken(previous);
+  jar.set(SESSION_COOKIE, r.token, { ...cookieBase, expires: new Date(r.expiresAt) });
+  if (r.trustToken && r.trustExpiresAt) jar.set(TRUST_COOKIE, r.trustToken, { ...cookieBase, expires: new Date(r.trustExpiresAt) });
+  jar.delete(MFA_COOKIE);
+  jar.delete(MFA_INFO_COOKIE);
+}
+
+/** "Entrar com passkey" (sem usuário e senha): 1. desafio. */
+export async function passkeyLoginOptions(): Promise<PasskeyStep> {
+  const r = await apiAnon<PasskeyOptions>("/v1/auth/passkey/options");
+  if (r.status !== 200) return { error: r.json.message ?? "Não foi possível começar." };
+  return { challengeId: r.json.challengeId, options: r.json.options };
+}
+
+/** 2. resposta do navegador → sessão. */
+export async function passkeyLoginFinish(challengeId: string, response: unknown): Promise<PasskeyStep> {
+  const r = await apiAnon<{ token: string; expiresAt: string }>("/v1/auth/passkey/verify", { challengeId, response });
+  if (r.status !== 200) return { error: r.json.message ?? "Não foi possível entrar com esta passkey." };
+  await startSession(r.json);
+  return { ok: true };
+}
+
+/** Etapa 2 do login (depois da senha) com passkey. */
+export async function mfaPasskeyOptions(): Promise<PasskeyStep> {
+  const token = (await cookies()).get(MFA_COOKIE)?.value;
+  if (!token) return { error: "A confirmação expirou. Entre de novo." };
+  const r = await apiMfa<PasskeyOptions>(token, "/v1/auth/mfa/passkey/options");
+  if (r.status !== 200) return { error: r.json.message ?? "Não foi possível começar." };
+  return { challengeId: r.json.challengeId, options: r.json.options };
+}
+
+export async function mfaPasskeyFinish(challengeId: string, response: unknown, trustDevice: boolean): Promise<PasskeyStep> {
+  const token = (await cookies()).get(MFA_COOKIE)?.value;
+  if (!token) return { error: "A confirmação expirou. Entre de novo." };
+  const r = await apiMfa<{ token: string; expiresAt: string; trustToken: string | null; trustExpiresAt: string | null }>(token, "/v1/auth/mfa/passkey/verify", {
+    challengeId,
+    response,
+    trustDevice,
+  });
+  if (r.status !== 200) return { error: r.json.message ?? "Passkey não confirmada." };
+  await startSession(r.json);
+  return { ok: true };
+}
+
+/** Conta → Adicionar passkey: 1. senha atual → desafio. */
+export async function registerPasskeyOptions(password: string): Promise<PasskeyStep> {
+  try {
+    const r = await api<PasskeyOptions>("/v1/admin/passkeys/register/options", { method: "POST", body: { password } });
+    return { challengeId: r.challengeId, options: r.options };
+  } catch (e) {
+    return { error: message(e) };
+  }
+}
+
+/** 2. resposta do navegador → passkey cadastrada. */
+export async function registerPasskeyFinish(challengeId: string, response: unknown, name: string): Promise<PasskeyStep> {
+  try {
+    await api("/v1/admin/passkeys/register/verify", { method: "POST", body: { challengeId, response, name } });
+  } catch (e) {
+    return { error: message(e) };
+  }
+  revalidatePath("/account");
+  return { ok: true };
+}
+
+export async function removePasskey(form: FormData) {
+  await api(`/v1/admin/passkeys/${String(form.get("id"))}`, { method: "DELETE" });
+  revalidatePath("/account");
 }

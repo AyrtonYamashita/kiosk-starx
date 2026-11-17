@@ -44,6 +44,8 @@ export async function setupApi(opts: { config?: Partial<Config> } = {}) {
     mailFrom: "StarX Kiosk <no-reply@pstarx.com>",
     otpTtlMin: 10,
     trustDays: 30,
+    webauthnRpId: "localhost",
+    webauthnOrigins: ["http://localhost:3000"],
     sessionTtlHours: 48,
     sessionIdleHours: 8,
     panelSecret: "segredo-do-painel-de-teste",

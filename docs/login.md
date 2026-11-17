@@ -102,3 +102,30 @@ Variáveis (`deploy/.env`): `AUTH_REQUIRE_2FA`, `AUTH_SECRET` (32+ caracteres, o
 1. Backup do banco. 2. Subir a API (migração `006_totp.sql`, só adiciona a tabela `admin_totp`) e publicar o painel.
 Nenhuma variável nova. Rollback: voltar a imagem anterior (a tabela a mais não atrapalha; quem ativou o app volta a
 receber o código por e-mail).
+
+## 1.3c — passkeys (opcional)
+
+- **Cadastrar** (Conta → Verificação em duas etapas → Passkeys → Adicionar passkey): nome + senha atual → janela do
+  navegador (Windows Hello, Touch ID, Android, chave de segurança). Até 10 por conta; lista com último uso e Remover.
+- **"Entrar com passkey"** na tela de login: sem usuário, senha nem código — a passkey já é 2 fatores (aparelho +
+  biometria/PIN) e não funciona em site falso. Também aparece como primeira opção na etapa 2 de quem entrou com senha
+  (o e-mail então não sai sozinho; continua disponível).
+- **Domínio (RP ID)**: `pstarx.com` — vale em `kiosk.pstarx.com` e em qualquer `*.pstarx.com` no futuro. **Não trocar**:
+  mudar o RP ID invalida todas as passkeys cadastradas.
+- **Segurança**: verificação do usuário obrigatória (biometria/PIN, não só toque); desafio de uso único com 5 min; origem
+  (`WEBAUTHN_ORIGINS`) e domínio conferidos; contador do autenticador só anda para a frente (clone é recusado); só a
+  chave pública fica no banco. Falhas do login sem senha contam no bloqueio por IP; na etapa 2, no bloqueio da conta.
+  Uma passkey entra mesmo com a conta bloqueada por senhas erradas (o bloqueio protege a senha; a passkey não é
+  adivinhável) — o bloqueio por IP continua valendo.
+- **Admin → Zerar 2FA** também remove as passkeys.
+- **Auditoria**: `passkey_registered`, `passkey_removed`, `passkey_register_failed`, `passkey_failure`,
+  `login_success` com `method: "passkey"`.
+- **Testes**: autenticador de software (`server/test/softAuthenticator.ts`, ES256) cobre cadastro, login, replay,
+  site/domínio errado, sem biometria, contador voltando, passkey removida, bloqueio por IP e etapa 2.
+
+### Deploy (1.3c)
+
+1. Backup do banco.
+2. No `.env` da VPS: `WEBAUTHN_RP_ID=pstarx.com` e `WEBAUTHN_ORIGINS=https://kiosk.pstarx.com`.
+3. Subir a API (migração `007_passkeys.sql`, só tabelas novas) e publicar o painel.
+Rollback: voltar a imagem anterior (as tabelas a mais não atrapalham; as passkeys param de funcionar até voltar).

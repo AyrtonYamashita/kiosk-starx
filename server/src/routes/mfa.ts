@@ -83,6 +83,7 @@ export function mfaDeps(db: Db, config: Config, mailer: Mailer) {
     }
     const recoveryLeft = Number((await db.query("SELECT count(*) FROM recovery_codes WHERE admin_id = $1 AND used_at IS NULL", [admin.id])).rows[0].count);
     const hasTotp = !!(await db.query("SELECT 1 FROM admin_totp WHERE admin_id = $1 AND confirmed_at IS NOT NULL", [admin.id])).rowCount;
+    const hasPasskey = !!(await db.query("SELECT 1 FROM webauthn_credentials WHERE admin_id = $1 LIMIT 1", [admin.id])).rowCount;
     const token = newToken();
     const s = (
       await db.query(
@@ -94,7 +95,7 @@ export function mfaDeps(db: Db, config: Config, mailer: Mailer) {
     let codeSent = false;
     let retryAfterSec = 0;
     // com app autenticador o e-mail não sai sozinho: só se a pessoa pedir ("Receber código por e-mail")
-    if (admin.email && !hasTotp) {
+    if (admin.email && !hasTotp && !hasPasskey) {
       retryAfterSec = await sendBlockedFor(db, admin.id, req.ip);
       if (!retryAfterSec) {
         await sendEmailCode(req, admin, s.id);
@@ -105,7 +106,7 @@ export function mfaDeps(db: Db, config: Config, mailer: Mailer) {
       mfaRequired: true,
       token,
       expiresAt: s.expires_at,
-      methods: [...(hasTotp ? ["totp"] : []), ...(admin.email ? ["email"] : []), ...(recoveryLeft ? ["recovery"] : [])],
+      methods: [...(hasPasskey ? ["passkey"] : []), ...(hasTotp ? ["totp"] : []), ...(admin.email ? ["email"] : []), ...(recoveryLeft ? ["recovery"] : [])],
       emailHint: admin.email ? maskEmail(admin.email) : null,
       codeSent,
       retryAfterSec,
@@ -117,7 +118,7 @@ export function mfaDeps(db: Db, config: Config, mailer: Mailer) {
 }
 
 /** Sessão "mfa" (etapa 2 do login). */
-async function partialSession(db: Db, req: FastifyRequest) {
+export async function partialSession(db: Db, req: FastifyRequest) {
   const auth = req.headers.authorization;
   if (!auth?.startsWith("Bearer ")) return null;
   const r = await db.query(
@@ -206,34 +207,53 @@ export async function mfaPublicRoutes(app: FastifyInstance, opts: { db: Db; conf
       return reply.code(400).send({ error: "invalid_code", message: "código incorreto", attemptsLeft: MAX_ATTEMPTS_PER_SESSION - attempts });
     }
 
-    // conferiu: a sessão "mfa" sai e nasce a sessão normal (token novo)
-    await db.query("DELETE FROM sessions WHERE id = $1", [s.id]);
-    const token = newToken();
-    const expires = new Date(Date.now() + config.sessionTtlHours * 3600_000);
-    await db.query("INSERT INTO sessions (admin_id, token_hash, expires_at, ip, user_agent) VALUES ($1, $2, $3, $4, $5)", [
-      s.admin_id,
-      sha256(token),
-      expires,
-      req.ip,
-      (req.headers["user-agent"] ?? "").toString().slice(0, 300) || null,
-    ]);
-    let trustToken: string | null = null;
-    let trustExpiresAt: Date | null = null;
-    if (body.data.trustDevice) {
-      trustToken = newToken();
-      trustExpiresAt = new Date(Date.now() + config.trustDays * 86_400_000);
-      await db.query("INSERT INTO trusted_devices (admin_id, token_hash, ip, user_agent, expires_at) VALUES ($1, $2, $3, $4, $5)", [
-        s.admin_id,
-        sha256(trustToken),
-        req.ip,
-        (req.headers["user-agent"] ?? "").toString().slice(0, 300) || null,
-        trustExpiresAt,
-      ]);
-    }
-    await audit(db, req, "mfa_success", { adminId: s.admin_id, details: { method: body.data.method, trustDevice: body.data.trustDevice } });
-    await audit(db, req, "login_success", { adminId: s.admin_id, identifier: s.username, details: { mfa: body.data.method } });
-    return { token, expiresAt: expires.toISOString(), idleHours: config.sessionIdleHours, trustToken, trustExpiresAt };
+    return completeMfa(db, config, req, s, body.data.method, body.data.trustDevice);
   });
+}
+
+const ua = (req: FastifyRequest) => (req.headers["user-agent"] ?? "").toString().slice(0, 300) || null;
+
+/** Sessão normal nova (login concluído). */
+export async function issueSession(db: Db, config: Config, req: FastifyRequest, adminId: string) {
+  const token = newToken();
+  const expires = new Date(Date.now() + config.sessionTtlHours * 3600_000);
+  await db.query("INSERT INTO sessions (admin_id, token_hash, expires_at, ip, user_agent) VALUES ($1, $2, $3, $4, $5)", [
+    adminId,
+    sha256(token),
+    expires,
+    req.ip,
+    ua(req),
+  ]);
+  return { token, expiresAt: expires.toISOString(), idleHours: config.sessionIdleHours };
+}
+
+/** Etapa 2 conferida: a sessão "mfa" sai, nasce a sessão normal e, se pedido, o navegador vira confiável. */
+export async function completeMfa(
+  db: Db,
+  config: Config,
+  req: FastifyRequest,
+  s: { id: string; admin_id: string; username: string },
+  method: string,
+  trustDevice: boolean,
+) {
+  await db.query("DELETE FROM sessions WHERE id = $1", [s.id]);
+  const session = await issueSession(db, config, req, s.admin_id);
+  let trustToken: string | null = null;
+  let trustExpiresAt: Date | null = null;
+  if (trustDevice) {
+    trustToken = newToken();
+    trustExpiresAt = new Date(Date.now() + config.trustDays * 86_400_000);
+    await db.query("INSERT INTO trusted_devices (admin_id, token_hash, ip, user_agent, expires_at) VALUES ($1, $2, $3, $4, $5)", [
+      s.admin_id,
+      sha256(trustToken),
+      req.ip,
+      ua(req),
+      trustExpiresAt,
+    ]);
+  }
+  await audit(db, req, "mfa_success", { adminId: s.admin_id, details: { method, trustDevice } });
+  await audit(db, req, "login_success", { adminId: s.admin_id, identifier: s.username, details: { mfa: method } });
+  return { ...session, trustToken, trustExpiresAt };
 }
 
 /** Na Conta (sessão normal): códigos de recuperação e navegadores confiáveis. Admin: zerar o 2FA de alguém. */
@@ -251,6 +271,9 @@ export async function mfaAccountRoutes(app: FastifyInstance, opts: { db: Db; con
       required: config.authRequire2fa,
       email: req.admin!.email,
       totp: { enabled: !!totp, since: totp?.confirmed_at ?? null },
+      passkeys: (
+        await db.query("SELECT id, name, device_type, backed_up, created_at, last_used_at FROM webauthn_credentials WHERE admin_id = $1 ORDER BY created_at", [req.admin!.id])
+      ).rows.map((p) => ({ id: p.id, name: p.name, synced: p.backed_up, createdAt: p.created_at, lastUsedAt: p.last_used_at })),
       recoveryCodesLeft: left,
       trustDays: config.trustDays,
       trustedDevices: devices.rows.map((d) => ({ id: d.id, ip: d.ip, userAgent: d.user_agent, createdAt: d.created_at, lastUsedAt: d.last_used_at, expiresAt: d.expires_at })),
@@ -275,22 +298,7 @@ export async function mfaAccountRoutes(app: FastifyInstance, opts: { db: Db; con
     return { ok: true };
   });
 
-  /** Confere a senha atual (ativar/desativar o app). Erro conta no bloqueio da conta, como no login. */
-  async function checkPassword(req: FastifyRequest, reply: FastifyReply, password: unknown): Promise<boolean> {
-    const key = lockKey("account", req.admin!.username);
-    const blocked = await lockedFor(db, "account", key);
-    if (blocked) {
-      retry(reply, blocked, `Muitas tentativas. Tente de novo em ${blocked < 60 ? `${blocked} s` : `${Math.ceil(blocked / 60)} min`}.`);
-      return false;
-    }
-    const row = (await db.query("SELECT password_hash FROM admins WHERE id = $1", [req.admin!.id])).rows[0];
-    if (typeof password === "string" && password && row && (await verifyPassword(password, row.password_hash))) return true;
-    await recordFailure(db, "account", key);
-    await audit(db, req, "password_check_failed", { adminId: req.admin!.id });
-    reply.code(400).send({ error: "invalid_password", message: "senha atual incorreta" });
-    return false;
-  }
-
+  const checkPassword = (req: FastifyRequest, reply: FastifyReply, password: unknown) => checkCurrentPassword(db, req, reply, password);
   /** Ativar o app, passo 1: senha atual → chave nova (QR Code). Só vale depois de confirmada com um código. */
   app.post("/v1/admin/mfa/totp/setup", async (req, reply) => {
     const { password } = (req.body ?? {}) as { password?: unknown };
@@ -339,6 +347,7 @@ export async function mfaAccountRoutes(app: FastifyInstance, opts: { db: Db; con
     await db.query("DELETE FROM recovery_codes WHERE admin_id = $1", [id]);
     await db.query("DELETE FROM trusted_devices WHERE admin_id = $1", [id]);
     await db.query("DELETE FROM admin_totp WHERE admin_id = $1", [id]);
+    await db.query("DELETE FROM webauthn_credentials WHERE admin_id = $1", [id]);
     if (id !== req.admin!.id) await db.query("DELETE FROM sessions WHERE admin_id = $1", [id]);
     await audit(db, req, "mfa_reset", { adminId: req.admin!.id, details: { userId: id } });
     return { ok: true };
@@ -348,4 +357,20 @@ export async function mfaAccountRoutes(app: FastifyInstance, opts: { db: Db; con
 /** Troca de senha: navegadores confiáveis deixam de valer (quem tinha a senha antiga não pula o 2FA). */
 export async function revokeTrust(db: Db, adminId: string) {
   await db.query("DELETE FROM trusted_devices WHERE admin_id = $1", [adminId]);
+}
+
+/** Confere a senha atual (ativar/desativar app ou passkey). Erro conta no bloqueio da conta, como no login. */
+export async function checkCurrentPassword(db: Db, req: FastifyRequest, reply: FastifyReply, password: unknown): Promise<boolean> {
+  const key = lockKey("account", req.admin!.username);
+  const blocked = await lockedFor(db, "account", key);
+  if (blocked) {
+    retry(reply, blocked, `Muitas tentativas. Tente de novo em ${blocked < 60 ? `${blocked} s` : `${Math.ceil(blocked / 60)} min`}.`);
+    return false;
+  }
+  const row = (await db.query("SELECT password_hash FROM admins WHERE id = $1", [req.admin!.id])).rows[0];
+  if (typeof password === "string" && password && row && (await verifyPassword(password, row.password_hash))) return true;
+  await recordFailure(db, "account", key);
+  await audit(db, req, "password_check_failed", { adminId: req.admin!.id });
+  reply.code(400).send({ error: "invalid_password", message: "senha atual incorreta" });
+  return false;
 }

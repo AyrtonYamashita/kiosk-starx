@@ -10,6 +10,7 @@ import { commandRoutes } from "./commands.js";
 import { configStatus, profileRoutes } from "./profiles.js";
 import { securityRoutes } from "./security.js";
 import { mfaAccountRoutes, mfaDeps, mfaPublicRoutes, revokeTrust } from "./mfa.js";
+import { passkeyAccountRoutes, passkeyPublicRoutes } from "./passkeys.js";
 import type { Mailer } from "../mfa.js";
 import { audit, clearLock, lockedFor, lockKey, recordFailure } from "../auth.js";
 import type { Waker } from "../wake.js";
@@ -68,6 +69,7 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
   const { db, config, waker } = opts;
   const { beginMfa } = mfaDeps(db, config, opts.mailer);
   await app.register(mfaPublicRoutes, { db, config, mailer: opts.mailer });
+  await app.register(passkeyPublicRoutes, { db, config });
 
   async function requireAdmin(req: FastifyRequest, reply: FastifyReply) {
     const auth = req.headers.authorization;
@@ -186,6 +188,7 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
 
     await priv.register(securityRoutes, { db, config });
     await priv.register(mfaAccountRoutes, { db, config });
+    await priv.register(passkeyAccountRoutes, { db, config });
 
     priv.post("/v1/admin/password", async (req, reply) => {
       const body = ChangePassword.safeParse(req.body);

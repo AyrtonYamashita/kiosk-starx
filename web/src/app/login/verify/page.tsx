@@ -5,7 +5,7 @@ import { VerifyForm } from "./VerifyForm";
 
 export const dynamic = "force-dynamic";
 
-type Info = { methods: ("totp" | "email" | "recovery")[]; emailHint: string | null; codeSent: boolean; retryAfterSec: number; trustDays: number; at: number };
+type Info = { methods: ("passkey" | "totp" | "email" | "recovery")[]; emailHint: string | null; codeSent: boolean; retryAfterSec: number; trustDays: number; at: number };
 
 /** Etapa 2 do login: o código enviado por e-mail (ou um código de recuperação). */
 export default async function VerifyPage() {

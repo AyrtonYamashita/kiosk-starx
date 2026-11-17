@@ -1,18 +1,23 @@
 "use client";
 
+import { browserSupportsWebAuthn } from "@simplewebauthn/browser";
+import { KeyRound } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useState } from "react";
-import { cancelMfa, resendMfaCode, verifyMfa } from "@/lib/actions";
+import { cancelMfa, mfaPasskeyFinish, mfaPasskeyOptions, resendMfaCode, verifyMfa } from "@/lib/actions";
+import { getAssertion, passkeyError } from "@/lib/passkey-client";
 
-type Method = "totp" | "email" | "recovery";
+type Method = "passkey" | "totp" | "email" | "recovery";
+type CodeMethod = Exclude<Method, "passkey">;
 
 /** E-mail e recuperação: ABCD-2345 (maiúsculas, hífen no meio). App: 6 dígitos. */
-function formatInput(method: Method, raw: string): string {
+function formatInput(method: CodeMethod, raw: string): string {
   if (method === "totp") return raw.replace(/\D/g, "").slice(0, 6);
   const s = raw.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
   return s.length > 4 ? `${s.slice(0, 4)}-${s.slice(4)}` : s;
 }
 
-const LABEL: Record<Method, string> = {
+const LABEL: Record<CodeMethod, string> = {
   totp: "Código do app autenticador",
   email: "Código do e-mail",
   recovery: "Código de recuperação",
@@ -31,13 +36,24 @@ export function VerifyForm({
   trustDays: number;
   initialWaitSec: number;
 }) {
+  const router = useRouter();
   const [method, setMethod] = useState<Method>(methods[0] ?? "recovery");
   const [code, setCode] = useState("");
+  const [trust, setTrust] = useState(false);
   const [state, action, pending] = useActionState(verifyMfa, undefined);
   const [resendState, resend, resending] = useActionState(resendMfaCode, undefined);
   const [wait, setWait] = useState(initialWaitSec);
+  const [passkeyBusy, setPasskeyBusy] = useState(false);
+  const [passkeyErr, setPasskeyErr] = useState<string | null>(null);
+  const [canPasskey, setCanPasskey] = useState(true);
 
-  // pediu o código por e-mail (a partir do app): passa a digitar o do e-mail
+  // navegador sem passkey: começa pelo próximo método
+  useEffect(() => {
+    const ok = browserSupportsWebAuthn();
+    setCanPasskey(ok);
+    if (!ok && methods[0] === "passkey") setMethod(methods[1] ?? "recovery");
+  }, [methods]);
+  // pediu o código por e-mail: passa a digitar o do e-mail
   useEffect(() => {
     if (resendState?.retryAfterSec) setWait(resendState.retryAfterSec);
     if (resendState?.ok) {
@@ -55,18 +71,45 @@ export function VerifyForm({
   const switchTo = (m: Method) => {
     setMethod(m);
     setCode("");
+    setPasskeyErr(null);
   };
 
+  async function usePasskey() {
+    setPasskeyBusy(true);
+    setPasskeyErr(null);
+    try {
+      const start = await mfaPasskeyOptions();
+      if (start.error || !start.options || !start.challengeId) throw new Error(start.error ?? "Não foi possível começar.");
+      const response = await getAssertion(start.options);
+      const done = await mfaPasskeyFinish(start.challengeId, response, trust);
+      if (done.error) throw new Error(done.error);
+      router.replace("/");
+      router.refresh();
+    } catch (e) {
+      setPasskeyErr(passkeyError(e));
+      setPasskeyBusy(false);
+    }
+  }
+
   const hint =
-    method === "totp"
-      ? "Digite o código de 6 dígitos do seu app autenticador."
-      : method === "recovery"
-        ? "Digite um dos seus códigos de recuperação (cada um vale uma vez)."
-        : !emailHint
-          ? "Sua conta não tem e-mail cadastrado: use um código de recuperação ou peça ao administrador."
-          : codeSent || resendState?.ok
-            ? `Enviamos um código de 8 caracteres para ${emailHint}. Ele vale por 10 minutos.`
-            : `Um código já foi enviado para ${emailHint} há pouco. Use-o ou peça outro.`;
+    method === "passkey"
+      ? "Confirme com a passkey deste aparelho (digital, rosto ou PIN)."
+      : method === "totp"
+        ? "Digite o código de 6 dígitos do seu app autenticador."
+        : method === "recovery"
+          ? "Digite um dos seus códigos de recuperação (cada um vale uma vez)."
+          : !emailHint
+            ? "Sua conta não tem e-mail cadastrado: use um código de recuperação ou peça ao administrador."
+            : codeSent || resendState?.ok
+              ? `Enviamos um código de 8 caracteres para ${emailHint}. Ele vale por 10 minutos.`
+              : `Um código já foi enviado para ${emailHint} há pouco. Use-o ou peça outro.`;
+
+  const trustBox = (
+    <label className="inline">
+      <input type="checkbox" name="trust" checked={trust} onChange={(e) => setTrust(e.target.checked)} />
+      Confiar neste navegador por {trustDays} dias (não pedir o código aqui)
+    </label>
+  );
 
   return (
     <div className="stack" style={{ gap: 20 }}>
@@ -76,40 +119,58 @@ export function VerifyForm({
           {hint}
         </p>
       </div>
-      <form action={action} className="stack">
-        <input type="hidden" name="method" value={method} />
-        <label>
-          {LABEL[method]}
-          <input
-            key={method}
-            name="code"
-            value={code}
-            onChange={(e) => setCode(formatInput(method, e.target.value))}
-            autoFocus
-            autoComplete="one-time-code"
-            inputMode={method === "totp" ? "numeric" : "text"}
-            className="mono"
-            placeholder={method === "totp" ? "123456" : "ABCD-2345"}
-            style={{ fontSize: 20, letterSpacing: "0.15em", textAlign: "center", height: 44 }}
-            required
-          />
-        </label>
-        <label className="inline">
-          <input type="checkbox" name="trust" />
-          Confiar neste navegador por {trustDays} dias (não pedir o código aqui)
-        </label>
-        {state?.error && (
-          <div className="alert error">
-            {state.error}
-            {state.attemptsLeft !== undefined ? ` (${state.attemptsLeft} tentativa(s) restante(s))` : ""}
-          </div>
-        )}
-        <button className="primary" disabled={pending || !ready}>
-          {pending ? "Conferindo…" : "Entrar"}
-        </button>
-      </form>
+
+      {method === "passkey" ? (
+        <div className="stack">
+          {trustBox}
+          {passkeyErr && <div className="alert error">{passkeyErr}</div>}
+          <button type="button" className="primary" onClick={usePasskey} disabled={passkeyBusy} style={{ justifyContent: "center" }}>
+            <KeyRound size={16} aria-hidden /> {passkeyBusy ? "Aguardando a biometria…" : "Usar passkey"}
+          </button>
+        </div>
+      ) : (
+        <form action={action} className="stack">
+          <input type="hidden" name="method" value={method} />
+          <label>
+            {LABEL[method]}
+            <input
+              key={method}
+              name="code"
+              value={code}
+              onChange={(e) => setCode(formatInput(method, e.target.value))}
+              autoFocus
+              autoComplete="one-time-code"
+              inputMode={method === "totp" ? "numeric" : "text"}
+              className="mono"
+              placeholder={method === "totp" ? "123456" : "ABCD-2345"}
+              style={{ fontSize: 20, letterSpacing: "0.15em", textAlign: "center", height: 44 }}
+              required
+            />
+          </label>
+          {trustBox}
+          {state?.error && (
+            <div className="alert error">
+              {state.error}
+              {state.attemptsLeft !== undefined ? ` (${state.attemptsLeft} tentativa(s) restante(s))` : ""}
+            </div>
+          )}
+          <button className="primary" disabled={pending || !ready}>
+            {pending ? "Conferindo…" : "Entrar"}
+          </button>
+        </form>
+      )}
 
       <div className="stack" style={{ gap: 6, alignItems: "flex-start" }}>
+        {method !== "passkey" && methods.includes("passkey") && canPasskey && (
+          <button type="button" className="link-button" onClick={() => switchTo("passkey")}>
+            Usar passkey
+          </button>
+        )}
+        {method !== "totp" && methods.includes("totp") && (
+          <button type="button" className="link-button" onClick={() => switchTo("totp")}>
+            Usar o app autenticador
+          </button>
+        )}
         {methods.includes("email") && (
           <form action={resend}>
             <button className="link-button" disabled={resending || wait > 0}>
@@ -125,12 +186,7 @@ export function VerifyForm({
             </button>
           </form>
         )}
-        {method !== "totp" && methods.includes("totp") && (
-          <button type="button" className="link-button" onClick={() => switchTo("totp")}>
-            Usar o app autenticador
-          </button>
-        )}
-        {method === "recovery" && methods.includes("email") && !methods.includes("totp") && (
+        {method === "recovery" && methods.includes("email") && !methods.includes("totp") && !methods.includes("passkey") && (
           <button type="button" className="link-button" onClick={() => switchTo("email")}>
             Usar o código do e-mail
           </button>

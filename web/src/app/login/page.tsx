@@ -1,4 +1,5 @@
 import { LoginForm } from "./LoginForm";
+import { PasskeyLogin } from "./PasskeyLogin";
 
 const ETAPA: Record<string, string> = {
   expirou: "A confirmação do código expirou. Entre de novo.",
@@ -23,6 +24,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         {expirada && <div className="alert warn">Sua sessão expirou. Entre de novo.</div>}
         {etapa && ETAPA[etapa] && <div className="alert warn">{ETAPA[etapa]}</div>}
         <LoginForm />
+        <PasskeyLogin />
       </div>
     </main>
   );
