@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { createUser, updateUser } from "@/lib/actions";
+import { createUser, resetUserMfa, updateUser } from "@/lib/actions";
 import type { UserInfo } from "@/lib/api";
 
 function Feedback({ state }: { state: { ok?: string; error?: string } | undefined }) {
@@ -55,6 +55,7 @@ export function CreateUserForm() {
 export function EditUser({ user, self }: { user: UserInfo; self: boolean }) {
   const [open, setOpen] = useState(false);
   const [state, action, pending] = useActionState(updateUser, undefined);
+  const [mfaState, resetMfa, resetting] = useActionState(resetUserMfa, undefined);
   if (!open) {
     return (
       <button type="button" onClick={() => setOpen(true)}>
@@ -100,6 +101,20 @@ export function EditUser({ user, self }: { user: UserInfo; self: boolean }) {
           fechar
         </button>
       </div>
+      <div className="row" style={{ borderTop: "1px solid var(--rule)", paddingTop: 10 }}>
+        <button
+          type="submit"
+          formAction={resetMfa}
+          className="danger"
+          disabled={resetting}
+          onClick={(e) => {
+            if (!confirm(`Zerar o 2FA de ${user.username}? Apaga os códigos de recuperação e os navegadores confiáveis${self ? "" : " e encerra as sessões"}.`)) e.preventDefault();
+          }}
+        >
+          Zerar 2FA (perdeu o acesso)
+        </button>
+      </div>
+      <Feedback state={mfaState} />
     </form>
   );
 }

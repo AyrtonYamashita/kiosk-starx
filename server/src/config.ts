@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import path from "node:path";
 
 export interface Config {
@@ -28,6 +29,15 @@ export interface Config {
    * painel repassa (X-Client-IP / X-Client-UA). Sem ele, o IP visto é o da Vercel.
    */
   panelSecret?: string;
+  /** 2FA obrigatório (código por e-mail no mínimo). Desligado: login só com senha, como antes. */
+  authRequire2fa: boolean;
+  /** Segredo para o HMAC dos códigos (e-mail e recuperação) e dos navegadores confiáveis. */
+  authSecret: string;
+  /** Resend (só no servidor). Sem chave: os e-mails não saem (aviso no log). */
+  resendApiKey?: string;
+  mailFrom: string;
+  otpTtlMin: number;
+  trustDays: number;
   /** Atrás do Caddy: usa X-Forwarded-For para o IP do aparelho. */
   trustProxy: boolean;
   logLevel: string;
@@ -37,6 +47,14 @@ function required(name: string): string {
   const v = process.env[name];
   if (!v) throw new Error(`variável de ambiente ${name} não definida`);
   return v;
+}
+
+function authSecret(): string {
+  const s = process.env.AUTH_SECRET;
+  if (s && s.length >= 32) return s;
+  if ((process.env.AUTH_REQUIRE_2FA ?? "false") === "true") throw new Error("AUTH_SECRET (32+ caracteres) é obrigatório com AUTH_REQUIRE_2FA=true");
+  // desenvolvimento: segredo por processo (códigos não sobrevivem a um reinício)
+  return crypto.randomBytes(32).toString("base64url");
 }
 
 export function loadConfig(): Config {
@@ -59,6 +77,12 @@ export function loadConfig(): Config {
     sessionTtlHours: Number(process.env.SESSION_TTL_HOURS ?? 48),
     sessionIdleHours: Number(process.env.SESSION_IDLE_HOURS ?? 8),
     panelSecret: process.env.PANEL_SECRET || undefined,
+    authRequire2fa: (process.env.AUTH_REQUIRE_2FA ?? "false") === "true",
+    authSecret: authSecret(),
+    resendApiKey: process.env.RESEND_API_KEY || undefined,
+    mailFrom: process.env.MAIL_FROM ?? "StarX Kiosk <no-reply@pstarx.com>",
+    otpTtlMin: Number(process.env.OTP_TTL_MIN ?? 10),
+    trustDays: Number(process.env.TRUST_DAYS ?? 30),
     trustProxy: (process.env.TRUST_PROXY ?? "true") === "true",
     logLevel: process.env.LOG_LEVEL ?? "info",
   };

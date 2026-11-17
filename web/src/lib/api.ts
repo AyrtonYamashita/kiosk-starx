@@ -3,6 +3,11 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 export const SESSION_COOKIE = "kiosk_session";
+/** Etapa 2 do login (sessão provisória do 2FA, 10 min) e os dados para a tela do código. */
+export const MFA_COOKIE = "kiosk_mfa";
+export const MFA_INFO_COOKIE = "kiosk_mfa_info";
+/** "Confiar neste navegador" (30 dias): pula o segundo fator. */
+export const TRUST_COOKIE = "kiosk_trust";
 
 function apiUrl(): string {
   const url = process.env.API_URL;
@@ -66,12 +71,26 @@ export async function apiRevokeToken(token: string): Promise<void> {
 }
 
 /** Login: não usa o cookie (ainda não existe). */
-export async function apiLogin(username: string, password: string): Promise<{ token: string; expiresAt: string } | { error: string }> {
+export type LoginResult =
+  | { token: string; expiresAt: string; mfaRequired?: undefined }
+  | {
+      mfaRequired: true;
+      token: string;
+      expiresAt: string;
+      methods: ("email" | "recovery")[];
+      emailHint: string | null;
+      codeSent: boolean;
+      retryAfterSec: number;
+      trustDays: number;
+    }
+  | { error: string };
+
+export async function apiLogin(username: string, password: string, trustToken?: string): Promise<LoginResult> {
   try {
     const res = await fetch(`${apiUrl()}/v1/admin/login`, {
       method: "POST",
       headers: { "content-type": "application/json", ...(await clientHeaders()) },
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ username, password, ...(trustToken ? { trustToken } : {}) }),
       cache: "no-store",
     });
     const json = await res.json().catch(() => null);
@@ -300,4 +319,24 @@ export interface AuthEvent {
   userAgent: string | null;
   details: Record<string, unknown> | null;
   createdAt: string;
+}
+
+/** Chamada da etapa 2 do login, com a sessão provisória (não o cookie da sessão normal). */
+export async function apiMfa<T>(token: string, path: string, body?: unknown): Promise<{ status: number; json: T & { message?: string; error?: string; retryAfterSec?: number; attemptsLeft?: number } }> {
+  const res = await fetch(`${apiUrl()}${path}`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}`, ...(body !== undefined ? { "content-type": "application/json" } : {}), ...(await clientHeaders()) },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+    cache: "no-store",
+  });
+  const json = await res.json().catch(() => ({}));
+  return { status: res.status, json };
+}
+
+export interface MfaInfo {
+  required: boolean;
+  email: string | null;
+  recoveryCodesLeft: number;
+  trustDays: number;
+  trustedDevices: { id: string; ip: string | null; userAgent: string | null; createdAt: string; lastUsedAt: string; expiresAt: string }[];
 }

@@ -1,14 +1,16 @@
 import { logout } from "@/lib/actions";
-import { api, type Me, type SessionInfo } from "@/lib/api";
+import { api, type Me, type MfaInfo, type SessionInfo } from "@/lib/api";
+import { MfaCard } from "./MfaCard";
 import { SessionsTable } from "@/components/SessionsTable";
 import { PasswordForm } from "./PasswordForm";
 
 export const dynamic = "force-dynamic";
 
 export default async function AccountPage() {
-  const [me, { sessions, idleHours }] = await Promise.all([
+  const [me, { sessions, idleHours }, mfa] = await Promise.all([
     api<Me>("/v1/admin/me"),
     api<{ sessions: SessionInfo[]; idleHours: number }>("/v1/admin/sessions"),
+    api<MfaInfo>("/v1/admin/mfa"),
   ]);
   return (
     <div className="stack">
@@ -26,6 +28,10 @@ export default async function AccountPage() {
         <section className="card stack">
           <h2>Trocar senha</h2>
           <PasswordForm />
+        </section>
+        <section className="card stack">
+          <h2>Verificação em duas etapas</h2>
+          <MfaCard info={mfa} />
         </section>
         <section className="card stack">
           <h2>Sessões ativas</h2>

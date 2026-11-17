@@ -9,6 +9,8 @@ import { appRepoRoutes } from "./apps.js";
 import { commandRoutes } from "./commands.js";
 import { configStatus, profileRoutes } from "./profiles.js";
 import { securityRoutes } from "./security.js";
+import { mfaAccountRoutes, mfaDeps, mfaPublicRoutes, revokeTrust } from "./mfa.js";
+import type { Mailer } from "../mfa.js";
 import { audit, clearLock, lockedFor, lockKey, recordFailure } from "../auth.js";
 import type { Waker } from "../wake.js";
 
@@ -19,7 +21,12 @@ declare module "fastify" {
 }
 
 /** Login por usuário ou e-mail. */
-const Login = z.object({ username: z.string().trim().min(1).max(200), password: z.string().min(1).max(256) });
+const Login = z.object({
+  username: z.string().trim().min(1).max(200),
+  password: z.string().min(1).max(256),
+  /** "confiar neste navegador" (cookie do painel): pula o segundo fator por 30 dias */
+  trustToken: z.string().max(200).optional(),
+});
 
 /** 429 com Retry-After e mensagem genérica (não diz se a conta existe). */
 function tooMany(reply: FastifyReply, sec: number) {
@@ -57,8 +64,10 @@ export function onlineWindowSec(config: Config) {
   return config.checkinIntervalSec * 3;
 }
 
-export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: Config; waker: Waker }) {
+export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: Config; waker: Waker; mailer: Mailer }) {
   const { db, config, waker } = opts;
+  const { beginMfa } = mfaDeps(db, config, opts.mailer);
+  await app.register(mfaPublicRoutes, { db, config, mailer: opts.mailer });
 
   async function requireAdmin(req: FastifyRequest, reply: FastifyReply) {
     const auth = req.headers.authorization;
@@ -67,14 +76,15 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
     // vale até a validade máxima (2 dias) e enquanto não ficar parada além do limite de inatividade (8 h)
     const r = await db.query(
       `UPDATE sessions s SET last_used_at = now() FROM admins a
-       WHERE s.token_hash = $1 AND s.expires_at > now() AND s.last_used_at > now() - make_interval(hours => $2)
+       WHERE s.token_hash = $1 AND s.stage = 'full' AND s.expires_at > now() AND s.last_used_at > now() - make_interval(hours => $2)
          AND a.id = s.admin_id AND a.disabled_at IS NULL
        RETURNING s.id AS session_id, a.id, a.username, a.email, a.role`,
       [tokenHash, config.sessionIdleHours],
     );
     if (!r.rows[0]) {
       // sessão vencida por inatividade/validade: sai do banco (logout no servidor)
-      await db.query("DELETE FROM sessions WHERE token_hash = $1", [tokenHash]);
+      // (só sessão normal: a provisória do 2FA não é derrubada por quem a usa numa rota do painel)
+      await db.query("DELETE FROM sessions WHERE token_hash = $1 AND stage = 'full'", [tokenHash]);
       return reply.code(401).send({ error: "unauthorized" });
     }
     const a = r.rows[0];
@@ -98,10 +108,18 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
     }
 
     const admin = (
-      await db.query("SELECT id, password_hash, disabled_at FROM admins WHERE username = $1 OR lower(email) = lower($1) ORDER BY username = $1 DESC LIMIT 1", [
+      await db.query("SELECT id, username, email, password_hash, disabled_at FROM admins WHERE username = $1 OR lower(email) = lower($1) ORDER BY username = $1 DESC LIMIT 1", [
         identifier,
       ])
     ).rows[0];
+    // conta bloqueada pelo segundo fator (erros de código contam no usuário, qualquer que seja o identificador digitado)
+    if (admin) {
+      const mfaLock = await lockedFor(db, "account", lockKey("account", admin.username));
+      if (mfaLock > 0) {
+        await audit(db, req, "login_blocked", { adminId: admin.id, identifier, details: { retryAfterSec: mfaLock } });
+        return tooMany(reply, mfaLock);
+      }
+    }
     // conta inexistente gasta o mesmo tempo (hash falso): a resposta não revela quais contas existem
     const passwordOk = admin ? await verifyPassword(body.data.password, admin.password_hash) : await verifyPassword(body.data.password, await DUMMY_HASH_PROMISE()).then(() => false);
     const ok = passwordOk && !admin.disabled_at;
@@ -124,6 +142,12 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
       await db.query("UPDATE admins SET password_hash = $2 WHERE id = $1", [admin.id, await hashPassword(body.data.password)]);
       await audit(db, req, "password_rehashed", { adminId: admin.id, details: { to: "argon2id" } });
     }
+    // segundo fator: com AUTH_REQUIRE_2FA (e navegador não confiável), a resposta é a etapa 2, não a sessão
+    const mfa = await beginMfa(req, admin, body.data.trustToken);
+    if (mfa) {
+      await audit(db, req, "login_password_ok", { adminId: admin.id, identifier, details: { codeSent: mfa.codeSent } });
+      return mfa;
+    }
     // sessão nova a cada login (rotação): o token anterior do navegador, se houver, o painel descarta
     const token = newToken();
     const expires = new Date(Date.now() + config.sessionTtlHours * 3600_000);
@@ -135,6 +159,7 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
       (req.headers["user-agent"] ?? "").toString().slice(0, 300) || null,
     ]);
     await db.query("DELETE FROM sessions WHERE expires_at < now() OR last_used_at < now() - make_interval(hours => $1)", [config.sessionIdleHours]);
+    await db.query("DELETE FROM email_otps WHERE created_at < now() - interval '1 day'");
     await audit(db, req, "login_success", { adminId: admin.id, identifier });
     return { token, expiresAt: expires.toISOString(), idleHours: config.sessionIdleHours };
   });
@@ -160,6 +185,7 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
     }));
 
     await priv.register(securityRoutes, { db, config });
+    await priv.register(mfaAccountRoutes, { db, config });
 
     priv.post("/v1/admin/password", async (req, reply) => {
       const body = ChangePassword.safeParse(req.body);
@@ -169,6 +195,7 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
       await db.query("UPDATE admins SET password_hash = $2, password_changed_at = now() WHERE id = $1", [req.admin!.id, await hashPassword(body.data.next)]);
       // derruba as outras sessões
       await db.query("DELETE FROM sessions WHERE admin_id = $1 AND id <> $2", [req.admin!.id, req.admin!.sessionId]);
+      await revokeTrust(db, req.admin!.id);
       await audit(db, req, "password_changed", { adminId: req.admin!.id });
       return { ok: true };
     });

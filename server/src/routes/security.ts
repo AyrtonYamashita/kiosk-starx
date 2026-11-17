@@ -3,6 +3,7 @@ import { z } from "zod";
 import { audit, clearLock, type LockKind } from "../auth.js";
 import type { Config } from "../config.js";
 import { hashPassword } from "../crypto.js";
+import { revokeTrust } from "./mfa.js";
 import type { Db } from "../db.js";
 
 /** Só o papel admin: usuários, desbloqueios, auditoria e sessões dos outros. */
@@ -144,6 +145,8 @@ export async function securityRoutes(app: FastifyInstance, opts: { db: Db; confi
         );
         // desativar, trocar papel ou senha: a pessoa precisa entrar de novo
         if (b.disabled === true || b.role || b.password) await db.query("DELETE FROM sessions WHERE admin_id = $1", [id]);
+        // senha redefinida ou conta desativada: navegadores confiáveis deixam de pular o 2FA
+        if (b.disabled === true || b.password) await revokeTrust(db, id);
         const changes = Object.keys(b).map((k) => (k === "password" ? "password_reset" : k));
         await audit(db, req, "user_updated", { adminId: req.admin!.id, details: { userId: id, changes } });
         return userJson(r.rows[0]);

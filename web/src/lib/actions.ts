@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import QRCode from "qrcode";
-import { api, ApiError, apiLogin, apiRevokeToken, SESSION_COOKIE, type CommandType, type Enrollment } from "./api";
+import { api, ApiError, apiLogin, apiMfa, apiRevokeToken, MFA_COOKIE, MFA_INFO_COOKIE, SESSION_COOKIE, TRUST_COOKIE, type CommandType, type Enrollment } from "./api";
 
 export type FormState = { error?: string; ok?: string } | undefined;
 
@@ -16,9 +16,22 @@ function message(e: unknown): string {
 
 // ---------------------------------------------------------------- sessão
 
+const cookieBase = { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax" as const, path: "/" };
+
 export async function login(_: FormState, form: FormData): Promise<FormState> {
-  const result = await apiLogin(String(form.get("username") ?? ""), String(form.get("password") ?? ""));
+  const jar = await cookies();
+  const result = await apiLogin(String(form.get("username") ?? ""), String(form.get("password") ?? ""), jar.get(TRUST_COOKIE)?.value);
   if ("error" in result) return { error: result.error };
+  if (result.mfaRequired) {
+    // etapa 2: sessão provisória no cookie (10 min) e a tela do código
+    jar.set(MFA_COOKIE, result.token, { ...cookieBase, expires: new Date(result.expiresAt) });
+    jar.set(
+      MFA_INFO_COOKIE,
+      JSON.stringify({ methods: result.methods, emailHint: result.emailHint, codeSent: result.codeSent, retryAfterSec: result.retryAfterSec, trustDays: result.trustDays, at: Date.now() }),
+      { ...cookieBase, expires: new Date(result.expiresAt) },
+    );
+    redirect("/login/verify");
+  }
   // rotação: a sessão que o navegador tinha antes é encerrada no servidor
   const previous = (await cookies()).get(SESSION_COOKIE)?.value;
   if (previous) await apiRevokeToken(previous);
@@ -381,4 +394,79 @@ export async function updateUser(_: FormState, form: FormData): Promise<FormStat
 export async function unlock(form: FormData) {
   await api("/v1/admin/security/unlock", { method: "POST", body: { kind: String(form.get("kind")), key: String(form.get("key")) } });
   revalidatePath("/users");
+}
+
+// ---------------------------------------------------------------- 2FA (fase 1.3a)
+
+export type MfaState = { error?: string; ok?: string; attemptsLeft?: number; retryAfterSec?: number } | undefined;
+
+/** Etapa 2: confere o código (e-mail ou recuperação). Deu certo: sessão normal, e o navegador fica confiável se pedido. */
+export async function verifyMfa(_: MfaState, form: FormData): Promise<MfaState> {
+  const jar = await cookies();
+  const token = jar.get(MFA_COOKIE)?.value;
+  if (!token) redirect("/login?etapa=expirou");
+  const trustDevice = form.get("trust") === "on";
+  const r = await apiMfa<{ token: string; expiresAt: string; trustToken: string | null; trustExpiresAt: string | null }>(token, "/v1/auth/mfa/verify", {
+    method: String(form.get("method") ?? "email"),
+    code: String(form.get("code") ?? ""),
+    trustDevice,
+  });
+  if (r.status === 401) {
+    jar.delete(MFA_COOKIE);
+    jar.delete(MFA_INFO_COOKIE);
+    redirect(`/login?etapa=${r.json.error === "too_many_attempts" ? "tentativas" : "expirou"}`);
+  }
+  if (r.status !== 200) return { error: r.json.message ?? "Código incorreto.", attemptsLeft: r.json.attemptsLeft, retryAfterSec: r.json.retryAfterSec };
+  // rotação: a sessão anterior do navegador (se houver) sai no servidor
+  const previous = jar.get(SESSION_COOKIE)?.value;
+  if (previous) await apiRevokeToken(previous);
+  jar.set(SESSION_COOKIE, r.json.token, { ...cookieBase, expires: new Date(r.json.expiresAt) });
+  if (r.json.trustToken && r.json.trustExpiresAt) jar.set(TRUST_COOKIE, r.json.trustToken, { ...cookieBase, expires: new Date(r.json.trustExpiresAt) });
+  jar.delete(MFA_COOKIE);
+  jar.delete(MFA_INFO_COOKIE);
+  redirect("/");
+}
+
+export async function resendMfaCode(_: MfaState): Promise<MfaState> {
+  const token = (await cookies()).get(MFA_COOKIE)?.value;
+  if (!token) redirect("/login?etapa=expirou");
+  const r = await apiMfa<{ emailHint: string }>(token, "/v1/auth/mfa/email/send");
+  if (r.status === 401) redirect("/login?etapa=expirou");
+  if (r.status === 429) return { error: r.json.message, retryAfterSec: r.json.retryAfterSec };
+  if (r.status !== 200) return { error: r.json.message ?? "Não foi possível enviar." };
+  return { ok: `Código novo enviado para ${r.json.emailHint}.`, retryAfterSec: 60 };
+}
+
+export async function cancelMfa() {
+  const jar = await cookies();
+  jar.delete(MFA_COOKIE);
+  jar.delete(MFA_INFO_COOKIE);
+  redirect("/login");
+}
+
+export type RecoveryState = { codes?: string[]; error?: string } | undefined;
+
+export async function generateRecoveryCodes(_: RecoveryState): Promise<RecoveryState> {
+  try {
+    const r = await api<{ codes: string[] }>("/v1/admin/mfa/recovery-codes", { method: "POST" });
+    revalidatePath("/account");
+    return { codes: r.codes };
+  } catch (e) {
+    return { error: message(e) };
+  }
+}
+
+export async function revokeTrustedDevice(form: FormData) {
+  await api(`/v1/admin/mfa/trusted-devices/${String(form.get("id"))}`, { method: "DELETE" });
+  revalidatePath("/account");
+}
+
+export async function resetUserMfa(_: FormState, form: FormData): Promise<FormState> {
+  try {
+    await api(`/v1/admin/users/${String(form.get("id"))}/reset-mfa`, { method: "POST" });
+  } catch (e) {
+    return { error: message(e) };
+  }
+  revalidatePath("/users");
+  return { ok: "2FA zerado: códigos de recuperação e navegadores confiáveis apagados; sessões encerradas." };
 }

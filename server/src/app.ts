@@ -10,6 +10,7 @@ import { deviceAppRoutes, uploadRoutes } from "./routes/apps.js";
 import { deviceScreenshotRoutes } from "./routes/commands.js";
 import { deviceRoutes } from "./routes/device.js";
 import { Waker } from "./wake.js";
+import { logMailer, resendMailer, type Mailer } from "./mfa.js";
 
 function safeEqual(a: string, b: string): boolean {
   const x = Buffer.from(a);
@@ -17,7 +18,7 @@ function safeEqual(a: string, b: string): boolean {
   return x.length === y.length && crypto.timingSafeEqual(x, y);
 }
 
-export async function buildApp(config: Config, db: Db, waker = new Waker()) {
+export async function buildApp(config: Config, db: Db, waker = new Waker(), mailer?: Mailer) {
   const app = Fastify({
     logger: { level: config.logLevel, redact: ["req.headers.authorization", "req.headers.cookie"] },
     trustProxy: config.trustProxy,
@@ -68,6 +69,7 @@ export async function buildApp(config: Config, db: Db, waker = new Waker()) {
   await app.register(deviceAppRoutes, { db, config });
   await app.register(deviceScreenshotRoutes, { db });
   await app.register(uploadRoutes, { db, config });
-  await app.register(adminRoutes, { db, config, waker });
+  const mail = mailer ?? (config.resendApiKey ? resendMailer(config.resendApiKey, config.mailFrom) : logMailer(app.log));
+  await app.register(adminRoutes, { db, config, waker, mailer: mail });
   return app;
 }

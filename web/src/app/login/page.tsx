@@ -1,7 +1,12 @@
 import { LoginForm } from "./LoginForm";
 
-export default async function LoginPage({ searchParams }: { searchParams: Promise<{ expirada?: string }> }) {
-  const { expirada } = await searchParams;
+const ETAPA: Record<string, string> = {
+  expirou: "A confirmação do código expirou. Entre de novo.",
+  tentativas: "Muitos códigos errados. Entre de novo com a senha.",
+};
+
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ expirada?: string; etapa?: string }> }) {
+  const { expirada, etapa } = await searchParams;
   return (
     <main className="login">
       <div className="brand">
@@ -16,6 +21,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           </p>
         </div>
         {expirada && <div className="alert warn">Sua sessão expirou. Entre de novo.</div>}
+        {etapa && ETAPA[etapa] && <div className="alert warn">{ETAPA[etapa]}</div>}
         <LoginForm />
       </div>
     </main>
