@@ -10,8 +10,8 @@ plugins {
     id("com.android.application")
 }
 
-val appVersionCode = 7
-val appVersionName = "0.4.2"
+val appVersionCode = 8
+val appVersionName = "0.4.3"
 
 // ---------------------------------------------------------------------------------------------
 // Assinatura de release: keystore FORA do repositório e do OneDrive, com backup próprio.
@@ -32,7 +32,7 @@ android {
     defaultConfig {
         // O applicationId não pode mudar depois que os aparelhos forem provisionados.
         applicationId = "com.pstarx.kiosk"
-        minSdk = 29 // Android 10
+        minSdk = 28 // Android 9 (coletores mais antigos)
         targetSdk = 34
         versionCode = appVersionCode
         versionName = appVersionName

@@ -6,6 +6,20 @@ import type { Enrollment, Release } from "@/lib/api";
 const PKG = "com.pstarx.kiosk";
 const ADMIN = `${PKG}/.admin.AdminReceiver`;
 const REMOTE_APK = "/data/local/tmp/starx-kiosk.apk";
+/** Android mínimo do app (minSdk do build): 28 = Android 9. */
+const MIN_SDK = 28;
+
+/** Erros do `pm install` → mensagem para quem está instalando. */
+function installError(out: string): string {
+  if (/INSTALL_FAILED_OLDER_SDK/.test(out)) return "o Android deste aparelho é antigo demais para o app (precisa do Android 9 ou mais novo)";
+  if (/INSTALL_FAILED_UPDATE_INCOMPATIBLE|INSTALL_FAILED_SIGNATURE|INCONSISTENT_CERTIFICATES/.test(out))
+    return "já existe um StarX Kiosk instalado com outra assinatura (ex.: um build de teste). Remova o app do aparelho e tente de novo";
+  if (/INSTALL_FAILED_INSUFFICIENT_STORAGE/.test(out)) return "sem espaço no aparelho para instalar o app";
+  if (/INSTALL_FAILED_VERIFICATION_FAILURE|INSTALL_FAILED_ABORTED/.test(out))
+    return "o aparelho recusou a instalação (Play Protect ou confirmação na tela). Se aparecer o aviso no coletor, toque em Instalar mesmo assim e tente de novo";
+  if (/INSTALL_FAILED_VERSION_DOWNGRADE/.test(out)) return "o aparelho já tem uma versão mais nova do app";
+  return `pm install: ${out}`;
+}
 
 type StepState = "wait" | "run" | "ok" | "fail" | "skip";
 type Step = { key: string; label: string; state: StepState; detail?: string };
@@ -83,7 +97,10 @@ export function AdbInstall({ enrollment, release }: { enrollment: Enrollment; re
       adb = new Adb(transport);
       const sh = (cmd: string) => adb!.subprocess.noneProtocol.spawnWaitText(cmd).then((t) => t.trim());
       const model = `${await adb.getProp("ro.product.manufacturer")} ${await adb.getProp("ro.product.model")}`;
-      set("connect", "ok", `${model} · Android ${await adb.getProp("ro.build.version.release")} · serial ${device.serial}`);
+      const androidVersion = await adb.getProp("ro.build.version.release");
+      const sdk = Number(await adb.getProp("ro.build.version.sdk"));
+      set("connect", "ok", `${model} · Android ${androidVersion} · serial ${device.serial}`);
+      if (sdk && sdk < MIN_SDK) throw new Error(`este aparelho tem Android ${androidVersion} (SDK ${sdk}); o StarX Kiosk precisa do Android 9 (SDK ${MIN_SDK}) ou mais novo`);
 
       // 2. conferir
       current = "check";
@@ -132,7 +149,7 @@ export function AdbInstall({ enrollment, release }: { enrollment: Enrollment; re
       }
       const install = await sh(`pm install -r ${REMOTE_APK}`);
       await sh(`rm -f ${REMOTE_APK}`);
-      if (!/Success/.test(install)) throw new Error(`pm install: ${install}`);
+      if (!/Success/.test(install)) throw new Error(installError(install));
       set("install", "ok");
 
       // 5. Device Owner
