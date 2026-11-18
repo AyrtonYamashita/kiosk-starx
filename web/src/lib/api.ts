@@ -121,8 +121,10 @@ export interface DeviceSummary {
   /** Tempo ligado no último contato (ms). */
   uptimeMs: number | null;
   infoUpdatedAt: string | null;
-  /** Usuário logado no sistema aberto no kiosk (integração futura com o site). */
+  /** Usuário logado no SSW (lido pelo app no piloto de leitura). */
   loggedUser: string | null;
+  /** Piloto da leitura do SSW ligado neste coletor. */
+  opsReader: boolean;
   kioskActive: boolean | null;
   kioskMode: string | null;
   kioskEnabled: boolean | null;
@@ -167,6 +169,10 @@ export interface DeviceDetail {
   managedApps: string[];
   managedStatus: Record<string, { versionCode: number | null; error: string | null; at?: string }>;
   lastScreenshotAt: string | null;
+  /** Piloto da leitura do SSW ligado neste coletor. */
+  opsReader: boolean;
+  /** Usuário logado no SSW agora (última leitura). */
+  sswUser: string | null;
 }
 
 export type CommandType = "reboot" | "lock" | "message" | "screenshot" | "reload" | "install_app" | "uninstall_app";

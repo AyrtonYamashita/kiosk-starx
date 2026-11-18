@@ -43,7 +43,7 @@ export const SCREEN_LABEL: Record<string, string> = {
 export const END_LABEL: Record<string, string> = {
   concluded: "concluída",
   interrupted: "interrompida",
-  left: "saiu da tela",
+  left: "saiu sem concluir",
   replaced: "trocou de placa",
 };
 

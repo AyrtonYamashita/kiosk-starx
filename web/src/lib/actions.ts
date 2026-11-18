@@ -79,6 +79,20 @@ export async function renameDevice(_: FormState, form: FormData): Promise<FormSt
   }
 }
 
+/** Liga/desliga o piloto da leitura do SSW no coletor (o coletor é avisado na hora). */
+export async function setOpsReader(_: FormState, form: FormData): Promise<FormState> {
+  const id = String(form.get("id"));
+  const on = form.get("on") === "1";
+  try {
+    await api(`/v1/admin/devices/${id}`, { method: "PATCH", body: { opsReader: on } });
+    revalidatePath(`/devices/${id}`);
+    revalidatePath("/");
+    return { ok: on ? "Leitura ligada: o coletor começa a ler o SSW em instantes." : "Leitura desligada." };
+  } catch (e) {
+    return { error: message(e) };
+  }
+}
+
 export async function deleteDevice(form: FormData) {
   await api(`/v1/admin/devices/${String(form.get("id"))}`, { method: "DELETE" });
   revalidatePath("/");

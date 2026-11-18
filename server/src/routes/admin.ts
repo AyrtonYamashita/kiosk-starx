@@ -42,7 +42,10 @@ function tooMany(reply: FastifyReply, sec: number) {
   });
 }
 const ChangePassword = z.object({ current: z.string().min(1), next: z.string().min(10).max(256) });
-const Rename = z.object({ name: z.string().trim().min(1).max(80) });
+/** Renomear e/ou marcar o piloto da leitura do SSW. */
+const DevicePatch = z
+  .object({ name: z.string().trim().min(1).max(80).optional(), opsReader: z.boolean().optional() })
+  .refine((b) => b.name !== undefined || b.opsReader !== undefined);
 const CreateCode = z.object({
   name: z.string().trim().min(1).max(80),
   maxUses: z.number().int().min(1).max(100_000).nullable().optional(),
@@ -215,8 +218,9 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
                 (d.info->>'uptimeMs')::bigint AS uptime_ms, d.info_updated_at, d.info->'session' AS session,
                 d.config->'kiosk'->>'mode' AS kiosk_mode, (d.config->'kiosk'->>'enabled')::boolean AS kiosk_enabled,
                 d.last_seen_at > now() - make_interval(secs => $1) AS online,
-                d.profile_id, p.name AS profile_name, p.config AS profile_config, d.config_overrides, d.config_nonce, d.applied_hash, d.failed_hash
-         FROM devices d LEFT JOIN profiles p ON p.id = d.profile_id ORDER BY d.name`,
+                d.profile_id, p.name AS profile_name, p.config AS profile_config, d.config_overrides, d.config_nonce, d.applied_hash, d.failed_hash,
+                d.ops_reader, s.ssw_user
+         FROM devices d LEFT JOIN profiles p ON p.id = d.profile_id LEFT JOIN ops_device_state s ON s.device_id = d.id ORDER BY d.name`,
         [onlineWindowSec(config)],
       );
       return {
@@ -246,8 +250,9 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
           // tempo ligado no último contato (o painel soma o tempo desde então, se o aparelho está online)
           uptimeMs: d.uptime_ms !== null ? Number(d.uptime_ms) : null,
           infoUpdatedAt: d.info_updated_at,
-          // usuário logado no sistema aberto no kiosk: reservado para a integração com o site (info.session.user)
-          loggedUser: typeof d.session?.user === "string" && d.session.user ? d.session.user : null,
+          // usuário logado no SSW (leitura da fase 2.4); antes dela, info.session.user (reservado)
+          loggedUser: d.ssw_user ?? (typeof d.session?.user === "string" && d.session.user ? d.session.user : null),
+          opsReader: d.ops_reader === true,
           kioskActive: d.app?.kioskActive ?? null,
           kioskMode: d.kiosk_mode,
           kioskEnabled: d.kiosk_enabled,
@@ -265,7 +270,8 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
       if (!z.uuid().safeParse(id).success) return reply.code(404).send({ error: "not_found" });
       const r = await db.query(
         `SELECT d.*, e.name AS enrollment_name, d.last_seen_at > now() - make_interval(secs => $2) AS online,
-                p.name AS profile_name, p.config AS profile_config, p.managed_apps
+                p.name AS profile_name, p.config AS profile_config, p.managed_apps,
+                (SELECT ssw_user FROM ops_device_state s WHERE s.device_id = d.id) AS ssw_user
          FROM devices d LEFT JOIN enrollment_codes e ON e.id = d.enrollment_code_id LEFT JOIN profiles p ON p.id = d.profile_id
          WHERE d.id = $1`,
         [id, onlineWindowSec(config)],
@@ -304,15 +310,28 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
         managedApps: (d.managed_apps as string[] | null) ?? [],
         managedStatus: d.managed_status ?? {},
         lastScreenshotAt: d.last_screenshot_at,
+        opsReader: d.ops_reader === true,
+        sswUser: d.ssw_user ?? null,
       };
     });
 
     priv.patch("/v1/admin/devices/:id", async (req, reply) => {
       const { id } = req.params as { id: string };
-      const body = Rename.safeParse(req.body);
+      const body = DevicePatch.safeParse(req.body);
       if (!body.success || !z.uuid().safeParse(id).success) return reply.code(400).send({ error: "invalid_body" });
-      const r = await db.query("UPDATE devices SET name = $2 WHERE id = $1 RETURNING id", [id, body.data.name]);
+      const { name, opsReader } = body.data;
+      const r = await db.query(
+        `UPDATE devices d SET name = COALESCE($2, d.name), ops_reader = COALESCE($3, d.ops_reader)
+         FROM (SELECT id, ops_reader AS before FROM devices WHERE id = $1 FOR UPDATE) o
+         WHERE d.id = o.id RETURNING o.before`,
+        [id, name ?? null, opsReader ?? null],
+      );
       if (!r.rowCount) return reply.code(404).send({ error: "not_found" });
+      if (opsReader !== undefined && opsReader !== r.rows[0].before) {
+        await audit(db, req, opsReader ? "ops_reader_on" : "ops_reader_off", { adminId: req.admin?.id ?? null, details: { deviceId: id } });
+        // o coletor fica sabendo no próximo check-in; o aviso antecipa
+        waker.wake([id]);
+      }
       return { ok: true };
     });
 

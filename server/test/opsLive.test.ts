@@ -72,6 +72,7 @@ beforeAll(async () => {
   const r = await t.api("POST", "/v1/device/enroll", { code, info: info("LIVE1") }, "");
   deviceId = r.json.deviceId;
   token = r.json.token;
+  expect((await t.api("PATCH", `/v1/admin/devices/${deviceId}`, { opsReader: true })).status).toBe(200);
 });
 beforeEach(async () => {
   await t.db.query("DELETE FROM ops_events");
@@ -144,6 +145,7 @@ describe("tela ao vivo", () => {
   it("aparelho removido some da tela", async () => {
     const code = (await t.api("POST", "/v1/admin/enrollments", { name: "Lote 2" })).json.code;
     const other = (await t.api("POST", "/v1/device/enroll", { code, info: info("LIVE2") }, "")).json;
+    await t.api("PATCH", `/v1/admin/devices/${other.deviceId}`, { opsReader: true });
     await send([{ id: id(), at: Date.now(), type: "heartbeat", screen: "menu", user: "joao" }], { id: other.deviceId, token: other.token });
     const s = await openStream((await ticket()).ticket);
     await s.waitFor((e) => e.event === "snapshot");

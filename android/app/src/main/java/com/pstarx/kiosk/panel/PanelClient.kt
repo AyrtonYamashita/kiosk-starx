@@ -106,6 +106,7 @@ class PanelClient(context: Context) {
                         appsHash = json.optString("appsHash").takeIf { !json.isNull("appsHash") && it.isNotBlank() },
                         configRevision = if (json.isNull("configRevision")) null else json.optInt("configRevision"),
                     )
+                    store.setOpsReader(json.optBoolean("opsReader", false))
                     if (s.pendingApplyResult != null) store.clearApplyResult()
                     if (body.has("managedStatus")) store.setSentManagedStatus(managedText)
                     json.optJSONArray("ackResults")?.let { Commands.ack(ctx, it, results) }

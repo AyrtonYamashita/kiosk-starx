@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { api, ApiError, type CatalogApp, type Command, type DeviceDetail, type Profile, type RepoApp, type Screenshot } from "@/lib/api";
 import { ago, bytes, dateTime, kioskModeLabel, networkLabel, uptime } from "@/lib/format";
-import { DeleteDevice, RenameDevice } from "./DeviceForms";
+import { DeleteDevice, OpsReaderToggle, RenameDevice } from "./DeviceForms";
 import { AppsTable } from "./AppsTable";
 import { DeviceCommands, ManagedAppsStatus } from "./DeviceCommands";
 import { DeviceConfig } from "./DeviceConfig";
@@ -133,7 +133,7 @@ export default async function DevicePage({ params }: { params: Promise<{ id: str
           <dl className="kv">
             <dt>Usuário logado</dt>
             <dd>
-              {d.info?.session?.user ? <span className="mono">{d.info.session.user}</span> : <span className="muted">— (integração futura com o site)</span>}
+              {d.sswUser ? <span className="mono">{d.sswUser}</span> : <span className="muted">{d.opsReader ? "ninguém no SSW" : "— (leitura do SSW desligada)"}</span>}
             </dd>
             <dt>App StarX</dt>
             <dd>
@@ -175,6 +175,15 @@ export default async function DevicePage({ params }: { params: Promise<{ id: str
           </dl>
         </section>
       </div>
+
+      <section className="card stack">
+        <h2>Leitura do SSW (piloto)</h2>
+        <span className="muted small">
+          Ligada, o app lê a tela do SSW neste coletor (quem está logado, a descarga e as bipagens) e manda para o{" "}
+          <Link href={d.opsReader ? `/operations/${d.id}` : "/operations"}>Acompanhamento</Link>. Ele só observa: não clica nem digita nada.
+        </span>
+        <OpsReaderToggle id={d.id} on={d.opsReader} appVersionCode={d.appVersionCode} />
+      </section>
 
       <section className="card stack">
         <h2>Localização</h2>

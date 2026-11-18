@@ -31,6 +31,8 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import com.pstarx.kiosk.config.KioskConfig
+import com.pstarx.kiosk.ops.OpsReader
+import com.pstarx.kiosk.panel.PanelStore
 import com.pstarx.kiosk.security.TapCounter
 import com.pstarx.kiosk.ui.PinActivity
 import com.pstarx.kiosk.ui.Theme
@@ -60,6 +62,10 @@ class KioskActivity : Activity() {
     private var countdown: Runnable? = null
     private val inactivity = Runnable { webView?.loadUrl(config.kiosk.web.url) }
     private val onChange: () -> Unit = { if (resumed) refresh() }
+    /** Piloto da leitura do SSW ligado/desligado no painel: liga ou para o leitor sem recarregar o site. */
+    private val onPanelChange: () -> Unit = { applyOps() }
+    /** Endereço da página principal (lido pela ponte do leitor, fora da thread principal). */
+    @Volatile private var pageUrl: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -67,10 +73,13 @@ class KioskActivity : Activity() {
         root = FrameLayout(this)
         setContentView(root)
         kiosk.addListener(onChange)
+        PanelStore.get(this).addListener(onPanelChange)
     }
 
     override fun onDestroy() {
         kiosk.removeListener(onChange)
+        PanelStore.get(this).removeListener(onPanelChange)
+        OpsReader.stop()
         handler.removeCallbacksAndMessages(null)
         webView?.destroy()
         super.onDestroy()
@@ -169,6 +178,7 @@ class KioskActivity : Activity() {
         root.removeAllViews()
         webView?.destroy()
         webView = null
+        pageUrl = null
         root.setBackgroundColor(parseColor(config.appearance.backgroundColor, Theme.NIGHT))
         val screen = when (config.kiosk.mode) {
             KioskConfig.Mode.APPS -> gridScreen()
@@ -190,6 +200,28 @@ class KioskActivity : Activity() {
         if (showReloadButton && !systemBarsHidden) root.addView(floatingReload())
         root.addView(cornerZone())
         if (previousMode == KioskConfig.Mode.APP && config.kiosk.mode != KioskConfig.Mode.APP) cancelCountdown()
+        applyOps()
+    }
+
+    // ---------------------------------------------------------------- leitura do SSW (piloto, fase 2.4)
+
+    /** Liga o leitor quando há site aberto e o piloto está marcado no painel; senão para (e tira o leitor da página). */
+    private fun applyOps() {
+        val wv = webView
+        if (wv != null && config.kiosk.mode == KioskConfig.Mode.WEB && OpsReader.enabled(this)) {
+            if (!OpsReader.running) {
+                OpsReader.start(this)
+                injectReader(wv)
+            }
+        } else if (OpsReader.running) {
+            OpsReader.stop()
+            wv?.evaluateJavascript("window.__starxOps && window.__starxOps.stop()", null)
+        }
+    }
+
+    private fun injectReader(view: WebView) {
+        if (!OpsReader.running || !OpsReader.isSswUrl(view.url)) return
+        runCatching { view.evaluateJavascript(OpsReader.script(this), null) }.onFailure { Log.e(TAG, "Falha ao injetar o leitor do SSW", it) }
     }
 
     /** Muda quando apps são instalados/removidos (o controlador avisa; a grade precisa redesenhar). */
@@ -308,6 +340,8 @@ class KioskActivity : Activity() {
             )
         }
         val wv = WebView(this)
+        // ponte do leitor do SSW: só aceita chamadas com o piloto ligado e com a página principal no SSW
+        wv.addJavascriptInterface(OpsReader.Bridge { OpsReader.isSswUrl(pageUrl) }, OpsReader.JS_NAME)
         wv.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
@@ -327,6 +361,17 @@ class KioskActivity : Activity() {
 
             override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
                 webError = false
+                pageUrl = url
+                if (!OpsReader.isSswUrl(url)) OpsReader.onLeftSsw()
+            }
+
+            override fun onPageFinished(view: WebView, url: String?) {
+                pageUrl = url
+                if (webView === view) injectReader(view)
+            }
+
+            override fun doUpdateVisitedHistory(view: WebView, url: String?, isReload: Boolean) {
+                pageUrl = url
             }
 
             override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {

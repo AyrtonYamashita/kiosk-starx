@@ -33,6 +33,8 @@ class PanelStore private constructor(context: Context) {
         val pendingApplyResult: org.json.JSONObject?,
         /** Situação dos apps gerenciados enviada por último (só reenvia quando muda). */
         val sentManagedStatus: String?,
+        /** Piloto da leitura do SSW ligado no painel (fase 2.4). */
+        val opsReader: Boolean,
     ) {
         val enrolled get() = serverUrl != null && token != null
     }
@@ -55,6 +57,7 @@ class PanelStore private constructor(context: Context) {
             appliedHash = prefs.getString("applied_hash", null),
             pendingApplyResult = prefs.getString("apply_result", null)?.let { runCatching { org.json.JSONObject(it) }.getOrNull() },
             sentManagedStatus = prefs.getString("sent_managed_status", null),
+            opsReader = prefs.getBoolean("ops_reader", false),
         )
 
     fun saveEnrollment(url: String, deviceId: String, token: String, name: String?, intervalSec: Int) {
@@ -65,7 +68,7 @@ class PanelStore private constructor(context: Context) {
             .remove("server_apps_hash").remove("server_config_revision")
             .remove("pending_url").remove("pending_code")
             .remove("applied_hash").remove("apply_result").remove("sent_managed_status")
-            .remove("last_error").remove("last_error_at")
+            .remove("last_error").remove("last_error_at").remove("ops_reader")
             .commit()
         notifyListeners()
     }
@@ -104,6 +107,13 @@ class PanelStore private constructor(context: Context) {
         prefs.edit().putString("sent_managed_status", text).apply()
     }
 
+    /** Piloto da leitura do SSW (resposta do check-in, ou desligado pela API). Avisa só quando muda. */
+    fun setOpsReader(on: Boolean) {
+        if (prefs.getBoolean("ops_reader", false) == on) return
+        prefs.edit().putBoolean("ops_reader", on).commit()
+        notifyListeners()
+    }
+
     fun clearApplyResult() {
         prefs.edit().remove("apply_result").commit()
     }
@@ -114,7 +124,7 @@ class PanelStore private constructor(context: Context) {
     }
 
     fun removedByPanel() {
-        prefs.edit().remove("token").remove("device_id").putBoolean("removed", true)
+        prefs.edit().remove("token").remove("device_id").remove("ops_reader").putBoolean("removed", true)
             .remove("server_apps_hash").remove("server_config_revision").commit()
         notifyListeners()
     }

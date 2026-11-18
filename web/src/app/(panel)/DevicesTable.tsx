@@ -142,6 +142,11 @@ export function DevicesTable({
                     <Link href={`/devices/${d.id}`}>
                       <strong>{d.name}</strong>
                     </Link>
+                    {d.opsReader && (
+                      <span className="badge blue" style={{ marginLeft: 6 }} title="Piloto da leitura do SSW ligado">
+                        SSW
+                      </span>
+                    )}
                     <div className="muted small">
                       {[d.manufacturer, d.model].filter(Boolean).join(" ")} · {d.serial ?? "sem serial"}
                     </div>
@@ -156,7 +161,7 @@ export function DevicesTable({
                     {d.loggedUser ? (
                       <span className="mono">{d.loggedUser}</span>
                     ) : (
-                      <span className="muted small" title="Integração futura: o usuário logado no sistema aberto no kiosk">
+                      <span className="muted small" title="Usuário logado no SSW (só nos coletores com a leitura ligada)">
                         —
                       </span>
                     )}

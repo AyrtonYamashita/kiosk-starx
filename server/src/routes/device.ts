@@ -265,7 +265,7 @@ export async function deviceRoutes(app: FastifyInstance, opts: { db: Db; config:
     // configuração do painel: vai só quando o aparelho ainda não aplicou a versão atual
     const row = (
       await db.query(
-        `SELECT p.config AS profile_config, p.managed_apps, d.config_overrides, d.config_nonce, d.failed_hash, d.applied_hash, d.app_version_code
+        `SELECT p.config AS profile_config, p.managed_apps, d.config_overrides, d.config_nonce, d.failed_hash, d.applied_hash, d.app_version_code, d.ops_reader
          FROM devices d LEFT JOIN profiles p ON p.id = d.profile_id WHERE d.id = $1`,
         [device.id],
       )
@@ -284,6 +284,8 @@ export async function deviceRoutes(app: FastifyInstance, opts: { db: Db; config:
       checkinIntervalSec: config.checkinIntervalSec,
       appsHash,
       configRevision,
+      // piloto da leitura do SSW (fase 2.4): o app só lê a tela e manda eventos quando marcado no painel
+      opsReader: row.ops_reader === true,
     };
   });
 }

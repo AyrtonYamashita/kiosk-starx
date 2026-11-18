@@ -40,6 +40,7 @@ beforeAll(async () => {
   const r = await t.api("POST", "/v1/device/enroll", { code, info: info("OPS1") }, "");
   deviceId = r.json.deviceId;
   token = r.json.token;
+  expect((await t.api("PATCH", `/v1/admin/devices/${deviceId}`, { opsReader: true })).status).toBe(200);
 });
 beforeEach(async () => {
   await t.db.query("DELETE FROM ops_events");
@@ -185,10 +186,40 @@ describe("eventos do leitor do SSW: abuso", () => {
   it("aparelho removido no painel deixa de mandar eventos", async () => {
     const code = (await t.api("POST", "/v1/admin/enrollments", { name: "Lote 2" })).json.code;
     const other = await t.api("POST", "/v1/device/enroll", { code, info: info("OPS2") }, "");
+    await t.api("PATCH", `/v1/admin/devices/${other.json.deviceId}`, { opsReader: true });
     const ev = [{ id: id(), at: at(0), type: "heartbeat", screen: "menu" }];
     expect((await send(ev, { device: other.json.deviceId, token: other.json.token })).status).toBe(200);
     expect((await t.api("DELETE", `/v1/admin/devices/${other.json.deviceId}`)).status).toBe(200);
     expect((await send([{ ...ev[0], id: id() }], { device: other.json.deviceId, token: other.json.token })).status).toBe(401);
+  });
+
+  it("piloto: só coletor marcado no painel manda eventos; o check-in informa o app", async () => {
+    const code = (await t.api("POST", "/v1/admin/enrollments", { name: "Piloto" })).json.code;
+    const other = (await t.api("POST", "/v1/device/enroll", { code, info: info("OPS3") }, "")).json;
+    const dev = { device: other.deviceId, token: other.token };
+    const checkin = async () => (await t.api("POST", "/v1/device/checkin", { appVersion: "0.5.0" }, other.token)).json;
+    const ev = () => [{ id: id(), at: Date.now(), type: "heartbeat", screen: "menu" }];
+
+    expect((await checkin()).opsReader).toBe(false);
+    expect((await t.api("GET", `/v1/admin/devices/${other.deviceId}`)).json.opsReader).toBe(false);
+    const off = await send(ev(), dev);
+    expect(off.status).toBe(403);
+    expect(off.json.error).toBe("ops_disabled");
+
+    expect((await t.api("PATCH", `/v1/admin/devices/${other.deviceId}`, { opsReader: true })).status).toBe(200);
+    expect((await checkin()).opsReader).toBe(true);
+    expect((await t.api("GET", `/v1/admin/devices/${other.deviceId}`)).json).toMatchObject({ opsReader: true, name: expect.any(String) });
+    expect((await send(ev(), dev)).status).toBe(200);
+    const log = await t.db.query("SELECT event FROM auth_events WHERE details->>'deviceId' = $1", [other.deviceId]);
+    expect(log.rows.map((r) => r.event)).toEqual(["ops_reader_on"]);
+
+    // renomear não mexe no piloto; corpo vazio é recusado
+    expect((await t.api("PATCH", `/v1/admin/devices/${other.deviceId}`, { name: "Coletor piloto" })).status).toBe(200);
+    expect((await checkin()).opsReader).toBe(true);
+    expect((await t.api("PATCH", `/v1/admin/devices/${other.deviceId}`, {})).status).toBe(400);
+
+    await t.api("PATCH", `/v1/admin/devices/${other.deviceId}`, { opsReader: false });
+    expect((await send(ev(), dev)).status).toBe(403);
   });
 
   it("limite de envios por coletor", async () => {

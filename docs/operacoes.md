@@ -21,6 +21,25 @@ Descarga de manifesto, coleta e romaneio usam a mesma tela de bipagem (`/bin/ssw
 
 A tela não mostra a hora de cada bipagem: cada aumento de "Lidos" é uma bipagem, com a hora em que o número mudou.
 
+## Leitor no app (2.4, app 0.5.0)
+
+- **Piloto**: só lê o SSW o coletor com "Leitura do SSW" ligada na página dele no painel (desligada por padrão). O
+  check-in informa o app (`opsReader`) e, ao ligar/desligar, o painel avisa o coletor na hora (~0,5 s). Fora do piloto,
+  a API recusa os eventos (`403 ops_disabled`) e o app para e descarta a fila.
+- **Leitor da página** (`android/app/src/main/assets/ssw_reader.js`): injetado só em páginas `https://*.ssw.inf.br`.
+  Lê os campos da tabela acima, confere a cada mudança da página e a cada 500 ms (campos escondidos mudam sem gerar
+  aviso) e manda um retrato ao app só quando algo mudou. Observa os toques em Concluir/Interromper. Não clica nem digita.
+- **Regras** (`OpsTracker.kt`):
+  - a leitura começa quando aparece o usuário logado (`#dropdownMenuButton` / `usuario`); a tela de login = saiu;
+  - abrir a bipagem → `op_start`; cada aumento de "Lidos" → `progress`;
+  - Concluir/Interromper só encerram quando a página sai da bipagem em até 10 s (confirmação cancelada não fecha);
+  - sair da bipagem sem Concluir/Interromper: voltando à mesma placa em até 2 min, segue a mesma carga; senão
+    `op_end` "left" (painel: "saiu sem concluir");
+  - sinal de vida a cada 15 s e quando a tela muda (a tela do coletor não apaga: só escurece).
+- **Fila e envio** (`OpsQueue.kt`, `OpsSender.kt`): eventos gravados no aparelho antes de sair (até 5.000; sinal de
+  vida só o último, na memória), lote ~0,3 s depois da mudança, até 200 por lote, respostas tratadas como abaixo
+  (lote com evento inválido é dividido até achar o culpado, que é descartado).
+
 ## Envio: `POST /v1/device/events`
 
 Cabeçalhos:
@@ -53,6 +72,7 @@ Respostas (todas trazem `serverTime`):
 - `409 stale` — `x-ts` não é maior que o do último lote aceito: reenviar com hora nova (mesmos eventos).
 - `400` — formato inválido: descartar o lote (não adianta repetir) e registrar no log.
 - `401` (outros) — aparelho removido ou assinatura errada: parar e esperar o próximo check-in.
+- `403 ops_disabled` — coletor fora do piloto: parar de ler e descartar a fila.
 - `413` — lote grande demais: dividir. `429` — esperar e repetir (com jitter).
 
 Regras no servidor: evento com id já recebido é ignorado (reenvio não duplica); eventos do lote são aplicados pela
