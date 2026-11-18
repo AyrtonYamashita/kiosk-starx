@@ -239,3 +239,9 @@ export async function applyBatch(c: Client, deviceId: string, events: OpsEvent[]
   }
   return { accepted: fresh.length, duplicates: events.length - fresh.length };
 }
+
+/**
+ * Leitura do SSW ligada no coletor `d` (SQL): a escolha feita no próprio coletor ou, sem escolha, a chave geral
+ * ("todos os coletores" / "só no piloto").
+ */
+export const OPS_READER_ON_SQL = "COALESCE(d.ops_reader, (SELECT reader_all FROM ops_settings LIMIT 1), false)";

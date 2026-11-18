@@ -222,6 +222,64 @@ describe("eventos do leitor do SSW: abuso", () => {
     expect((await send(ev(), dev)).status).toBe(403);
   });
 
+  it("chave geral: lê em todos os coletores (menos os desligados um a um), avisa na hora e volta ao piloto", async () => {
+    const enroll = async (serial: string) => {
+      const code = (await t.api("POST", "/v1/admin/enrollments", { name: serial })).json.code;
+      return (await t.api("POST", "/v1/device/enroll", { code, info: info(serial) }, "")).json as { deviceId: string; token: string };
+    };
+    const a = await enroll("OPS4"); // segue a chave geral
+    const b = await enroll("OPS5"); // desligado só nele
+    const checkin = async (d: { token: string }) => (await t.api("POST", "/v1/device/checkin", { appVersion: "0.5.0" }, d.token)).json.opsReader;
+    const ev = () => [{ id: id(), at: Date.now(), type: "heartbeat", screen: "menu" }];
+    await t.api("PATCH", `/v1/admin/devices/${b.deviceId}`, { opsReader: false });
+    expect(await checkin(a)).toBe(false);
+    const before = (await t.api("GET", "/v1/admin/ops/settings")).json;
+    expect(before.readerAll).toBe(false);
+
+    // ligar a chave geral acorda quem está esperando
+    const waiting = t.app.inject({ method: "GET", url: "/v1/device/wait?timeoutSec=30", headers: { authorization: `Bearer ${a.token}` } });
+    await new Promise((r) => setTimeout(r, 200));
+    const t0 = Date.now();
+    expect((await t.api("PUT", "/v1/admin/ops/settings", { readerAll: true })).status).toBe(200);
+    expect((await waiting).json()).toEqual({ wake: true });
+    expect(Date.now() - t0).toBeLessThan(5000);
+
+    expect(await checkin(a)).toBe(true);
+    expect(await checkin(b)).toBe(false);
+    expect((await send(ev(), { device: a.deviceId, token: a.token })).status).toBe(200);
+    expect((await send(ev(), { device: b.deviceId, token: b.token })).status).toBe(403);
+    expect((await t.api("GET", `/v1/admin/devices/${a.deviceId}`)).json).toMatchObject({ opsReader: true, opsReaderChoice: null, opsReaderAll: true });
+    expect((await t.api("GET", `/v1/admin/devices/${b.deviceId}`)).json).toMatchObject({ opsReader: false, opsReaderChoice: false, opsReaderAll: true });
+    const list = (await t.api("GET", "/v1/admin/devices")).json.devices as { id: string; opsReader: boolean }[];
+    expect(list.find((d) => d.id === a.deviceId)?.opsReader).toBe(true);
+    const after = (await t.api("GET", "/v1/admin/ops/settings")).json;
+    expect(after.readerAll).toBe(true);
+    // todos leem, menos os desligados um a um (b e o coletor do teste do piloto)
+    expect(after.devices.reading).toBe(after.devices.total - 2);
+
+    // b volta a seguir a chave geral
+    expect((await t.api("PATCH", `/v1/admin/devices/${b.deviceId}`, { opsReader: null })).status).toBe(200);
+    expect(await checkin(b)).toBe(true);
+    const log = await t.db.query(
+      "SELECT event FROM auth_events WHERE event LIKE 'ops_reader%' AND (details->>'deviceId' = $1 OR event LIKE 'ops_reader_all%') ORDER BY id",
+      [b.deviceId],
+    );
+    expect(log.rows.map((r) => r.event)).toEqual(["ops_reader_off", "ops_reader_all_on", "ops_reader_default"]);
+
+    // operador vê, mas não mexe na chave geral; corpo inválido é recusado
+    expect((await t.api("POST", "/v1/admin/users", { username: "op.ops", email: "op.ops@pstarx.com", role: "operator", password: "senha-do-operador-1" })).status).toBe(200);
+    const opToken = (await t.api("POST", "/v1/admin/login", { username: "op.ops", password: "senha-do-operador-1" }, "")).json.token;
+    expect((await t.api("GET", "/v1/admin/ops/settings", undefined, opToken)).status).toBe(200);
+    expect((await t.api("PUT", "/v1/admin/ops/settings", { readerAll: false }, opToken)).status).toBe(403);
+    expect((await t.api("PUT", "/v1/admin/ops/settings", { readerAll: "sim" })).status).toBe(400);
+
+    // de volta ao piloto: só quem foi ligado um a um continua
+    expect((await t.api("PUT", "/v1/admin/ops/settings", { readerAll: false })).status).toBe(200);
+    expect(await checkin(a)).toBe(false);
+    expect((await send(ev(), { device: a.deviceId, token: a.token })).status).toBe(403);
+    expect((await send(ev())).status).toBe(200); // o coletor principal destes testes foi ligado nele mesmo
+  });
+
   it("limite de envios por coletor", async () => {
     let limited = 0;
     for (let i = 0; i < 125; i++) {

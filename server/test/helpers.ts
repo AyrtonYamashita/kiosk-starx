@@ -49,6 +49,8 @@ export async function setupApi(opts: { config?: Partial<Config> } = {}) {
     sessionTtlHours: 48,
     sessionIdleHours: 8,
     panelSecret: "segredo-do-painel-de-teste",
+    opsRetentionDays: 90,
+    opsHeartbeatRetentionDays: 7,
     trustProxy: false,
     logLevel: "silent",
   };

@@ -23,9 +23,11 @@ A tela não mostra a hora de cada bipagem: cada aumento de "Lidos" é uma bipage
 
 ## Leitor no app (2.4, app 0.5.0)
 
-- **Piloto**: só lê o SSW o coletor com "Leitura do SSW" ligada na página dele no painel (desligada por padrão). O
-  check-in informa o app (`opsReader`) e, ao ligar/desligar, o painel avisa o coletor na hora (~0,5 s). Fora do piloto,
-  a API recusa os eventos (`403 ops_disabled`) e o app para e descarta a fila.
+- **Quem lê**: a **chave geral** (fim da página do Acompanhamento, só administradores) diz "só no piloto" ou "todos os
+  coletores". Na página de cada coletor dá para ligar ou desligar só nele, ou voltar a seguir a chave geral
+  (`devices.ops_reader`: null = segue a chave, true/false = escolha do coletor; `ops_settings.reader_all` = chave). O
+  check-in informa o app (`opsReader`, o que vale) e, a cada mudança, a API avisa os coletores na hora (~0,5 s). Com a
+  leitura desligada, a API recusa os eventos (`403 ops_disabled`) e o app para e descarta a fila.
 - **Leitor da página** (`android/app/src/main/assets/ssw_reader.js`): injetado só em páginas `https://*.ssw.inf.br`.
   Lê os campos da tabela acima, confere a cada mudança da página e a cada 500 ms (campos escondidos mudam sem gerar
   aviso) e manda um retrato ao app só quando algo mudou. Observa os toques em Concluir/Interromper. Não clica nem digita.
@@ -72,7 +74,7 @@ Respostas (todas trazem `serverTime`):
 - `409 stale` — `x-ts` não é maior que o do último lote aceito: reenviar com hora nova (mesmos eventos).
 - `400` — formato inválido: descartar o lote (não adianta repetir) e registrar no log.
 - `401` (outros) — aparelho removido ou assinatura errada: parar e esperar o próximo check-in.
-- `403 ops_disabled` — coletor fora do piloto: parar de ler e descartar a fila.
+- `403 ops_disabled` — leitura desligada para o coletor: parar de ler e descartar a fila.
 - `413` — lote grande demais: dividir. `429` — esperar e repetir (com jitter).
 
 Regras no servidor: evento com id já recebido é ignorado (reenvio não duplica); eventos do lote são aplicados pela
@@ -83,7 +85,13 @@ hora do aparelho; `op_start` da mesma função+placa continua a operação; outr
 
 - `ops_operations`: uma linha por descarga — totais, lidos, bipagens, primeira/última, soma e quantidade de intervalos
   (tempo médio por volume = soma ÷ quantidade). Guardado sem prazo.
-- `ops_events`: eventos como chegaram (90 dias, limpeza na 2.5).
+- `ops_events`: eventos como chegaram. Limpeza (2.5, `src/opsRetention.ts`), pela própria API ao subir (+1 min) e a
+  cada hora, em lotes de 5.000:
+  - sinal de vida: `OPS_HEARTBEAT_RETENTION_DAYS` (padrão 7 dias);
+  - demais eventos: `OPS_RETENTION_DAYS` (padrão 90 dias);
+  - antes de apagar os eventos de uma carga, os pontos do gráfico de bipagens vão para `ops_operations.scan_curve`
+    (`[[hora ms, lidos], ...]`, só quando "lidos" muda) e o detalhe da carga continua igual.
+- `ops_settings`: chave geral da leitura (uma linha; na fase 3, uma por tenant).
 - `ops_device_state`: o que cada coletor está fazendo agora (os cards).
 
 ## Tela "Acompanhamento de operações" (2.3)

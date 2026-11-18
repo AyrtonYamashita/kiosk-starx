@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { Db } from "../db.js";
-import { applyBatch, OPS_MAX_BODY, OPS_MAX_SKEW_MS, OpsBatch, type OpsBus, signatureOk } from "../ops.js";
+import { applyBatch, OPS_MAX_BODY, OPS_MAX_SKEW_MS, OPS_READER_ON_SQL, OpsBatch, type OpsBus, signatureOk } from "../ops.js";
 
 /**
  * Recebimento dos eventos do leitor do SSW (fase 2.2): POST /v1/device/events.
@@ -41,7 +41,9 @@ export async function opsDeviceRoutes(app: FastifyInstance, opts: { db: Db; bus:
 
       if (!z.uuid().safeParse(deviceId).success || !/^\d{12,14}$/.test(tsRaw) || !raw) return deny();
       const ts = Number(tsRaw);
-      const dev = (await db.query<{ token_hash: string; ops_reader: boolean }>("SELECT token_hash, ops_reader FROM devices WHERE id = $1", [deviceId])).rows[0];
+      const dev = (
+        await db.query<{ token_hash: string; ops_reader: boolean }>(`SELECT token_hash, ${OPS_READER_ON_SQL} AS ops_reader FROM devices d WHERE id = $1`, [deviceId])
+      ).rows[0];
       // aparelho removido (revogado) ou assinatura errada: mesma resposta
       if (!dev || !signatureOk(dev.token_hash, ts, raw, signature)) {
         req.log.warn({ deviceId }, "lote de eventos recusado: aparelho ou assinatura inválidos");
@@ -49,7 +51,7 @@ export async function opsDeviceRoutes(app: FastifyInstance, opts: { db: Db; bus:
       }
       // relógio do aparelho muito fora: devolve a hora do servidor para o app corrigir
       if (Math.abs(ts - serverTime) > OPS_MAX_SKEW_MS) return reply.code(401).send({ error: "clock_skew", serverTime });
-      // fora do piloto (desmarcado no painel): o app para de ler e descarta a fila
+      // leitura desligada no painel (no coletor ou pela chave geral): o app para de ler e descarta a fila
       if (!dev.ops_reader) return reply.code(403).send({ error: "ops_disabled", message: "leitura do SSW desligada para este coletor", serverTime });
 
       const body = OpsBatch.safeParse(req.body);

@@ -3,10 +3,46 @@ import { z } from "zod";
 import type { Config } from "../config.js";
 import type { Db } from "../db.js";
 import { allCards, deviceCard, FN_LABEL, opMetrics, type OpsLive } from "../opsLive.js";
+import { loadCurve, scansFromCurve } from "../opsRetention.js";
+import { OPS_READER_ON_SQL } from "../ops.js";
+import { audit } from "../auth.js";
+import type { Waker } from "../wake.js";
 
 /** Painel (sessão normal): cards, detalhe de um coletor e ingresso para a conexão ao vivo. */
-export async function opsAdminRoutes(app: FastifyInstance, opts: { db: Db; config: Config; live: OpsLive }) {
-  const { db, config, live } = opts;
+export async function opsAdminRoutes(app: FastifyInstance, opts: { db: Db; config: Config; live: OpsLive; waker: Waker }) {
+  const { db, config, live, waker } = opts;
+
+  /** Chave geral da leitura do SSW e quantos coletores leem agora. */
+  app.get("/v1/admin/ops/settings", async () => {
+    const r = (
+      await db.query(
+        `SELECT (SELECT reader_all FROM ops_settings LIMIT 1) AS reader_all, count(*)::int AS total,
+                (count(*) FILTER (WHERE ${OPS_READER_ON_SQL}))::int AS reading,
+                (count(*) FILTER (WHERE d.ops_reader IS NOT NULL))::int AS custom
+         FROM devices d`,
+      )
+    ).rows[0];
+    return { readerAll: r.reader_all === true, devices: { total: r.total, reading: r.reading, custom: r.custom } };
+  });
+
+  /** Liga a leitura em todos os coletores (menos os desligados um a um) ou volta para só o piloto. Só administradores. */
+  app.put("/v1/admin/ops/settings", async (req, reply) => {
+    if (req.admin?.role !== "admin") return reply.code(403).send({ error: "forbidden", message: "só administradores" });
+    const body = z.object({ readerAll: z.boolean() }).safeParse(req.body);
+    if (!body.success) return reply.code(400).send({ error: "invalid_body" });
+    const r = await db.query(
+      `UPDATE ops_settings s SET reader_all = $1, updated_at = now() FROM (SELECT reader_all AS before FROM ops_settings FOR UPDATE) o
+       RETURNING o.before`,
+      [body.data.readerAll],
+    );
+    if (r.rows[0]?.before !== body.data.readerAll) {
+      await audit(db, req, body.data.readerAll ? "ops_reader_all_on" : "ops_reader_all_off", { adminId: req.admin!.id });
+      // os coletores que seguem a chave geral ficam sabendo na hora
+      const ids = (await db.query<{ id: string }>("SELECT id FROM devices WHERE ops_reader IS NULL")).rows.map((d) => d.id);
+      waker.wake(ids);
+    }
+    return { ok: true };
+  });
 
   app.get("/v1/admin/ops/cards", async () => ({ cards: await allCards(db), serverTime: Date.now() }));
 
@@ -32,29 +68,8 @@ export async function opsAdminRoutes(app: FastifyInstance, opts: { db: Db; confi
       )
     ).rows[0];
 
-    // bipagens: cada aumento de "lidos", com o intervalo desde o aumento anterior
-    const scans: { at: string; qty: number; delta: number; intervalSec: number | null }[] = [];
-    if (op) {
-      const evs = (
-        await db.query(
-          "SELECT at, COALESCE((data->'read'->>'qty')::numeric, CASE WHEN type = 'op_start' THEN 0 END) AS qty FROM ops_events WHERE operation_id = $1 AND type IN ('op_start', 'progress') ORDER BY at",
-          [op.id],
-        )
-      ).rows;
-      let prevQty: number | null = null;
-      let prevAt: Date | null = null;
-      for (const e of evs) {
-        const qty = e.qty === null ? null : Number(e.qty);
-        if (qty === null) continue;
-        if (prevQty !== null && qty > prevQty) {
-          scans.push({ at: e.at.toISOString(), qty, delta: qty - prevQty, intervalSec: prevAt ? Math.round((e.at.getTime() - prevAt.getTime()) / 100) / 10 : null });
-          prevAt = e.at;
-        } else if (prevQty === null && qty > 0) {
-          prevAt = null; // já começou com volumes lidos (retomada)
-        }
-        prevQty = qty;
-      }
-    }
+    // bipagens: cada aumento de "lidos", com o intervalo desde o aumento anterior (eventos ou gráfico guardado na carga)
+    const scans = op ? scansFromCurve(await loadCurve(db, op)) : [];
 
     const today = (
       await db.query(

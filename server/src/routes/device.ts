@@ -5,6 +5,7 @@ import { newToken, sha256 } from "../crypto.js";
 import type { Db } from "../db.js";
 import { authDevice } from "../deviceAuth.js";
 import { desiredConfig } from "../kioskConfig.js";
+import { OPS_READER_ON_SQL } from "../ops.js";
 import { readRelease } from "../release.js";
 import { latestArtifacts, type Artifact } from "./apps.js";
 import { CommandResult, commandsForDevice, recordResults } from "./commands.js";
@@ -265,7 +266,7 @@ export async function deviceRoutes(app: FastifyInstance, opts: { db: Db; config:
     // configuração do painel: vai só quando o aparelho ainda não aplicou a versão atual
     const row = (
       await db.query(
-        `SELECT p.config AS profile_config, p.managed_apps, d.config_overrides, d.config_nonce, d.failed_hash, d.applied_hash, d.app_version_code, d.ops_reader
+        `SELECT p.config AS profile_config, p.managed_apps, d.config_overrides, d.config_nonce, d.failed_hash, d.applied_hash, d.app_version_code, ${OPS_READER_ON_SQL} AS ops_reader_on
          FROM devices d LEFT JOIN profiles p ON p.id = d.profile_id WHERE d.id = $1`,
         [device.id],
       )
@@ -284,8 +285,8 @@ export async function deviceRoutes(app: FastifyInstance, opts: { db: Db; config:
       checkinIntervalSec: config.checkinIntervalSec,
       appsHash,
       configRevision,
-      // piloto da leitura do SSW (fase 2.4): o app só lê a tela e manda eventos quando marcado no painel
-      opsReader: row.ops_reader === true,
+      // leitura do SSW: o app só lê a tela e manda eventos quando ligada (no coletor ou pela chave geral)
+      opsReader: row.ops_reader_on === true,
     };
   });
 }

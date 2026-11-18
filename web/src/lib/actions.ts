@@ -79,15 +79,29 @@ export async function renameDevice(_: FormState, form: FormData): Promise<FormSt
   }
 }
 
-/** Liga/desliga o piloto da leitura do SSW no coletor (o coletor é avisado na hora). */
+/** Leitura do SSW no coletor: ligar, desligar ou seguir a chave geral (o coletor é avisado na hora). */
 export async function setOpsReader(_: FormState, form: FormData): Promise<FormState> {
   const id = String(form.get("id"));
-  const on = form.get("on") === "1";
+  const choice = String(form.get("on"));
+  const on = choice === "default" ? null : choice === "1";
   try {
     await api(`/v1/admin/devices/${id}`, { method: "PATCH", body: { opsReader: on } });
     revalidatePath(`/devices/${id}`);
     revalidatePath("/");
-    return { ok: on ? "Leitura ligada: o coletor começa a ler o SSW em instantes." : "Leitura desligada." };
+    return { ok: on === null ? "Este coletor voltou a seguir a chave geral." : on ? "Leitura ligada: o coletor começa a ler o SSW em instantes." : "Leitura desligada neste coletor." };
+  } catch (e) {
+    return { error: message(e) };
+  }
+}
+
+/** Chave geral da leitura do SSW (só administradores). */
+export async function setOpsReaderAll(_: FormState, form: FormData): Promise<FormState> {
+  const all = form.get("all") === "1";
+  try {
+    await api("/v1/admin/ops/settings", { method: "PUT", body: { readerAll: all } });
+    revalidatePath("/operations");
+    revalidatePath("/");
+    return { ok: all ? "Leitura ligada em todos os coletores (menos os desligados um a um)." : "Leitura só nos coletores ligados um a um." };
   } catch (e) {
     return { error: message(e) };
   }

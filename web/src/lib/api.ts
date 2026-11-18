@@ -121,7 +121,7 @@ export interface DeviceSummary {
   /** Tempo ligado no último contato (ms). */
   uptimeMs: number | null;
   infoUpdatedAt: string | null;
-  /** Usuário logado no SSW (lido pelo app no piloto de leitura). */
+  /** Usuário logado no SSW (lido pelo app com a leitura do SSW ligada). */
   loggedUser: string | null;
   /** Piloto da leitura do SSW ligado neste coletor. */
   opsReader: boolean;
@@ -171,6 +171,10 @@ export interface DeviceDetail {
   lastScreenshotAt: string | null;
   /** Piloto da leitura do SSW ligado neste coletor. */
   opsReader: boolean;
+  /** Escolha feita neste coletor (null = segue a chave geral). */
+  opsReaderChoice: boolean | null;
+  /** Chave geral: leitura em todos os coletores. */
+  opsReaderAll: boolean;
   /** Usuário logado no SSW agora (última leitura). */
   sswUser: string | null;
 }
@@ -364,6 +368,12 @@ export async function apiAnon<T>(path: string, body?: unknown): Promise<{ status
 // ---------------------------------------------------------------- acompanhamento de operações (fase 2)
 
 export type OpsTotals = { qty: number; kg: number; value: number };
+/** Chave geral da leitura do SSW. */
+export interface OpsSettings {
+  readerAll: boolean;
+  devices: { total: number; reading: number; custom: number };
+}
+
 export interface OpsCard {
   deviceId: string;
   deviceName: string;

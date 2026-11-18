@@ -12,6 +12,7 @@ import { securityRoutes } from "./security.js";
 import { mfaAccountRoutes, mfaDeps, mfaPublicRoutes, revokeTrust } from "./mfa.js";
 import { passkeyAccountRoutes, passkeyPublicRoutes } from "./passkeys.js";
 import { opsAdminRoutes } from "./opsAdmin.js";
+import { OPS_READER_ON_SQL } from "../ops.js";
 import type { OpsLive } from "../opsLive.js";
 import type { Mailer } from "../mfa.js";
 import { audit, clearLock, lockedFor, lockKey, recordFailure } from "../auth.js";
@@ -42,9 +43,9 @@ function tooMany(reply: FastifyReply, sec: number) {
   });
 }
 const ChangePassword = z.object({ current: z.string().min(1), next: z.string().min(10).max(256) });
-/** Renomear e/ou marcar o piloto da leitura do SSW. */
+/** Renomear e/ou escolher a leitura do SSW neste coletor (null = seguir a chave geral). */
 const DevicePatch = z
-  .object({ name: z.string().trim().min(1).max(80).optional(), opsReader: z.boolean().optional() })
+  .object({ name: z.string().trim().min(1).max(80).optional(), opsReader: z.boolean().nullable().optional() })
   .refine((b) => b.name !== undefined || b.opsReader !== undefined);
 const CreateCode = z.object({
   name: z.string().trim().min(1).max(80),
@@ -194,7 +195,7 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
     await priv.register(securityRoutes, { db, config });
     await priv.register(mfaAccountRoutes, { db, config });
     await priv.register(passkeyAccountRoutes, { db, config });
-    await priv.register(opsAdminRoutes, { db, config, live: opts.live });
+    await priv.register(opsAdminRoutes, { db, config, live: opts.live, waker });
 
     priv.post("/v1/admin/password", async (req, reply) => {
       const body = ChangePassword.safeParse(req.body);
@@ -219,7 +220,7 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
                 d.config->'kiosk'->>'mode' AS kiosk_mode, (d.config->'kiosk'->>'enabled')::boolean AS kiosk_enabled,
                 d.last_seen_at > now() - make_interval(secs => $1) AS online,
                 d.profile_id, p.name AS profile_name, p.config AS profile_config, d.config_overrides, d.config_nonce, d.applied_hash, d.failed_hash,
-                d.ops_reader, s.ssw_user
+                d.ops_reader, ${OPS_READER_ON_SQL} AS ops_reader_on, s.ssw_user
          FROM devices d LEFT JOIN profiles p ON p.id = d.profile_id LEFT JOIN ops_device_state s ON s.device_id = d.id ORDER BY d.name`,
         [onlineWindowSec(config)],
       );
@@ -252,7 +253,7 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
           infoUpdatedAt: d.info_updated_at,
           // usuário logado no SSW (leitura da fase 2.4); antes dela, info.session.user (reservado)
           loggedUser: d.ssw_user ?? (typeof d.session?.user === "string" && d.session.user ? d.session.user : null),
-          opsReader: d.ops_reader === true,
+          opsReader: d.ops_reader_on === true,
           kioskActive: d.app?.kioskActive ?? null,
           kioskMode: d.kiosk_mode,
           kioskEnabled: d.kiosk_enabled,
@@ -271,7 +272,8 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
       const r = await db.query(
         `SELECT d.*, e.name AS enrollment_name, d.last_seen_at > now() - make_interval(secs => $2) AS online,
                 p.name AS profile_name, p.config AS profile_config, p.managed_apps,
-                (SELECT ssw_user FROM ops_device_state s WHERE s.device_id = d.id) AS ssw_user
+                (SELECT ssw_user FROM ops_device_state s WHERE s.device_id = d.id) AS ssw_user,
+                ${OPS_READER_ON_SQL} AS ops_reader_on, (SELECT reader_all FROM ops_settings LIMIT 1) AS ops_reader_all
          FROM devices d LEFT JOIN enrollment_codes e ON e.id = d.enrollment_code_id LEFT JOIN profiles p ON p.id = d.profile_id
          WHERE d.id = $1`,
         [id, onlineWindowSec(config)],
@@ -310,7 +312,10 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
         managedApps: (d.managed_apps as string[] | null) ?? [],
         managedStatus: d.managed_status ?? {},
         lastScreenshotAt: d.last_screenshot_at,
-        opsReader: d.ops_reader === true,
+        // leitura do SSW: o que vale agora, a escolha deste coletor (null = segue a chave geral) e a chave geral
+        opsReader: d.ops_reader_on === true,
+        opsReaderChoice: d.ops_reader ?? null,
+        opsReaderAll: d.ops_reader_all === true,
         sswUser: d.ssw_user ?? null,
       };
     });
@@ -321,14 +326,15 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
       if (!body.success || !z.uuid().safeParse(id).success) return reply.code(400).send({ error: "invalid_body" });
       const { name, opsReader } = body.data;
       const r = await db.query(
-        `UPDATE devices d SET name = COALESCE($2, d.name), ops_reader = COALESCE($3, d.ops_reader)
+        `UPDATE devices d SET name = COALESCE($2, d.name), ops_reader = CASE WHEN $4 THEN $3::boolean ELSE d.ops_reader END
          FROM (SELECT id, ops_reader AS before FROM devices WHERE id = $1 FOR UPDATE) o
          WHERE d.id = o.id RETURNING o.before`,
-        [id, name ?? null, opsReader ?? null],
+        [id, name ?? null, opsReader ?? null, opsReader !== undefined],
       );
       if (!r.rowCount) return reply.code(404).send({ error: "not_found" });
       if (opsReader !== undefined && opsReader !== r.rows[0].before) {
-        await audit(db, req, opsReader ? "ops_reader_on" : "ops_reader_off", { adminId: req.admin?.id ?? null, details: { deviceId: id } });
+        const event = opsReader === null ? "ops_reader_default" : opsReader ? "ops_reader_on" : "ops_reader_off";
+        await audit(db, req, event, { adminId: req.admin?.id ?? null, details: { deviceId: id } });
         // o coletor fica sabendo no próximo check-in; o aviso antecipa
         waker.wake([id]);
       }

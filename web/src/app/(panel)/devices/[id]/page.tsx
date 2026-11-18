@@ -177,12 +177,13 @@ export default async function DevicePage({ params }: { params: Promise<{ id: str
       </div>
 
       <section className="card stack">
-        <h2>Leitura do SSW (piloto)</h2>
+        <h2>Leitura do SSW</h2>
         <span className="muted small">
           Ligada, o app lê a tela do SSW neste coletor (quem está logado, a descarga e as bipagens) e manda para o{" "}
-          <Link href={d.opsReader ? `/operations/${d.id}` : "/operations"}>Acompanhamento</Link>. Ele só observa: não clica nem digita nada.
+          <Link href={d.opsReader ? `/operations/${d.id}` : "/operations"}>Acompanhamento</Link>. Ele só observa: não clica nem digita nada. Sem
+          escolha aqui, vale a chave geral, no fim da página do Acompanhamento.
         </span>
-        <OpsReaderToggle id={d.id} on={d.opsReader} appVersionCode={d.appVersionCode} />
+        <OpsReaderToggle id={d.id} on={d.opsReader} choice={d.opsReaderChoice} all={d.opsReaderAll} appVersionCode={d.appVersionCode} />
       </section>
 
       <section className="card stack">

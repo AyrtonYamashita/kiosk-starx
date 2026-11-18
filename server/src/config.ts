@@ -41,6 +41,9 @@ export interface Config {
   /** Passkeys: domínio (RP ID) e endereços do painel aceitos. Produção: pstarx.com e https://kiosk.pstarx.com. */
   webauthnRpId: string;
   webauthnOrigins: string[];
+  /** Leitura do SSW: dias que os eventos brutos ficam guardados (as cargas ficam para sempre) e os sinais de vida. */
+  opsRetentionDays: number;
+  opsHeartbeatRetentionDays: number;
   /** Atrás do Caddy: usa X-Forwarded-For para o IP do aparelho. */
   trustProxy: boolean;
   logLevel: string;
@@ -58,6 +61,15 @@ function authSecret(): string {
   if ((process.env.AUTH_REQUIRE_2FA ?? "false") === "true") throw new Error("AUTH_SECRET (32+ caracteres) é obrigatório com AUTH_REQUIRE_2FA=true");
   // desenvolvimento: segredo por processo (códigos não sobrevivem a um reinício)
   return crypto.randomBytes(32).toString("base64url");
+}
+
+/** Prazo em dias (inteiro, 1 ou mais). */
+function days(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (!raw) return fallback;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 1) throw new Error(`${name} precisa ser um número inteiro de dias (1 ou mais)`);
+  return n;
 }
 
 export function loadConfig(): Config {
@@ -91,6 +103,8 @@ export function loadConfig(): Config {
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean),
+    opsRetentionDays: days("OPS_RETENTION_DAYS", 90),
+    opsHeartbeatRetentionDays: days("OPS_HEARTBEAT_RETENTION_DAYS", 7),
     trustProxy: (process.env.TRUST_PROXY ?? "true") === "true",
     logLevel: process.env.LOG_LEVEL ?? "info",
   };

@@ -34,6 +34,8 @@ const config: Config = {
     webauthnOrigins: ["http://localhost:3000"],
   sessionTtlHours: 48,
   sessionIdleHours: 8,
+  opsRetentionDays: 90,
+  opsHeartbeatRetentionDays: 7,
   trustProxy: false,
   logLevel: "silent",
 };
