@@ -1,0 +1,50 @@
+/** Formatos da tela de operações (pt-BR, horário de Brasília). */
+
+export const OFFLINE_AFTER_MS = 45_000;
+
+const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 2 });
+const num = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 });
+const int = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 });
+
+export const fmtMoney = (v: number) => money.format(v);
+export const fmtKg = (v: number) => `${num.format(v)} kg`;
+export const fmtQty = (v: number) => int.format(v);
+
+export function fmtDuration(sec: number): string {
+  const s = Math.max(0, Math.round(sec));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  if (h) return `${h} h ${String(m).padStart(2, "0")} min`;
+  if (m) return `${m} min ${String(s % 60).padStart(2, "0")} s`;
+  return `${s} s`;
+}
+
+export function fmtAgo(iso: string | null, now: number): string {
+  if (!iso) return "—";
+  const s = Math.max(0, Math.round((now - new Date(iso).getTime()) / 1000));
+  if (s < 5) return "agora";
+  return `há ${fmtDuration(s)}`;
+}
+
+export const fmtTime = (iso: string | null) =>
+  iso ? new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" }) : "—";
+
+export const fmtClock = (iso: string | null) =>
+  iso ? new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: "America/Sao_Paulo" }) : "—";
+
+export const SCREEN_LABEL: Record<string, string> = {
+  bipagem: "bipando",
+  placa: "na escolha da placa",
+  menu: "no menu",
+  login: "na tela de login",
+  outra: "em outra tela",
+};
+
+export const END_LABEL: Record<string, string> = {
+  concluded: "concluída",
+  interrupted: "interrompida",
+  left: "saiu da tela",
+  replaced: "trocou de placa",
+};
+
+export const isOffline = (lastSeenAt: string | null, now: number) => !lastSeenAt || now - new Date(lastSeenAt).getTime() > OFFLINE_AFTER_MS;

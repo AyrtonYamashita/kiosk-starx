@@ -589,3 +589,15 @@ export async function removePasskey(form: FormData) {
   await api(`/v1/admin/passkeys/${String(form.get("id"))}`, { method: "DELETE" });
   revalidatePath("/account");
 }
+
+// ---------------------------------------------------------------- acompanhamento de operações (fase 2.3)
+
+/** Ingresso de uso único (60 s) para a tela abrir a conexão ao vivo direto na API. */
+export async function opsStreamTicket(): Promise<{ ticket?: string; url?: string; error?: string }> {
+  try {
+    const r = await api<{ ticket: string; url: string }>("/v1/admin/ops/stream-ticket", { method: "POST" });
+    return { ticket: r.ticket, url: r.url };
+  } catch (e) {
+    return { error: message(e) };
+  }
+}

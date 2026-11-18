@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LogOut, Package, QrCode, ShieldCheck, SlidersHorizontal, Smartphone, UserRound, type LucideIcon } from "lucide-react";
+import { Activity, LogOut, Package, QrCode, ShieldCheck, SlidersHorizontal, Smartphone, UserRound, type LucideIcon } from "lucide-react";
 import { logout } from "@/lib/actions";
 
 const LINKS: { href: string; label: string; short: string; icon: LucideIcon; match: (p: string) => boolean; adminOnly?: boolean }[] = [
+  { href: "/operations", label: "Acompanhamento", short: "Ao vivo", icon: Activity, match: (p) => p.startsWith("/operations") },
   { href: "/", label: "Aparelhos", short: "Aparelhos", icon: Smartphone, match: (p) => p === "/" || p.startsWith("/devices") },
   { href: "/profiles", label: "Perfis", short: "Perfis", icon: SlidersHorizontal, match: (p) => p.startsWith("/profiles") },
   { href: "/apps", label: "Apps", short: "Apps", icon: Package, match: (p) => p.startsWith("/apps") },

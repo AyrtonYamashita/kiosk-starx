@@ -354,3 +354,76 @@ export async function apiAnon<T>(path: string, body?: unknown): Promise<{ status
   const json = await res.json().catch(() => ({}));
   return { status: res.status, json };
 }
+
+// ---------------------------------------------------------------- acompanhamento de operações (fase 2)
+
+export type OpsTotals = { qty: number; kg: number; value: number };
+export interface OpsCard {
+  deviceId: string;
+  deviceName: string;
+  user: string | null;
+  domain: string | null;
+  branch: string | null;
+  screen: string | null;
+  lastSeenAt: string | null;
+  operation: null | {
+    id: string;
+    fn: string;
+    fnLabel: string;
+    plate: string;
+    realPlate: string | null;
+    units: string[];
+    startedAt: string;
+    total: OpsTotals;
+    read: OpsTotals;
+    missing: OpsTotals;
+    scans: number;
+    lastScanAt: string | null;
+    avgSecPerVolume: number | null;
+    etaAt: string | null;
+  };
+}
+export interface OpsDetail {
+  device: { id: string; name: string };
+  card: OpsCard | null;
+  operation: null | {
+    id: string;
+    fn: string;
+    fnLabel: string;
+    plate: string;
+    realPlate: string | null;
+    units: string[];
+    user: string | null;
+    domain: string | null;
+    branch: string | null;
+    startedAt: string;
+    endedAt: string | null;
+    endReason: string | null;
+    scans: number;
+    firstScanAt: string | null;
+    lastScanAt: string | null;
+    total: OpsTotals;
+    read: OpsTotals;
+    missing: OpsTotals;
+    avgSecPerVolume: number | null;
+    etaAt: string | null;
+  };
+  scans: { at: string; qty: number; delta: number; intervalSec: number | null }[];
+  today: {
+    id: string;
+    fn: string;
+    fnLabel: string;
+    plate: string;
+    user: string | null;
+    startedAt: string;
+    endedAt: string | null;
+    endReason: string | null;
+    durationSec: number;
+    totalQty: number;
+    readQty: number;
+    totalValue: number;
+    scans: number;
+  }[];
+  functionTimeTodaySec: number | null;
+  serverTime: number;
+}

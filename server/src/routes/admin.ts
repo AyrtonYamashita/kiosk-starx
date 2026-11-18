@@ -11,6 +11,8 @@ import { configStatus, profileRoutes } from "./profiles.js";
 import { securityRoutes } from "./security.js";
 import { mfaAccountRoutes, mfaDeps, mfaPublicRoutes, revokeTrust } from "./mfa.js";
 import { passkeyAccountRoutes, passkeyPublicRoutes } from "./passkeys.js";
+import { opsAdminRoutes } from "./opsAdmin.js";
+import type { OpsLive } from "../opsLive.js";
 import type { Mailer } from "../mfa.js";
 import { audit, clearLock, lockedFor, lockKey, recordFailure } from "../auth.js";
 import type { Waker } from "../wake.js";
@@ -65,7 +67,7 @@ export function onlineWindowSec(config: Config) {
   return config.checkinIntervalSec * 3;
 }
 
-export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: Config; waker: Waker; mailer: Mailer }) {
+export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: Config; waker: Waker; mailer: Mailer; live: OpsLive }) {
   const { db, config, waker } = opts;
   const { beginMfa } = mfaDeps(db, config, opts.mailer);
   await app.register(mfaPublicRoutes, { db, config, mailer: opts.mailer });
@@ -189,6 +191,7 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
     await priv.register(securityRoutes, { db, config });
     await priv.register(mfaAccountRoutes, { db, config });
     await priv.register(passkeyAccountRoutes, { db, config });
+    await priv.register(opsAdminRoutes, { db, config, live: opts.live });
 
     priv.post("/v1/admin/password", async (req, reply) => {
       const body = ChangePassword.safeParse(req.body);
@@ -319,6 +322,7 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
       if (!z.uuid().safeParse(id).success) return reply.code(404).send({ error: "not_found" });
       const r = await db.query("DELETE FROM devices WHERE id = $1", [id]);
       if (!r.rowCount) return reply.code(404).send({ error: "not_found" });
+      opts.live.removed(id);
       return { ok: true };
     });
 
