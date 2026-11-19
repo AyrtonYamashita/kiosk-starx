@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import QRCode from "qrcode";
-import { api, ApiError, apiAnon, apiLogin, apiMfa, apiRevokeToken, MFA_COOKIE, MFA_INFO_COOKIE, SESSION_COOKIE, TRUST_COOKIE, type CommandType, type Enrollment } from "./api";
+import { api, ApiError, apiAnon, apiLogin, apiMfa, apiRevokeToken, MFA_COOKIE, MFA_INFO_COOKIE, SESSION_COOKIE, TRUST_COOKIE, type CommandType, type Enrollment, type OpsDetail } from "./api";
 
 export type FormState = { error?: string; ok?: string } | undefined;
 
@@ -627,5 +627,16 @@ export async function opsStreamTicket(): Promise<{ ticket?: string; url?: string
     return { ticket: r.ticket, url: r.url };
   } catch (e) {
     return { error: message(e) };
+  }
+}
+
+/** Como terminou uma carga (para o aviso em tempo real): motivo e volumes lidos/total. */
+export async function opsOperationEnd(deviceId: string, opId: string): Promise<{ endReason: string | null; read: number; total: number } | null> {
+  try {
+    const d = await api<OpsDetail>(`/v1/admin/ops/devices/${encodeURIComponent(deviceId)}?op=${encodeURIComponent(opId)}`);
+    const o = d.operation;
+    return o && o.id === opId ? { endReason: o.endReason, read: o.read.qty, total: o.total.qty } : null;
+  } catch {
+    return null;
   }
 }
