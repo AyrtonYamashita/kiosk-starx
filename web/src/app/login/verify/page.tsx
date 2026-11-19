@@ -1,3 +1,5 @@
+import { StarxLogo } from "@/components/brand/Logo";
+import { ThemeToggle } from "@/components/brand/ThemeToggle";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { MFA_COOKIE, MFA_INFO_COOKIE } from "@/lib/api";
@@ -19,9 +21,9 @@ export default async function VerifyPage() {
   }
   return (
     <main className="login">
+      <ThemeToggle className="login-theme" />
       <div className="brand">
-        <span className="mark" aria-hidden />
-        <strong>StarX Kiosk</strong>
+        <StarxLogo size={36} />
       </div>
       <div className="card stack" style={{ gap: 20 }}>
         <VerifyForm

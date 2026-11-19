@@ -42,12 +42,7 @@ button:not(:disabled), [role='button'] { cursor: pointer; }
   display: flex; flex-direction: column; overflow: hidden;
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card);
 }
-.sidebar .brand { display: flex; align-items: center; gap: 10px; padding: 16px 16px 14px; }
-.sidebar .brand .mark {
-  width: 24px; height: 24px; border-radius: var(--radius-nav); flex: none;
-  background: var(--blue);
-}
-.sidebar .brand strong { font-family: var(--font-display); font-size: 13px; font-weight: 600; letter-spacing: -0.01em; }
+.sidebar .brand { display: flex; align-items: center; gap: 8px; padding: 12px 12px 10px 16px; }
 .sidebar .section-label { padding: 4px 16px 8px; }
 .sidebar nav { display: flex; flex-direction: column; gap: 2px; padding: 0 8px; flex: 1; overflow-y: auto; }
 .nav-item {
@@ -95,9 +90,38 @@ button:not(:disabled), [role='button'] { cursor: pointer; }
   .tabbar a.active { color: var(--blue); }
 }
 
+/* barra do topo só no celular */
+.topbar { display: none; }
+@media (max-width: 1023.98px) {
+  .topbar { display: flex; align-items: center; gap: 8px; margin: -4px 0 16px; }
+}
+
+/* ---------------------------------------------------------------- marca */
+
+.starx-logo {
+  display: inline-flex; align-items: center; flex: none; white-space: nowrap;
+  font-family: var(--font-display); font-weight: 700; letter-spacing: -0.03em; line-height: 1; color: var(--ink);
+}
+.starx-logo svg { flex: none; }
+.starx-logo .kiosk { font-weight: 500; color: var(--blue); }
+button.theme-toggle {
+  width: var(--control); height: var(--control); padding: 0; flex: none;
+  border-radius: var(--radius-field); border: 1px solid var(--glass-border); background: var(--glass); color: var(--ink);
+}
+button.theme-toggle:hover { background: var(--subtle); color: var(--ink); }
+
+/* fundo Bubble: intensidade das bolhas pelo token (o gradiente de base fica inteiro) */
+.starx-bg > div[aria-hidden] { opacity: var(--bubble-opacity); }
+
+/* vidro: cartões, menu e barras sobre o fundo Bubble */
+.card, .sidebar, .tabbar {
+  background: var(--glass); border-color: var(--glass-border);
+  -webkit-backdrop-filter: blur(var(--glass-blur)); backdrop-filter: blur(var(--glass-blur));
+}
+
 /* ---------------------------------------------------------------- utilidades de layout */
 
-.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); padding: 14px 16px; }
+.card { border: 1px solid var(--line); border-radius: var(--radius-card); padding: 14px 16px; }
 /* cabeçalho de cartão: título 13/600 com divisória embaixo */
 .card > h2:first-child { margin: -14px -16px 0; padding: 12px 16px; border-bottom: 1px solid var(--rule); }
 .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
@@ -208,8 +232,7 @@ span.alert { display: inline-flex; padding: 6px 10px; }
 /* login: cartão central de 380px com a marca em cima */
 .login { min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 32px 16px; }
 .login .brand { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 32px; }
-.login .brand .mark { width: 36px; height: 36px; border-radius: var(--radius-card); background: var(--blue); }
-.login .brand strong { font-family: var(--font-display); font-size: 18px; font-weight: 600; letter-spacing: -0.015em; }
+.login-theme { position: fixed; top: 16px; right: 16px; }
 .login .card { width: 100%; max-width: 380px; padding: 24px; }
 .login .card > h2:first-child { margin: 0; padding: 0; border: none; }
 

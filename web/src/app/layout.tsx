@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Mono, Inter, Space_Grotesk } from "next/font/google";
+import { StarxBackground } from "@/components/brand/StarxBackground";
 import { ThemeProvider } from "@/components/brand/ThemeProvider";
 import "./globals.css";
 
@@ -10,7 +11,7 @@ const inter = Inter({ subsets: ["latin"], weight: ["400", "500", "600"], variabl
 const plexMono = IBM_Plex_Mono({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-plex-mono", display: "swap" });
 
 export const metadata: Metadata = {
-  title: "StarX Kiosk",
+  title: "Starx Kiosk",
   description: "Painel dos aparelhos StarX Kiosk",
   robots: { index: false, follow: false },
 };
@@ -19,7 +20,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="pt-BR" className={`${spaceGrotesk.variable} ${inter.variable} ${plexMono.variable}`} suppressHydrationWarning>
       <body>
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          <StarxBackground />
+          {children}
+        </ThemeProvider>
       </body>
     </html>
   );

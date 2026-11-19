@@ -1,5 +1,5 @@
 import { api, type Me } from "@/lib/api";
-import { Sidebar, TabBar } from "@/components/Nav";
+import { Sidebar, TabBar, TopBar } from "@/components/Nav";
 
 export default async function PanelLayout({ children }: { children: React.ReactNode }) {
   // sem sessão válida, api() redireciona para /login
@@ -7,7 +7,10 @@ export default async function PanelLayout({ children }: { children: React.ReactN
   return (
     <div className="shell">
       <Sidebar username={me.username} role={me.role} />
-      <main className="main">{children}</main>
+      <main className="main">
+        <TopBar />
+        {children}
+      </main>
       <TabBar role={me.role} />
     </div>
   );

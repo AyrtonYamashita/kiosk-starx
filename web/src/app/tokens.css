@@ -45,6 +45,7 @@
   /* base do Bubble (gradiente) */
   --bubble-from: #F3F7FD;
   --bubble-to: #DCE9FC;
+  --bubble-opacity: 0.3; /* bolhas atrás das tabelas: o azul só sugere */
 
   /* raios (maiores que os antigos: 10/8 → 16/12) */
   --radius-bar: 2px;
@@ -102,6 +103,7 @@
 
   --bubble-from: #04080F;
   --bubble-to: #070F1D;
+  --bubble-opacity: 0.45;
 
   --shadow-float: 0 6px 20px rgb(0 0 0 / 0.55);
 }

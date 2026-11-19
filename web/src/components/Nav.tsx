@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Activity, LogOut, Package, QrCode, ShieldCheck, SlidersHorizontal, Smartphone, UserRound, type LucideIcon } from "lucide-react";
 import { logout } from "@/lib/actions";
+import { StarxLogo } from "@/components/brand/Logo";
+import { ThemeToggle } from "@/components/brand/ThemeToggle";
 
 const LINKS: { href: string; label: string; short: string; icon: LucideIcon; match: (p: string) => boolean; adminOnly?: boolean }[] = [
   { href: "/operations", label: "Acompanhamento", short: "Ao vivo", icon: Activity, match: (p) => p.startsWith("/operations") },
@@ -26,8 +28,9 @@ export function Sidebar({ username, role }: { username: string; role: "admin" | 
   return (
     <aside className="sidebar">
       <div className="brand">
-        <span className="mark" aria-hidden />
-        <strong>StarX Kiosk</strong>
+        <StarxLogo size={24} />
+        <span className="spacer" />
+        <ThemeToggle />
       </div>
       <span className="section-label">Operação</span>
       <nav>
@@ -53,6 +56,17 @@ export function Sidebar({ username, role }: { username: string; role: "admin" | 
         </form>
       </div>
     </aside>
+  );
+}
+
+/** Barra do topo (celular): logotipo e alternador de tema; o menu vira a barra de abas inferior. */
+export function TopBar() {
+  return (
+    <header className="topbar">
+      <StarxLogo size={22} />
+      <span className="spacer" />
+      <ThemeToggle />
+    </header>
   );
 }
 
