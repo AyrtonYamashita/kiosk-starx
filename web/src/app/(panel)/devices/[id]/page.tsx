@@ -10,7 +10,7 @@ import { AppForms, CommandButtons, ManagedAppsStatus } from "./DeviceCommands";
 import { DeviceConfig } from "./DeviceConfig";
 import { LocationCard } from "./DeviceLocation";
 import { DeviceMapLazy } from "./DeviceMapLazy";
-import { DeviceTabs } from "./DeviceTabs";
+import { UnderlineTabs } from "@/components/UnderlineTabs";
 
 export const dynamic = "force-dynamic";
 
@@ -71,7 +71,7 @@ export default async function DevicePage({ params }: { params: Promise<{ id: str
           <span className="muted small">
             Ligada, o app lê a tela do SSW neste coletor (quem está logado, a descarga e as bipagens) e manda para o{" "}
             <Link href={d.opsReader ? `/operations/${d.id}` : "/operations"}>Acompanhamento</Link>. Só observa: não clica nem digita nada. Sem escolha
-            aqui, vale a chave geral do Acompanhamento.
+            aqui, vale a chave geral, no fim da página de Aparelhos.
           </span>
           <OpsReaderToggle id={d.id} on={d.opsReader} choice={d.opsReaderChoice} all={d.opsReaderAll} appVersionCode={d.appVersionCode} />
         </div>
@@ -165,7 +165,7 @@ export default async function DevicePage({ params }: { params: Promise<{ id: str
         </section>
 
         <section className="liquid-glass device-card">
-          <DeviceTabs tabs={tabs} />
+          <UnderlineTabs tabs={tabs} label="Seções do aparelho" />
         </section>
       </div>
 

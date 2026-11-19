@@ -10,8 +10,6 @@ import { setClockOffset, useClockValue } from "@/lib/clock";
 import { fmtAgo, fmtDuration, fmtTime, isOffline, SCREEN_LABEL } from "@/lib/opsFormat";
 import { useOpsStream } from "@/lib/useOpsStream";
 
-type Op = NonNullable<OpsCard["operation"]>;
-
 /** Cards ao vivo, um por coletor: em operação primeiro, depois logados, depois o resto. */
 export function OpsBoard({ initial, initialServerTime }: { initial: OpsCard[]; initialServerTime: number }) {
   const [cards, setCards] = useState<Record<string, OpsCard>>(() => Object.fromEntries(initial.map((c) => [c.deviceId, c])));
@@ -42,23 +40,12 @@ export function OpsBoard({ initial, initialServerTime }: { initial: OpsCard[]; i
     initialServerTime,
   );
 
-  const { list, kpi } = useMemo(() => {
+  const list = useMemo(() => {
     const offline = new Set(offlineKey ? offlineKey.split(",") : []);
     const rank = (c: OpsCard) => (offline.has(c.deviceId) ? 3 : c.operation ? 0 : c.user ? 1 : 2);
-    const live = all.filter((c) => !offline.has(c.deviceId));
-    const ops = live.map((c) => c.operation).filter((o): o is Op => !!o);
-    return {
-      list: all
-        .filter((c) => !onlyLogged || c.user || c.operation)
-        .sort((a, b) => rank(a) - rank(b) || (a.user ?? a.deviceName).localeCompare(b.user ?? b.deviceName, "pt-BR")),
-      kpi: {
-        working: ops.length,
-        logged: live.filter((c) => c.user).length,
-        read: ops.reduce((s, o) => s + o.read.qty, 0),
-        missing: ops.reduce((s, o) => s + o.missing.qty, 0),
-        value: ops.reduce((s, o) => s + o.total.value, 0),
-      },
-    };
+    return all
+      .filter((c) => !onlyLogged || c.user || c.operation)
+      .sort((a, b) => rank(a) - rank(b) || (a.user ?? a.deviceName).localeCompare(b.user ?? b.deviceName, "pt-BR"));
   }, [all, offlineKey, onlyLogged]);
 
   return (
@@ -94,14 +81,6 @@ export function OpsBoard({ initial, initialServerTime }: { initial: OpsCard[]; i
         </div>
       </header>
 
-      <section className="ops-kpis" aria-label="Resumo agora">
-        <Kpi label="Em operação" value={kpi.working} />
-        <Kpi label="Logados" value={kpi.logged} />
-        <Kpi label="Volumes lidos" value={kpi.read} tone="good" />
-        <Kpi label="Faltam" value={kpi.missing} tone={kpi.missing > 0 ? "bad" : undefined} />
-        <Kpi label="Valor em carga" value={kpi.value} decimals={2} prefix="R$ " />
-      </section>
-
       {list.length === 0 ? (
         <div className="card muted">
           {all.length === 0 ? "Nenhum coletor enviou dados ainda. Os cards aparecem quando o app estiver lendo o SSW." : "Nenhum colaborador logado agora."}
@@ -113,15 +92,6 @@ export function OpsBoard({ initial, initialServerTime }: { initial: OpsCard[]; i
           ))}
         </div>
       )}
-    </div>
-  );
-}
-
-function Kpi({ label, value, tone, decimals, prefix }: { label: string; value: number; tone?: "good" | "bad"; decimals?: number; prefix?: string }) {
-  return (
-    <div className="card ops-kpi">
-      <span className="section-label">{label}</span>
-      <Num value={value} decimals={decimals} prefix={prefix} className={tone} />
     </div>
   );
 }

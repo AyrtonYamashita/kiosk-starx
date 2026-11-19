@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useRef } from "react";
-import { fmtDuration } from "@/lib/opsFormat";
+import { fmtAgo, fmtDuration } from "@/lib/opsFormat";
 import { useClockValue } from "@/lib/clock";
 import { useOpsStream } from "@/lib/useOpsStream";
 
@@ -38,4 +38,18 @@ export function LiveDetail({ deviceId }: { deviceId: string }) {
 /** Tempo correndo desde `since` (ex.: duração da carga aberta). */
 export function Elapsed({ since, serverTime, extraSec = 0 }: { since: string; serverTime: number; extraSec?: number }) {
   return <>{useClockValue((now) => fmtDuration((now - new Date(since).getTime()) / 1000 + extraSec), serverTime)}</>;
+}
+
+/** "faltam X" até o término previsto, ou "atrasado". */
+export function Eta({ etaAt, serverTime }: { etaAt: string; serverTime: number }) {
+  const left = useClockValue((now) => {
+    const s = (new Date(etaAt).getTime() - now) / 1000;
+    return s > 0 ? `faltam ${fmtDuration(s)}` : "atrasado";
+  }, serverTime);
+  return <span className={left === "atrasado" ? "bad" : undefined}>{left}</span>;
+}
+
+/** "há X" desde `iso`. */
+export function SinceClock({ iso, serverTime }: { iso: string; serverTime: number }) {
+  return <>{useClockValue((now) => fmtAgo(iso, now), serverTime)}</>;
 }
