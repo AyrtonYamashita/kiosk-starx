@@ -363,6 +363,11 @@ label.dev-check { min-height: 32px; gap: 8px; font-size: 12.5px; }
 .dev-name { display: inline-flex; align-items: center; gap: 8px; }
 .dev-name .dot { width: 8px; height: 8px; }
 .reader-all { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.segmented { display: inline-flex; padding: 3px; gap: 2px; border: 1px solid var(--line); border-radius: var(--radius-field); background: var(--subtle); }
+.segmented button { height: 32px; padding: 0 14px; border: none; border-radius: 9px; background: none; color: var(--soft); font-weight: 500; }
+.segmented button:hover:not(:disabled) { background: var(--surface); color: var(--ink); }
+.segmented button.on, .segmented button.on:disabled { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: 0 0 0 1px var(--line); cursor: default; }
+.segmented button:disabled:not(.on) { background: none; color: var(--soft); }
 @media (max-width: 1023.98px) {
   .dev-layout { grid-template-columns: minmax(0, 1fr); }
   .dev-filters { position: static; max-height: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -370,18 +375,16 @@ label.dev-check { min-height: 32px; gap: 8px; font-size: 12.5px; }
 }
 .dev-main table :is(th, td) { padding-left: 10px; padding-right: 10px; }
 .dev-main table :is(th, td):first-child { padding-left: 14px; }
-.batt { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.batt-body {
-  position: relative; width: 24px; height: 12px; border: 1.5px solid var(--mid); border-radius: 3px; padding: 1px; box-sizing: border-box;
+.batt {
+  position: relative; display: inline-flex; align-items: center; justify-content: center; width: 46px; height: 20px;
+  border: 1.5px solid var(--mid); border-radius: 5px; overflow: visible; vertical-align: middle;
 }
-.batt-body::after { content: ""; position: absolute; right: -4px; top: 3px; width: 2px; height: 4px; border-radius: 0 1px 1px 0; background: var(--mid); }
-.batt-fill { display: block; height: 100%; border-radius: 1px; }
+.batt::after { content: ""; position: absolute; right: -5px; top: 5px; width: 3px; height: 7px; border-radius: 0 2px 2px 0; background: var(--mid); }
+.batt-fill { position: absolute; left: 2px; top: 2px; bottom: 2px; max-width: calc(100% - 4px); border-radius: 2px; opacity: 0.38; }
 .batt.good .batt-fill { background: var(--good); }
 .batt.warn .batt-fill { background: var(--warn); }
 .batt.bad .batt-fill { background: var(--bad); }
-.batt.warn .batt-n { color: var(--warn-deep); }
-.batt.bad .batt-n { color: var(--bad-deep); }
-.batt-zap { color: var(--warn); margin-left: -2px; }
+.batt-n { position: relative; font-size: 11px; font-weight: 600; line-height: 1; color: var(--ink); font-variant-numeric: tabular-nums; }
 .num { display: inline-flex; align-items: baseline; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .good { color: var(--good-deep); }
 .bad { color: var(--bad-deep); }

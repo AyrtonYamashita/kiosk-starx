@@ -2,23 +2,22 @@
 
 import Link from "next/link";
 import { useActionState, useMemo, useState } from "react";
-import { Search, Zap } from "lucide-react";
+import { Search } from "lucide-react";
 import { bulkAssignProfile, sendCommand } from "@/lib/actions";
 import type { DeviceSummary, Profile } from "@/lib/api";
 import { ago, configStatusLabel, kioskModeLabel, networkLabel, uptime } from "@/lib/format";
 
-/** Bateria: ícone preenchido até o nível, cor pela faixa e raio quando carrega. Offline não mostra (o dado é velho). */
+/** Bateria com a % dentro, preenchida até o nível e na cor da faixa. Offline não mostra (o dado é velho). */
 function Battery({ b, online }: { b: DeviceSummary["battery"]; online: boolean }) {
   if (!online || !b || b.level === null || b.level === undefined) return <span className="muted">—</span>;
   const tone = b.level <= 15 && !b.charging ? "bad" : b.level <= 30 && !b.charging ? "warn" : "good";
   const label = `${b.level}%${b.charging ? ", carregando" : b.level <= 15 ? ", bateria baixa" : ""}`;
   return (
-    <span className={`batt ${tone}`} title={label} aria-label={`Bateria ${label}`}>
-      <span className="batt-body" aria-hidden>
-        <span className="batt-fill" style={{ width: `${Math.max(4, Math.min(100, b.level))}%` }} />
+    <span className={`batt ${tone}`} title={`Bateria ${label}`} role="img" aria-label={`Bateria ${label}`}>
+      <span className="batt-fill" style={{ width: `${Math.max(0, Math.min(100, b.level))}%` }} aria-hidden />
+      <span className="batt-n" aria-hidden>
+        {b.level}%
       </span>
-      <span className="batt-n">{b.level}%</span>
-      {b.charging && <Zap size={13} strokeWidth={2} className="batt-zap" aria-hidden />}
     </span>
   );
 }
