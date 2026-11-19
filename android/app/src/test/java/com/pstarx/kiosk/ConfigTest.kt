@@ -75,7 +75,7 @@ class ConfigTest {
         assertEquals("", c.kiosk.web.url)
         assertEquals(100, c.display.brightness)
         assertEquals(KioskConfig.Orientation.AUTO, c.display.orientation)
-        assertEquals("#001425", c.appearance.backgroundColor)
+        assertEquals("#070E1A", c.appearance.backgroundColor)
         assertEquals(2, c.appearance.columns)
         assertEquals(5, c.security.exitTaps)
         assertTrue(c.security.blockFactoryReset)

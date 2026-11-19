@@ -295,7 +295,7 @@ class SettingsActivity : Activity() {
         })
         section("Aparência")
         add(Ui.labeled(this, "Título (aparece no topo da grade)", Ui.textField(this, "Ex.: Expedição", a.title) { v -> edit({ it.copy(appearance = it.appearance.copy(title = v.take(80))) }) }))
-        add(Ui.labeled(this, "Cor de fundo (#RRGGBB)", Ui.textField(this, "#001425", a.backgroundColor) { v ->
+        add(Ui.labeled(this, "Cor de fundo (#RRGGBB)", Ui.textField(this, "#070E1A", a.backgroundColor) { v ->
             if (COLOR.matches(v.trim())) edit({ it.copy(appearance = it.appearance.copy(backgroundColor = v.trim().uppercase())) })
         }))
         add(Ui.labeled(this, "Cor do texto (#RRGGBB)", Ui.textField(this, "#FFFFFF", a.textColor) { v ->

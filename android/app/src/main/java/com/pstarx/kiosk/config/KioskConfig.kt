@@ -99,7 +99,7 @@ data class KioskConfig(
 
     data class Appearance(
         val title: String = "",
-        val backgroundColor: String = "#001425",
+        val backgroundColor: String = "#070E1A",
         val textColor: String = "#FFFFFF",
         val columns: Int = 4,
     )

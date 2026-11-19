@@ -422,8 +422,8 @@ class KioskActivity : Activity() {
             setPadding(dp(10), dp(10), dp(10), dp(10))
             contentDescription = "Recarregar página"
             background = android.graphics.drawable.RippleDrawable(
-                android.content.res.ColorStateList.valueOf(Theme.withAlpha(Theme.P1, 0.3f)),
-                Theme.box(this@KioskActivity, Theme.withAlpha(Theme.NIGHT_SURFACE, 0.9f), Theme.R_PILL, Theme.P3),
+                android.content.res.ColorStateList.valueOf(Theme.withAlpha(Theme.BLUE_SOFT, 0.3f)),
+                Theme.box(this@KioskActivity, Theme.withAlpha(Theme.NIGHT_SURFACE, 0.9f), Theme.R_PILL, Theme.NIGHT_LINE),
                 null,
             )
             elevation = Theme.dpf(this@KioskActivity, 2f)

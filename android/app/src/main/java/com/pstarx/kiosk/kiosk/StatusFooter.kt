@@ -100,7 +100,7 @@ class StatusFooter(context: Context, onReload: (() -> Unit)? = null, private val
                 scaleType = ImageView.ScaleType.CENTER_INSIDE
                 setPadding(d(7), d(5), d(7), d(5))
                 background = android.graphics.drawable.RippleDrawable(
-                    android.content.res.ColorStateList.valueOf(Theme.withAlpha(Theme.P1, 0.3f)),
+                    android.content.res.ColorStateList.valueOf(Theme.withAlpha(Theme.BLUE_SOFT, 0.3f)),
                     Theme.box(context, Theme.NIGHT_SURFACE, Theme.R_NAV),
                     null,
                 )
@@ -171,19 +171,19 @@ class StatusFooter(context: Context, onReload: (() -> Unit)? = null, private val
                     "wifi" -> {
                         val rssi = w?.optInt("rssi", -127) ?: -127
                         val ssid = w?.optString("ssid")?.takeIf { w.has("ssid") && !w.isNull("ssid") && it.isNotBlank() }
-                        wifi.set(levelOf(rssi), Theme.P1)
+                        wifi.set(levelOf(rssi), Theme.BLUE_SOFT)
                         network.text = ssid ?: "Wi-Fi"
                         signal.text = if (rssi > -127) "$rssi dBm" else ""
                     }
-                    "ethernet" -> { wifi.set(4, Theme.P1); network.text = "Cabo"; signal.text = "" }
-                    "cellular" -> { bars.set(3, Theme.P1); network.text = "Dados móveis"; signal.text = "" }
+                    "ethernet" -> { wifi.set(4, Theme.BLUE_SOFT); network.text = "Cabo"; signal.text = "" }
+                    "cellular" -> { bars.set(3, Theme.BLUE_SOFT); network.text = "Dados móveis"; signal.text = "" }
                     "none" -> {
                         wifi.set(0, Theme.BAD)
                         network.text = "Sem rede"
                         network.setTextColor(Theme.BAD)
                         signal.text = ""
                     }
-                    else -> { wifi.set(2, Theme.P1); network.text = "Conectado"; signal.text = "" }
+                    else -> { wifi.set(2, Theme.BLUE_SOFT); network.text = "Conectado"; signal.text = "" }
                 }
             }
         }
@@ -201,7 +201,7 @@ class StatusFooter(context: Context, onReload: (() -> Unit)? = null, private val
     /** Ícone de Wi-Fi: ponto e três arcos em leque; acesos conforme o nível (1 = só o ponto, 4 = tudo). */
     private class WifiGlyph(context: Context) : View(context) {
         private var level = 0
-        private var color = Theme.P1
+        private var color = Theme.BLUE_SOFT
         private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND }
         private val dot = Paint(Paint.ANTI_ALIAS_FLAG)
         private val arc = RectF()
@@ -217,7 +217,7 @@ class StatusFooter(context: Context, onReload: (() -> Unit)? = null, private val
             val sw = width / 9f
             val bottom = height - sw / 2
             stroke.strokeWidth = sw
-            val off = Theme.withAlpha(Theme.P4, 1f)
+            val off = Theme.NIGHT_LINE
             // ponto
             dot.color = if (level >= 1) color else off
             canvas.drawCircle(cx, bottom - sw * 0.6f, sw * 0.85f, dot)
@@ -235,7 +235,7 @@ class StatusFooter(context: Context, onReload: (() -> Unit)? = null, private val
     /** Dados móveis: quatro barras de raio 2dp (as barras de uso do console, em pé). */
     private class SignalBars(context: Context) : View(context) {
         private var level = 0
-        private var color = Theme.P1
+        private var color = Theme.BLUE_SOFT
         private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
         private val r = Theme.dpf(context, Theme.R_BAR.toFloat()) / 2f
         private val rect = RectF()
@@ -253,7 +253,7 @@ class StatusFooter(context: Context, onReload: (() -> Unit)? = null, private val
                 val h = height * (i + 1) / 4f
                 val left = i * (bw + gap)
                 rect.set(left, height - h, left + bw, height.toFloat())
-                paint.color = if (i < level) color else Theme.P4
+                paint.color = if (i < level) color else Theme.NIGHT_LINE
                 canvas.drawRoundRect(rect, r, r, paint)
             }
         }

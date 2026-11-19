@@ -25,7 +25,7 @@ Toda alteração ganha um número de **revisão** e a origem (`local`, `adb`, `p
     "web": { "url": "", "reloadOnErrorSec": 15, "inactivityReturnSec": 0, "allowZoom": true, "reloadButton": false }
   },
   "display": { "keepScreenOn": true, "brightness": null, "dimAfterSec": 0, "lowBatteryPercent": 15, "lowBatteryMessage": "Troque a bateria antes de continuar a operação.", "orientation": "auto", "showStatusBar": false },
-  "appearance": { "title": "", "backgroundColor": "#001425", "textColor": "#FFFFFF", "columns": 4 },
+  "appearance": { "title": "", "backgroundColor": "#070E1A", "textColor": "#FFFFFF", "columns": 4 },
   "security": {
     "pin": "1234",
     "exitCorner": "bottom_right",
