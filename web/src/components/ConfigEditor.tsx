@@ -13,7 +13,7 @@ type Cfg = Record<string, Json>;
 type PinMode = "device" | "keep" | "set" | "none";
 
 const DEFAULTS: Cfg = {
-  kiosk: { enabled: true, mode: "apps", app: null, apps: [], relaunchDelaySec: 3, web: { url: "", reloadOnErrorSec: 15, inactivityReturnSec: 0, allowZoom: true, reloadButton: false } },
+  kiosk: { enabled: true, mode: "apps", app: null, apps: [], relaunchDelaySec: 3, web: { url: "", reloadOnErrorSec: 15, inactivityReturnSec: 0, allowZoom: true, reloadButton: false, idleLogoutMin: 2 } },
   display: {
     keepScreenOn: true,
     brightness: null,
@@ -118,6 +118,7 @@ const FIELD_LABEL: Record<string, string> = {
   "kiosk.web.url": "Site (URL)",
   "kiosk.web.reloadOnErrorSec": "Recarregar após erro",
   "kiosk.web.inactivityReturnSec": "Voltar à página inicial",
+  "kiosk.web.idleLogoutMin": "Desconectar operador parado",
   "kiosk.web.allowZoom": "Zoom",
   "kiosk.web.reloadButton": "Botão de recarregar",
   "display.keepScreenOn": "Manter a tela ligada",
@@ -318,6 +319,10 @@ export function ConfigEditor({
                 <label>
                   Voltar à página inicial após inatividade (s, 0 = nunca)
                   <input type="number" min={0} max={86400} value={k.web.inactivityReturnSec} onChange={(e) => set("kiosk.web.inactivityReturnSec", Number(e.target.value))} />
+                </label>
+                <label>
+                  Desconectar operador parado no SSW (min, 0 = nunca)
+                  <input type="number" min={0} max={240} value={k.web.idleLogoutMin ?? 2} onChange={(e) => set("kiosk.web.idleLogoutMin", Number(e.target.value))} />
                 </label>
               </div>
               {check("kiosk.web.allowZoom", "Permitir zoom")}

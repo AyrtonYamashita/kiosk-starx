@@ -166,6 +166,13 @@ describe("perfis", () => {
 });
 
 describe("campos de tela e site (atalho de recarregar, escurecer)", () => {
+  it("aceita idleLogoutMin (0 a 240 min); recusa fora da faixa", async () => {
+    const ok = await t.api("POST", "/v1/admin/profiles", { name: "Inativo", config: { kiosk: { web: { idleLogoutMin: 2 } } } });
+    expect(ok.status).toBe(200);
+    expect(ok.json.config).toMatchObject({ kiosk: { web: { idleLogoutMin: 2 } } });
+    expect((await t.api("POST", "/v1/admin/profiles", { name: "Inativo demais", config: { kiosk: { web: { idleLogoutMin: 241 } } } })).status).toBe(400);
+  });
+
   it("aceita reloadButton e dimAfterSec; recusa fora da faixa", async () => {
     const ok = await t.api("POST", "/v1/admin/profiles", { name: "Escurece", config: { kiosk: { web: { reloadButton: true } }, display: { dimAfterSec: 120, lowBatteryPercent: 20, lowBatteryMessage: "Troque a bateria" } } });
     expect(ok.status).toBe(200);

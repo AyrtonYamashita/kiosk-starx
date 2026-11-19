@@ -14,18 +14,23 @@ import android.os.SystemClock
 import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.view.WindowManager
+import android.webkit.CookieManager
+import android.webkit.JavascriptInterface
 import android.webkit.SslErrorHandler
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.webkit.WebStorage
 import android.widget.FrameLayout
 import android.widget.GridLayout
+import android.widget.Button
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -69,6 +74,17 @@ class KioskActivity : Activity() {
     /** Endereço da página principal (lido pela ponte do leitor, fora da thread principal). */
     @Volatile private var pageUrl: String? = null
 
+    /** Operador parado no SSW: aviso de 30 s e saída (kiosk.web.idleLogoutMin). */
+    private val idle = IdleLogout()
+    private var idleOverlay: View? = null
+    private var idleButton: Button? = null
+    private val idleTick = object : Runnable {
+        override fun run() {
+            tickIdle()
+            handler.postDelayed(this, 1_000)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         kiosk = KioskController.get(this)
@@ -105,6 +121,9 @@ class KioskActivity : Activity() {
         }
         ensureLockTask()
         refresh()
+        idle.activity(SystemClock.elapsedRealtime())
+        handler.removeCallbacks(idleTick)
+        handler.postDelayed(idleTick, 1_000)
         if (config.kiosk.mode == KioskConfig.Mode.APP) {
             if (kiosk.restartAppPending) {
                 // "recarregar" do painel: o app já foi para segundo plano; encerra e abre de novo (sem contar como queda)
@@ -126,6 +145,7 @@ class KioskActivity : Activity() {
     override fun onPause() {
         resumed = false
         cancelCountdown()
+        handler.removeCallbacks(idleTick)
         super.onPause()
     }
 
@@ -146,6 +166,7 @@ class KioskActivity : Activity() {
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
         if (ev.actionMasked == MotionEvent.ACTION_DOWN) {
             restartInactivity()
+            idle.activity(SystemClock.elapsedRealtime())
             swallowGesture = ScreenDimmer.onUserActivity()
         }
         if (swallowGesture) {
@@ -153,6 +174,92 @@ class KioskActivity : Activity() {
             return true
         }
         return super.dispatchTouchEvent(ev)
+    }
+
+    /** Tecla física ou leitor de código que digita como teclado: conta como atividade do operador. */
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.action == KeyEvent.ACTION_DOWN) idle.activity(SystemClock.elapsedRealtime())
+        return super.dispatchKeyEvent(event)
+    }
+
+    // ---------------------------------------------------------------- operador parado no SSW
+
+    private fun tickIdle() {
+        val now = SystemClock.elapsedRealtime()
+        val url = pageUrl
+        val eligible = config.kiosk.mode == KioskConfig.Mode.WEB && webView != null &&
+            IdleLogout.loggedIn(url, OpsReader.isSswUrl(url)) && !IdleLogout.scanningUrl(url) && !OpsReader.isBusy()
+        when (idle.tick(now, config.kiosk.web.idleLogoutMin * 60_000L, eligible)) {
+            IdleLogout.Action.SHOW -> showIdle(now)
+            IdleLogout.Action.UPDATE -> updateIdle(now)
+            IdleLogout.Action.HIDE -> hideIdle()
+            IdleLogout.Action.LOGOUT -> {
+                hideIdle()
+                logoutSsw()
+            }
+            IdleLogout.Action.NONE -> Unit
+        }
+    }
+
+    private fun idleLabel(now: Long) = "Confirmo minha presença (${idle.secondsLeft(now)})"
+
+    /** Aviso por cima do site: só o botão confirma; o resto da tela não responde enquanto ele está aberto. */
+    private fun showIdle(now: Long) {
+        hideIdle()
+        ScreenDimmer.onUserActivity()
+        val button = Ui.button(this, idleLabel(now), Ui.Variant.PRIMARY) {
+            idle.confirm(SystemClock.elapsedRealtime())
+            hideIdle()
+        }
+        val card = Ui.card(this).apply {
+            setPadding(dp(20), dp(20), dp(20), dp(20))
+            addView(Ui.text(this@KioskActivity, "Usuário Inativo!", Theme.Type.SECTION_TITLE))
+            addView(Ui.note(this@KioskActivity, "Você será desconectado automaticamente caso não confirme em 30s.").apply { setPadding(0, dp(8), 0, dp(16)) })
+            addView(button, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        }
+        val overlay = FrameLayout(this).apply {
+            setBackgroundColor(Theme.withAlpha(Color.BLACK, 0.6f))
+            isClickable = true
+            isFocusable = true
+            addView(card, FrameLayout.LayoutParams(minOf(dp(340), resources.displayMetrics.widthPixels - dp(48)), FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
+        }
+        root.addView(overlay, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        idleOverlay = overlay
+        idleButton = button
+        Log.i(TAG, "Operador parado: aviso de inatividade")
+    }
+
+    private fun updateIdle(now: Long) {
+        val overlay = idleOverlay ?: return showIdle(now)
+        // a tela foi redesenhada (configuração nova): o aviso volta por cima
+        if (overlay.parent == null) root.addView(overlay, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        idleButton?.text = idleLabel(now)
+    }
+
+    private fun hideIdle() {
+        idleOverlay?.let { root.removeView(it) }
+        idleOverlay = null
+        idleButton = null
+    }
+
+    /** Sai do SSW: apaga a sessão (cookies e dados da página) e volta à página inicial do site. */
+    private fun logoutSsw() {
+        Log.i(TAG, "Operador parado: saindo do SSW")
+        val cookies = CookieManager.getInstance()
+        cookies.removeAllCookies { cookies.flush() }
+        WebStorage.getInstance().deleteAllData()
+        webView?.let {
+            it.clearHistory()
+            it.loadUrl(config.kiosk.web.url)
+        }
+    }
+
+    /** Ponte da página: digitação e rolagem dentro do site (o teclado da tela não passa pelos toques desta tela). */
+    private inner class IdleBridge {
+        @JavascriptInterface
+        fun activity() {
+            handler.post { idle.activity(SystemClock.elapsedRealtime()) }
+        }
     }
 
     private fun ensureLockTask() {
@@ -346,6 +453,7 @@ class KioskActivity : Activity() {
         val wv = WebView(this)
         // ponte do leitor do SSW: só aceita chamadas com o piloto ligado e com a página principal no SSW
         wv.addJavascriptInterface(OpsReader.Bridge { OpsReader.isSswUrl(pageUrl) }, OpsReader.JS_NAME)
+        wv.addJavascriptInterface(IdleBridge(), IDLE_JS_NAME)
         wv.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
@@ -366,12 +474,16 @@ class KioskActivity : Activity() {
             override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
                 webError = false
                 pageUrl = url
+                idle.activity(SystemClock.elapsedRealtime())
                 if (!OpsReader.isSswUrl(url)) OpsReader.onLeftSsw()
             }
 
             override fun onPageFinished(view: WebView, url: String?) {
                 pageUrl = url
-                if (webView === view) injectReader(view)
+                if (webView === view) {
+                    injectReader(view)
+                    view.evaluateJavascript(IDLE_HOOK, null)
+                }
             }
 
             override fun doUpdateVisitedHistory(view: WebView, url: String?, isReload: Boolean) {
@@ -531,6 +643,12 @@ class KioskActivity : Activity() {
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
     private companion object {
+        /** Ponte da atividade do operador na página (só registra que houve digitação ou rolagem). */
+        private const val IDLE_JS_NAME = "StarXKiosk"
+        private const val IDLE_HOOK =
+            "(function(){if(window.__starxIdle)return;window.__starxIdle=1;var t=0;function a(){var n=Date.now();" +
+                "if(n-t>3000){t=n;try{StarXKiosk.activity()}catch(e){}}}" +
+                "['keydown','input','scroll','pointerdown'].forEach(function(e){document.addEventListener(e,a,true)});})()"
         const val TAG = "KioskActivity"
         const val STATUS_TAG = "status"
         const val CRASH_WINDOW_MS = 2 * 60_000L

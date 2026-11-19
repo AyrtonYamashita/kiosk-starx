@@ -35,6 +35,7 @@ export const KioskConfigInput = z
             inactivityReturnSec: z.number().int().min(0).max(86_400),
             allowZoom: z.boolean(),
             reloadButton: z.boolean(),
+            idleLogoutMin: z.number().int().min(0).max(240),
           })
           .partial()
           .strict(),

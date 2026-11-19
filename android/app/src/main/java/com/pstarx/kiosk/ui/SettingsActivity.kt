@@ -221,6 +221,9 @@ class SettingsActivity : Activity() {
                 add(Ui.labeled(this, "Voltar à página inicial após inatividade (segundos, 0 = nunca)", Ui.textField(this, "0", k.web.inactivityReturnSec.toString(), numeric = true) { v ->
                     edit({ it.copy(kiosk = it.kiosk.copy(web = it.kiosk.web.copy(inactivityReturnSec = v.toIntOrNull()?.coerceIn(0, 86_400) ?: 0))) })
                 }))
+                add(Ui.labeled(this, "Desconectar operador parado (minutos, 0 = nunca)", Ui.textField(this, "2", k.web.idleLogoutMin.toString(), numeric = true) { v ->
+                    edit({ it.copy(kiosk = it.kiosk.copy(web = it.kiosk.web.copy(idleLogoutMin = v.toIntOrNull()?.coerceIn(0, 240) ?: 0))) })
+                }, "Aviso de 30 s antes de sair do SSW. Nunca durante a bipagem."))
                 add(Ui.switchRow(this, "Permitir zoom", null, k.web.allowZoom) { on -> edit({ it.copy(kiosk = it.kiosk.copy(web = it.kiosk.web.copy(allowZoom = on))) }) })
                 add(Ui.switchRow(this, "Botão de recarregar a página", "Atalho na tela do kiosk para sair de um erro", k.web.reloadButton) { on ->
                     edit({ it.copy(kiosk = it.kiosk.copy(web = it.kiosk.web.copy(reloadButton = on))) })

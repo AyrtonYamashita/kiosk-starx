@@ -75,6 +75,8 @@ data class KioskConfig(
         val allowZoom: Boolean = true,
         /** Botão de recarregar a página na tela do kiosk (para o operador sair de um erro sem chamar ninguém). */
         val reloadButton: Boolean = false,
+        /** Operador logado no SSW parado esse tempo (min): aviso de 30 s e depois sai do SSW (0 = nunca). Nunca durante a bipagem. */
+        val idleLogoutMin: Int = 2,
     )
 
     data class Display(
@@ -166,7 +168,8 @@ data class KioskConfig(
                         .put("reloadOnErrorSec", kiosk.web.reloadOnErrorSec)
                         .put("inactivityReturnSec", kiosk.web.inactivityReturnSec)
                         .put("allowZoom", kiosk.web.allowZoom)
-                        .put("reloadButton", kiosk.web.reloadButton),
+                        .put("reloadButton", kiosk.web.reloadButton)
+                        .put("idleLogoutMin", kiosk.web.idleLogoutMin),
                 ),
         )
         .put(
@@ -242,6 +245,7 @@ data class KioskConfig(
                         inactivityReturnSec = r.int(w, "kiosk.web.inactivityReturnSec", d.kiosk.web.inactivityReturnSec, 0..86_400),
                         allowZoom = r.bool(w, "kiosk.web.allowZoom", d.kiosk.web.allowZoom),
                         reloadButton = r.bool(w, "kiosk.web.reloadButton", d.kiosk.web.reloadButton),
+                        idleLogoutMin = r.int(w, "kiosk.web.idleLogoutMin", d.kiosk.web.idleLogoutMin, 0..240),
                     ),
                 ),
                 display = Display(
