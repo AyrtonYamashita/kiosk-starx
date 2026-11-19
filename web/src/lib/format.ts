@@ -70,3 +70,8 @@ export const commandStatusLabel: Record<"pending" | "sent" | "ok" | "failed" | "
   expired: ["off", "expirou"],
   canceled: ["off", "cancelado"],
 };
+
+/** Nome padrão do cadastro (o mesmo da API): modelo + 4 últimos do serial. */
+export function defaultDeviceName(model: string | null, serial: string | null) {
+  return [model, serial ? serial.slice(-4) : null].filter(Boolean).join(" ") || "Aparelho";
+}

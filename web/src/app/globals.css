@@ -107,11 +107,6 @@ button:not(:disabled), [role='button'] { cursor: pointer; }
 }
 .starx-logo svg { flex: none; }
 .starx-logo .kiosk { font-weight: 500; color: var(--blue); }
-button.theme-toggle {
-  width: var(--control); height: var(--control); padding: 0; flex: none;
-  border-radius: var(--radius-field); border: 1px solid var(--glass-border); background: var(--glass); color: var(--ink);
-}
-button.theme-toggle:hover { background: var(--subtle); color: var(--ink); }
 
 /* fundo Bubble: intensidade das bolhas pelo token (o gradiente de base fica inteiro) */
 .starx-bg > div[aria-hidden] { opacity: var(--bubble-opacity); }
@@ -238,7 +233,6 @@ span.alert { display: inline-flex; padding: 6px 10px; }
 /* login: cartão central de 380px com a marca em cima */
 .login { min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 32px 16px; }
 .login .brand { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 32px; }
-.login-theme { position: fixed; top: 16px; right: 16px; }
 .login .card { width: 100%; max-width: 380px; padding: 24px; }
 .login .card > h2:first-child { margin: 0; padding: 0; border: none; }
 
@@ -412,13 +406,12 @@ tr.selected td { background: var(--blue-tint); }
 .device-page {
   display: grid; gap: 16px; font-size: 12px; line-height: 17px;
   grid-template-columns: 440px minmax(0, 1fr) 440px;
-  grid-template-areas: "left loc right";
+  grid-template-areas: "left . right";
   height: calc(100dvh - 48px);
 }
 .device-col { display: flex; flex-direction: column; gap: 16px; min-height: 0; min-width: 0; }
-.device-left { grid-area: left; }
+.device-left { grid-area: left; overflow-y: auto; padding-right: 2px; }
 .device-right { grid-area: right; overflow-y: auto; }
-.device-loc { grid-area: loc; display: flex; align-items: flex-end; justify-content: center; min-width: 0; padding-bottom: 28px; }
 .device-card { flex: none; min-width: 0; }
 .device-card > h2 { font-family: var(--font-display); font-size: 14px; line-height: 20px; margin: 0 0 10px; letter-spacing: -0.01em; }
 .device-card dl.kv { gap: 6px 12px; }
@@ -434,7 +427,16 @@ tr.selected td { background: var(--blue-tint); }
 .device-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 6px 0 0; padding-top: 10px; border-top: 1px solid var(--lg-border); }
 .device-stats dt { font-size: 10.5px; line-height: 14px; color: var(--soft); }
 .device-stats dd { margin: 2px 0 0; font-size: 12.5px; line-height: 17px; font-weight: 600; overflow-wrap: anywhere; }
-.device-more { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--lg-border); }
+.device-more { margin-top: 12px; padding-top: 6px; border-top: 1px solid var(--lg-border); }
+button.device-more-toggle {
+  width: 100%; height: 36px; padding: 0 4px; justify-content: flex-start; gap: 6px; border: none; background: none;
+  color: var(--mid); font-size: 12px; font-weight: 500; border-radius: var(--radius-chip);
+}
+button.device-more-toggle:hover { background: none; color: var(--ink); }
+.device-more-chevron { transition: transform .2s ease-out; }
+.device-more-toggle[aria-expanded="true"] .device-more-chevron { transform: rotate(180deg); }
+.device-more-body { padding: 4px 0 2px; }
+.device-danger { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--lg-border); }
 
 /* abas de texto sublinhadas: ativa = ink 600 com sublinhado azul de 2 px; inativa = soft, sem borda */
 .device-tabs-list { display: flex; gap: 18px; border-bottom: 1px solid var(--lg-border); margin-bottom: 12px; }
@@ -460,9 +462,8 @@ button.cmd-button:hover { background: var(--subtle); color: var(--ink); }
 button.cmd-button.bad, button.cmd-button.bad:hover { color: var(--bad-deep); }
 
 /* cartão da posição, no centro livre */
-.device-loc-card { width: min(100%, 320px); display: flex; flex-direction: column; gap: 8px; }
-dl.kv.device-loc-kv { grid-template-columns: 1fr; gap: 0; }
-dl.kv.device-loc-kv dd { margin-bottom: 6px; }
+.device-loc-card { display: flex; flex-direction: column; gap: 8px; }
+.device-loc-card > h2 { margin-bottom: 2px; }
 .device-loc-empty { margin: 0; font-size: 12px; color: var(--mid); }
 
 /* mapa: fundo fixo da tela toda; o resto da página deixa os toques passarem para ele onde não há card */
@@ -492,16 +493,14 @@ dl.kv.device-loc-kv dd { margin-bottom: 6px; }
   .device-page {
     height: auto; align-items: start;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    grid-template-rows: auto 1fr;
-    grid-template-areas: "left right" "loc right";
+    grid-template-areas: "left right";
   }
   .device-right { overflow: visible; }
   .device-config { flex: none; overflow: visible; }
-  .device-loc { justify-content: stretch; align-items: flex-start; padding-bottom: 0; }
-  .device-loc-card { width: 100%; }
+  .device-left { overflow: visible; }
 }
 @media (max-width: 1023.98px) {
-  .device-page { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-template-areas: "left" "loc" "right"; }
+  .device-page { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-template-areas: "left" "right"; }
   .device-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 } /* fim da camada components */

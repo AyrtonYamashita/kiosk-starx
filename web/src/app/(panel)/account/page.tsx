@@ -3,6 +3,7 @@ import { api, type Me, type MfaInfo, type SessionInfo } from "@/lib/api";
 import { MfaCard } from "./MfaCard";
 import { SessionsTable } from "@/components/SessionsTable";
 import { PasswordForm } from "./PasswordForm";
+import { ThemePicker } from "@/components/brand/ThemePicker";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,11 @@ export default async function AccountPage() {
         <button>Sair desta sessão</button>
       </form>
       <div className="grid" style={{ alignItems: "start" }}>
+        <section className="card stack">
+          <h2>Aparência</h2>
+          <ThemePicker />
+          <span className="muted small">Vale para este navegador.</span>
+        </section>
         <section className="card stack">
           <h2>Trocar senha</h2>
           <PasswordForm />

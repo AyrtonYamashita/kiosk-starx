@@ -3,20 +3,24 @@
 import { useActionState } from "react";
 import { deleteDevice, renameDevice, setOpsReader } from "@/lib/actions";
 
-export function RenameDevice({ id, name }: { id: string; name: string }) {
+/**
+ * Identidade do coletor: o nome usado no painel todo (lista, avisos, acompanhamento). Em branco, vale o nome padrão
+ * gerado no cadastro.
+ */
+export function IdentityForm({ id, name, fallback }: { id: string; name: string; fallback: string }) {
   const [state, action, pending] = useActionState(renameDevice, undefined);
   return (
-    <form action={action} className="row">
+    <form action={action} className="stack" style={{ gap: 10 }}>
       <input type="hidden" name="id" value={id} />
-      <label style={{ flex: 1, minWidth: 220 }}>
-        Nome
-        <input name="name" defaultValue={name} maxLength={80} required />
+      <label>
+        Nome do coletor
+        <input name="name" defaultValue={name === fallback ? "" : name} maxLength={80} placeholder={fallback} />
       </label>
-      <button disabled={pending} style={{ alignSelf: "flex-end" }}>
-        Salvar nome
-      </button>
-      {state?.ok && <span className="alert ok">{state.ok}</span>}
-      {state?.error && <span className="alert error">{state.error}</span>}
+      <div className="row" style={{ gap: 8 }}>
+        <button disabled={pending}>Salvar nome</button>
+        <span className="muted small">Em branco, fica {fallback}.</span>
+      </div>
+      {state?.error && <span className="alert error small">{state.error}</span>}
     </form>
   );
 }

@@ -14,7 +14,6 @@ import { Smartphone } from "@/components/animate-ui/icons/smartphone";
 import { UserRound } from "@/components/animate-ui/icons/user-round";
 import { logout } from "@/lib/actions";
 import { StarxLogo } from "@/components/brand/Logo";
-import { ThemeToggle } from "@/components/brand/ThemeToggle";
 
 const LINKS: { href: string; label: string; short: string; icon: ComponentType<{ size?: number; strokeWidth?: number; "aria-hidden"?: boolean }>; match: (p: string) => boolean; adminOnly?: boolean }[] = [
   { href: "/operations", label: "Acompanhamento", short: "Ao vivo", icon: Activity, match: (p) => p.startsWith("/operations") },
@@ -38,8 +37,6 @@ export function Sidebar({ username, role }: { username: string; role: "admin" | 
     <aside className="sidebar">
       <div className="brand">
         <StarxLogo size={24} />
-        <span className="spacer" />
-        <ThemeToggle />
       </div>
       <span className="section-label">Operação</span>
       <nav>
@@ -72,13 +69,11 @@ export function Sidebar({ username, role }: { username: string; role: "admin" | 
   );
 }
 
-/** Barra do topo (celular): logotipo e alternador de tema; o menu vira a barra de abas inferior. */
+/** Barra do topo (celular): logotipo; o menu vira a barra de abas inferior. */
 export function TopBar() {
   return (
     <header className="topbar">
       <StarxLogo size={22} />
-      <span className="spacer" />
-      <ThemeToggle />
     </header>
   );
 }

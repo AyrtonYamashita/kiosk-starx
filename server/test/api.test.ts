@@ -167,7 +167,9 @@ describe("cadastro e check-in", () => {
     expect(list.devices[0].network).toMatchObject({ type: "wifi", ssid: "LOJA", ip: "192.168.0.10" });
   });
 
-  it("renomeia", async () => {
+  it("renomeia, e nome vazio volta ao nome padrão do cadastro", async () => {
+    expect((await api("PATCH", `/v1/admin/devices/${deviceId}`, { name: "" })).status).toBe(200);
+    expect((await api("GET", `/v1/admin/devices/${deviceId}`)).json.name).toBe("C6000 00A1");
     expect((await api("PATCH", `/v1/admin/devices/${deviceId}`, { name: "Doca 3" })).status).toBe(200);
     expect((await api("GET", `/v1/admin/devices/${deviceId}`)).json.name).toBe("Doca 3");
   });

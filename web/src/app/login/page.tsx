@@ -1,5 +1,4 @@
 import { StarxLogo } from "@/components/brand/Logo";
-import { ThemeToggle } from "@/components/brand/ThemeToggle";
 import { LoginForm } from "./LoginForm";
 import { PasskeyLogin } from "./PasskeyLogin";
 
@@ -12,7 +11,6 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   const { expirada, etapa } = await searchParams;
   return (
     <main className="login">
-      <ThemeToggle className="login-theme" />
       <div className="brand">
         <StarxLogo size={36} />
       </div>

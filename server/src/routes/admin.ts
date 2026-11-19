@@ -45,7 +45,8 @@ function tooMany(reply: FastifyReply, sec: number) {
 const ChangePassword = z.object({ current: z.string().min(1), next: z.string().min(10).max(256) });
 /** Renomear e/ou escolher a leitura do SSW neste coletor (null = seguir a chave geral). */
 const DevicePatch = z
-  .object({ name: z.string().trim().min(1).max(80).optional(), opsReader: z.boolean().nullable().optional() })
+  // nome vazio = volta ao nome padrão do cadastro (modelo + 4 últimos do serial)
+  .object({ name: z.string().trim().max(80).optional(), opsReader: z.boolean().nullable().optional() })
   .refine((b) => b.name !== undefined || b.opsReader !== undefined);
 const CreateCode = z.object({
   name: z.string().trim().min(1).max(80),
@@ -326,7 +327,10 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
       if (!body.success || !z.uuid().safeParse(id).success) return reply.code(400).send({ error: "invalid_body" });
       const { name, opsReader } = body.data;
       const r = await db.query(
-        `UPDATE devices d SET name = COALESCE($2, d.name), ops_reader = CASE WHEN $4 THEN $3::boolean ELSE d.ops_reader END
+        `UPDATE devices d SET name = CASE WHEN $2::text IS NULL THEN d.name
+                                          WHEN $2 = '' THEN COALESCE(NULLIF(concat_ws(' ', d.model, right(d.serial, 4)), ''), 'Aparelho')
+                                          ELSE $2 END,
+                              ops_reader = CASE WHEN $4 THEN $3::boolean ELSE d.ops_reader END
          FROM (SELECT id, ops_reader AS before FROM devices WHERE id = $1 FOR UPDATE) o
          WHERE d.id = o.id RETURNING o.before`,
         [id, name ?? null, opsReader ?? null, opsReader !== undefined],

@@ -73,6 +73,8 @@ export async function renameDevice(_: FormState, form: FormData): Promise<FormSt
   try {
     await api(`/v1/admin/devices/${id}`, { method: "PATCH", body: { name: String(form.get("name") ?? "") } });
     revalidatePath(`/devices/${id}`);
+    revalidatePath("/");
+    revalidatePath("/operations");
     return { ok: "Nome salvo." };
   } catch (e) {
     return { error: message(e) };

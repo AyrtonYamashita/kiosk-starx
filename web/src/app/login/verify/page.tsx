@@ -1,5 +1,4 @@
 import { StarxLogo } from "@/components/brand/Logo";
-import { ThemeToggle } from "@/components/brand/ThemeToggle";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { MFA_COOKIE, MFA_INFO_COOKIE } from "@/lib/api";
@@ -26,7 +25,6 @@ export default async function VerifyPage() {
   }
   return (
     <main className="login">
-      <ThemeToggle className="login-theme" />
       <div className="brand">
         <StarxLogo size={36} />
       </div>

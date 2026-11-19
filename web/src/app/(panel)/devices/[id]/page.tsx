@@ -3,8 +3,9 @@ import { notFound } from "next/navigation";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { LiquidGlassDefs } from "@/components/brand/LiquidGlass";
 import { api, ApiError, type CatalogApp, type Command, type DeviceDetail, type Profile, type RepoApp, type Screenshot } from "@/lib/api";
-import { ago, bytes, dateTime, kioskModeLabel, networkLabel, uptime } from "@/lib/format";
-import { DeleteDevice, OpsReaderToggle, RenameDevice } from "./DeviceForms";
+import { ago, bytes, dateTime, defaultDeviceName, kioskModeLabel, networkLabel, uptime } from "@/lib/format";
+import { DeleteDevice, IdentityForm, OpsReaderToggle } from "./DeviceForms";
+import { MoreInfo } from "./MoreInfo";
 import { AppsTable } from "./AppsTable";
 import { AppForms, CommandButtons, ManagedAppsStatus } from "./DeviceCommands";
 import { DeviceConfig } from "./DeviceConfig";
@@ -167,11 +168,18 @@ export default async function DevicePage({ params }: { params: Promise<{ id: str
         <section className="liquid-glass device-card">
           <UnderlineTabs tabs={tabs} label="Seções do aparelho" />
         </section>
-      </div>
 
-      <div className="device-loc">
         <section className="liquid-glass device-card device-loc-card" aria-label="Última posição">
+          <h2>Coordenadas</h2>
           <LocationCard location={loc} enabled={locEnabled} />
+        </section>
+
+        <section className="liquid-glass device-card">
+          <h2>Identidade</h2>
+          <IdentityForm id={d.id} name={d.name} fallback={defaultDeviceName(d.model, d.serial)} />
+          <div className="device-danger">
+            <DeleteDevice id={d.id} name={d.name} />
+          </div>
         </section>
       </div>
 
@@ -222,9 +230,8 @@ export default async function DevicePage({ params }: { params: Promise<{ id: str
               {d.enrollmentName ? ` · ${d.enrollmentName}` : ""}
             </dd>
           </dl>
-          <details className="device-more">
-            <summary className="small">Rede, IMEI e administração</summary>
-            <dl className="kv" style={{ marginTop: 8 }}>
+          <MoreInfo title="Rede, IMEI e configuração">
+            <dl className="kv">
               <dt>IMEI</dt>
               <dd className="mono">{(hw.imeis ?? []).join(", ") || "—"}</dd>
               {net.wifi && (
@@ -249,11 +256,7 @@ export default async function DevicePage({ params }: { params: Promise<{ id: str
                 {d.configSource ? ` · alterada por ${d.configSource}` : ""}
               </dd>
             </dl>
-            <div className="stack" style={{ gap: 10, marginTop: 12 }}>
-              <RenameDevice id={d.id} name={d.name} />
-              <DeleteDevice id={d.id} name={d.name} />
-            </div>
-          </details>
+          </MoreInfo>
         </section>
 
         <section className="liquid-glass device-card device-config">
