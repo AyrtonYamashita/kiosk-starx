@@ -3,6 +3,7 @@ package com.pstarx.kiosk.apps
 import android.content.Context
 import android.util.Log
 import com.pstarx.kiosk.commands.Commands
+import com.pstarx.kiosk.ops.OpsReader
 import com.pstarx.kiosk.panel.PanelSync
 import org.json.JSONArray
 import org.json.JSONObject
@@ -39,8 +40,15 @@ object ManagedApps {
             .sortedBy { it.packageName == ctx.packageName }
         if (todo.isEmpty() || !busy.compareAndSet(false, true)) return
         Commands.worker.execute {
+            var attempted = false
             try {
                 for (a in todo) {
+                    // atualizar o próprio app reinicia a tela: espera o colaborador sair da bipagem (próximo check-in)
+                    if (a.packageName == ctx.packageName && OpsReader.isBusy()) {
+                        Log.i(TAG, "Atualização do app adiada: bipagem em andamento")
+                        continue
+                    }
+                    attempted = true
                     Log.i(TAG, "Instalando ${a.packageName} ${a.versionCode}")
                     val r = installer.install(a)
                     record(ctx, a, r)
@@ -48,7 +56,7 @@ object ManagedApps {
                 }
             } finally {
                 busy.set(false)
-                PanelSync.now(ctx, "managed-apps")
+                if (attempted) PanelSync.now(ctx, "managed-apps")
             }
         }
     }

@@ -6,6 +6,7 @@ import type { Db } from "../db.js";
 import { authDevice } from "../deviceAuth.js";
 import { desiredConfig } from "../kioskConfig.js";
 import { OPS_READER_ON_SQL } from "../ops.js";
+import { readerScript } from "../reader.js";
 import { readRelease } from "../release.js";
 import { latestArtifacts, type Artifact } from "./apps.js";
 import { CommandResult, commandsForDevice, recordResults } from "./commands.js";
@@ -287,6 +288,20 @@ export async function deviceRoutes(app: FastifyInstance, opts: { db: Db; config:
       configRevision,
       // leitura do SSW: o app só lê a tela e manda eventos quando ligada (no coletor ou pela chave geral)
       opsReader: row.ops_reader_on === true,
+      // leitor do SSW: o app baixa em /v1/device/reader quando o sha256 muda
+      reader: (() => {
+        const r = readerScript();
+        return r ? { sha256: r.sha256 } : null;
+      })(),
     };
+  });
+
+  /** Leitor do SSW (texto do script). O app confere o sha256 informado no check-in antes de usar. */
+  app.get("/v1/device/reader", async (req, reply) => {
+    const device = await authDevice(db, req);
+    if (!device) return reply.code(401).send({ error: "unauthorized" });
+    const r = readerScript();
+    if (!r) return reply.code(404).send({ error: "not_found" });
+    return reply.header("content-type", "application/javascript; charset=utf-8").header("x-sha256", r.sha256).header("cache-control", "no-store").send(r.body);
   });
 }

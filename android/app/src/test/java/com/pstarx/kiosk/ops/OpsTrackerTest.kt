@@ -166,6 +166,46 @@ class OpsTrackerTest {
         assertNull(s.read)
         assertEquals("outra", Snapshot.parse("""{"screen":"hack"}""")!!.screen)
         assertNull(Snapshot.parse("não é json"))
-        assertNull(Snapshot.parse("""{"screen":"bipagem","fn":"outra"}""")!!.fn)
+        assertNull(Snapshot.parse("""{"screen":"bipagem","fn":"Carga de Manifesto!"}""")!!.fn)
+        assertEquals("carga_manifesto", Snapshot.parse("""{"screen":"bipagem","fn":"carga_manifesto"}""")!!.fn)
+    }
+
+    @Test
+    fun `carga de manifesto - abre a carga como as descargas`() {
+        val ev = t.onSnapshot(at(0.0), bip(200, plate = "ARMAZEM", fn = "carga_manifesto", total = 263)) +
+            t.onSnapshot(at(3.0), bip(201, plate = "ARMAZEM", fn = "carga_manifesto", total = 263))
+        assertEquals(listOf("session:maria", "op_start:ARMAZEM", "progress:201"), ev.kinds())
+        assertEquals("carga_manifesto", ev.first { it.getString("type") == "op_start" }.getString("fn"))
+    }
+
+    @Test
+    fun `tela não entendida - manda a estrutura uma vez por tela a cada 10 min`() {
+        val d = JSONObject().put("reason", "bipagem sem funcao").put("path", "/bin/sswbar/carga/manifesto/x")
+            .put("ids", org.json.JSONArray(listOf("td#total_qtde"))).put("reader", "v2").put("lixo", "não vai")
+        val s = Snapshot("bipagem", user = "maria", total = tot(1), diag = d)
+        val first = t.onSnapshot(at(0.0), s).filter { it.getString("type") == "diag" }
+        assertEquals(1, first.size)
+        assertEquals("bipagem", first[0].getString("screen"))
+        assertEquals("v2", first[0].getString("reader"))
+        assertFalse(first[0].has("lixo"))
+        assertTrue(t.onSnapshot(at(60.0), s).none { it.getString("type") == "diag" })
+        assertTrue(t.onSnapshot(at(601.0), s).any { it.getString("type") == "diag" })
+        val other = JSONObject(d.toString()).put("path", "/bin/sswbar/outra")
+        assertTrue(t.onSnapshot(at(602.0), s.copy(diag = other)).any { it.getString("type") == "diag" })
+    }
+
+    @Test
+    fun `ocupado - na bipagem ou com carga aberta, até 15 min sem mudar a tela`() {
+        assertFalse(t.busy(at(0.0)))
+        t.onSnapshot(at(0.0), Snapshot("menu", user = "maria"))
+        assertFalse(t.busy(at(1.0)))
+        t.onSnapshot(at(10.0), bip(1))
+        assertTrue(t.busy(at(11.0)))
+        assertTrue(t.busy(at(10.0 + 14 * 60)))
+        assertFalse(t.busy(at(10.0 + 15 * 60))) // parado na bipagem: a atualização pode entrar
+        t.onSnapshot(at(1000.0), bip(2))
+        t.onAction(at(1001.0), "concluir")
+        t.onSnapshot(at(1002.0), Snapshot("placa", user = "maria", fn = "coleta"))
+        assertFalse(t.busy(at(1003.0))) // concluiu e saiu da bipagem
     }
 }

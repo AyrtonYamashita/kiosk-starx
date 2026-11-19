@@ -1,5 +1,6 @@
 package com.pstarx.kiosk.panel
 
+import com.pstarx.kiosk.ops.OpsReader
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
@@ -107,6 +108,8 @@ class PanelClient(context: Context) {
                         configRevision = if (json.isNull("configRevision")) null else json.optInt("configRevision"),
                     )
                     store.setOpsReader(json.optBoolean("opsReader", false))
+                    // leitor do SSW entregue pela API: baixa quando muda (a tela injeta o novo na página aberta)
+                    json.optJSONObject("reader")?.let { OpsReader.onReaderInfo(ctx, it.optString("sha256").ifBlank { null }) }
                     if (s.pendingApplyResult != null) store.clearApplyResult()
                     if (body.has("managedStatus")) store.setSentManagedStatus(managedText)
                     json.optJSONArray("ackResults")?.let { Commands.ack(ctx, it, results) }

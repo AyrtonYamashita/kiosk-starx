@@ -130,6 +130,58 @@ describe("eventos do leitor do SSW: uma descarga", () => {
   });
 });
 
+describe("carga de manifesto, diagnóstico da tela e leitor entregue pela API (0.5.1)", () => {
+  it("carga vira operação com o nome certo no painel", async () => {
+    const r = await send([
+      { id: id(), at: at(0), type: "session", user: "jeff", domain: "ALT", branch: "CGB" },
+      { id: id(), at: at(2), type: "op_start", fn: "carga_manifesto", plate: "ARMAZEM", units: ["MRS"], total: tot(263), read: tot(200) },
+      { id: id(), at: at(5), type: "progress", fn: "carga_manifesto", plate: "ARMAZEM", read: tot(201) },
+    ]);
+    expect(r.status).toBe(200);
+    expect(await op()).toMatchObject({ fn: "carga_manifesto", plate: "ARMAZEM", scans: 1 });
+    const detail = (await t.api("GET", `/v1/admin/ops/devices/${deviceId}`)).json;
+    expect(detail.operation).toMatchObject({ fn: "carga_manifesto", fnLabel: "Carga de Manifesto" });
+    const cards = (await t.api("GET", "/v1/admin/ops/cards")).json.cards as { deviceId: string; operation?: { fnLabel: string } }[];
+    expect(JSON.stringify(cards.find((c) => c.deviceId === deviceId))).toContain("Carga de Manifesto");
+    // função desconhecida continua recusada
+    expect((await send([{ id: id(), at: at(9), type: "op_start", fn: "carga_outra", plate: "X", total: tot(1) }])).status).toBe(400);
+  });
+
+  it("diagnóstico de tela não entendida é guardado e não mexe na operação", async () => {
+    const d = {
+      id: id(),
+      at: at(0),
+      type: "diag",
+      screen: "bipagem",
+      reason: "bipagem sem funcao",
+      path: "/bin/sswbar/carga/manifesto/armazem",
+      title: "Carga de Manifesto",
+      ids: ["td#total_qtde", "td#cap_qtde"],
+      inputs: ["hidden:funcao=4", "hidden:placa=ARMAZEM"],
+      texts: ["Placa provisória: ARMAZEM"],
+      reader: "2026-11-18.2",
+    };
+    expect((await send([d])).status).toBe(200);
+    const row = (await t.db.query("SELECT type, data FROM ops_events WHERE id = $1", [d.id])).rows[0];
+    expect(row.type).toBe("diag");
+    expect(row.data).toMatchObject({ reason: "bipagem sem funcao", inputs: ["hidden:funcao=4", "hidden:placa=ARMAZEM"] });
+    expect(await op()).toBeUndefined();
+    expect((await send([{ ...d, id: id(), ids: Array.from({ length: 200 }, (_, i) => `x#${i}`) }])).status).toBe(400);
+  });
+
+  it("check-in informa o sha256 do leitor e o coletor baixa o script", async () => {
+    const tokenOk = token;
+    const ck = (await t.api("POST", "/v1/device/checkin", { appVersion: "0.5.1" }, tokenOk)).json;
+    expect(ck.reader.sha256).toMatch(/^[0-9a-f]{64}$/);
+    const res = await t.app.inject({ method: "GET", url: "/v1/device/reader", headers: { authorization: `Bearer ${tokenOk}` } });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["content-type"]).toContain("javascript");
+    expect(sha256hex(res.body)).toBe(ck.reader.sha256);
+    expect(res.body).toContain("carga_");
+    expect((await t.app.inject({ method: "GET", url: "/v1/device/reader", headers: { authorization: "Bearer nada" } })).statusCode).toBe(401);
+  });
+});
+
 describe("eventos do leitor do SSW: abuso", () => {
   it("o mesmo evento reenviado (lote novo) não conta de novo", async () => {
     const start = { id: id(), at: at(0), type: "op_start", fn: "coleta", plate: "EEE3333", total: tot(5) };

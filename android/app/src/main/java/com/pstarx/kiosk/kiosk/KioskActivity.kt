@@ -64,6 +64,8 @@ class KioskActivity : Activity() {
     private val onChange: () -> Unit = { if (resumed) refresh() }
     /** Piloto da leitura do SSW ligado/desligado no painel: liga ou para o leitor sem recarregar o site. */
     private val onPanelChange: () -> Unit = { applyOps() }
+    /** Leitor novo entregue pela API: substitui o que está na página aberta (o leitor troca a versão antiga sozinho). */
+    private val onReaderChange: () -> Unit = { webView?.let { injectReader(it) } }
     /** Endereço da página principal (lido pela ponte do leitor, fora da thread principal). */
     @Volatile private var pageUrl: String? = null
 
@@ -74,11 +76,13 @@ class KioskActivity : Activity() {
         setContentView(root)
         kiosk.addListener(onChange)
         PanelStore.get(this).addListener(onPanelChange)
+        OpsReader.onScriptChanged = onReaderChange
     }
 
     override fun onDestroy() {
         kiosk.removeListener(onChange)
         PanelStore.get(this).removeListener(onPanelChange)
+        if (OpsReader.onScriptChanged === onReaderChange) OpsReader.onScriptChanged = null
         OpsReader.stop()
         handler.removeCallbacksAndMessages(null)
         webView?.destroy()
@@ -203,9 +207,9 @@ class KioskActivity : Activity() {
         applyOps()
     }
 
-    // ---------------------------------------------------------------- leitura do SSW (piloto, fase 2.4)
+    // ---------------------------------------------------------------- leitura do SSW (fase 2.4)
 
-    /** Liga o leitor quando há site aberto e o piloto está marcado no painel; senão para (e tira o leitor da página). */
+    /** Liga o leitor quando há site aberto e a leitura está ligada no painel; senão para (e tira o leitor da página). */
     private fun applyOps() {
         val wv = webView
         if (wv != null && config.kiosk.mode == KioskConfig.Mode.WEB && OpsReader.enabled(this)) {

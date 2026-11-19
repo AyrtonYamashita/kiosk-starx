@@ -10,8 +10,8 @@ plugins {
     id("com.android.application")
 }
 
-val appVersionCode = 10
-val appVersionName = "0.5.0"
+val appVersionCode = 11
+val appVersionName = "0.5.1"
 
 // ---------------------------------------------------------------------------------------------
 // Assinatura de release: keystore FORA do repositório e do OneDrive, com backup próprio.
@@ -28,6 +28,9 @@ val keystoreProps = Properties().apply { if (keystorePropsFile.isFile) keystoreP
 android {
     namespace = "com.pstarx.kiosk"
     compileSdk = 36
+
+    // leitor do SSW: um arquivo só (server/reader), entregue pela API e embutido no APK como reserva
+    sourceSets["main"].assets.srcDir("../../server/reader")
 
     defaultConfig {
         // O applicationId não pode mudar depois que os aparelhos forem provisionados.

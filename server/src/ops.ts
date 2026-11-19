@@ -14,7 +14,10 @@ export const OPS_MAX_BODY = 64 * 1024;
 export const OPS_MAX_EVENTS = 200;
 export const OPS_MAX_SKEW_MS = 5 * 60_000;
 
-const Fn = z.enum(["manifesto", "coleta", "romaneio"]);
+/** Descarga (manifesto/coleta/romaneio) e carga (carga_*). */
+export const OPS_FUNCTIONS = ["manifesto", "coleta", "romaneio", "carga_manifesto", "carga_coleta", "carga_romaneio"] as const;
+const Fn = z.enum(OPS_FUNCTIONS);
+const Screen = z.enum(["bipagem", "placa", "menu", "login", "outra"]);
 const Num = z.number().finite().min(0).max(1e10);
 const Totals = z.object({ qty: Num, kg: Num, value: Num });
 const Str = (max: number) => z.string().trim().max(max);
@@ -38,10 +41,23 @@ export const OpsEvent = z.discriminatedUnion("type", [
   z.object({
     ...Base,
     type: z.literal("heartbeat"),
-    screen: z.enum(["bipagem", "placa", "menu", "login", "outra"]),
+    screen: Screen,
     user: Str(64).nullable().optional(),
     fn: Fn.nullable().optional(),
     plate: Str(20).nullable().optional(),
+  }),
+  // tela do SSW que o leitor não entendeu (bipagem sem função/placa/total, ou tela desconhecida): só a estrutura
+  z.object({
+    ...Base,
+    type: z.literal("diag"),
+    screen: Screen,
+    reason: Str(60),
+    path: Str(300),
+    title: Str(120).optional(),
+    ids: z.array(Str(80)).max(150).optional(),
+    inputs: z.array(Str(80)).max(150).optional(),
+    texts: z.array(Str(160)).max(40).optional(),
+    reader: Str(40).optional(),
   }),
 ]);
 export type OpsEvent = z.infer<typeof OpsEvent>;
@@ -197,6 +213,8 @@ async function applyEvent(c: Client, deviceId: string, st: State, e: OpsEvent): 
       st.screen = "placa";
       return open?.id ?? null;
     }
+    case "diag":
+      return st.operation_id;
     case "heartbeat": {
       st.screen = e.screen;
       if (e.user !== undefined) st.ssw_user = e.user;

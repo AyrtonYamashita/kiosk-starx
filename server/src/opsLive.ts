@@ -8,7 +8,14 @@ import type { OpsBus } from "./ops.js";
  * todas as telas abertas (SSE). A tela abre a conexão direto na API com um ingresso de uso único (60 s) que o painel
  * pede com a sessão do usuário.
  */
-export const FN_LABEL: Record<string, string> = { manifesto: "Descarga de Manifesto", coleta: "Descarga de Coleta", romaneio: "Descarga de Romaneio" };
+export const FN_LABEL: Record<string, string> = {
+  manifesto: "Descarga de Manifesto",
+  coleta: "Descarga de Coleta",
+  romaneio: "Descarga de Romaneio",
+  carga_manifesto: "Carga de Manifesto",
+  carga_coleta: "Carga de Coleta",
+  carga_romaneio: "Carga de Romaneio",
+};
 
 type Totals = { qty: number; kg: number; value: number };
 export interface OpsCard {

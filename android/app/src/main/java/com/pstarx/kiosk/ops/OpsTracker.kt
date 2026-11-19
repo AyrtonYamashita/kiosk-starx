@@ -31,10 +31,13 @@ data class Snapshot(
     val units: List<String> = emptyList(),
     val total: Totals? = null,
     val read: Totals? = null,
+    /** Estrutura da página quando o leitor não a entendeu (repassada como veio; ver ssw_reader.js). */
+    val diag: JSONObject? = null,
 ) {
     companion object {
         val SCREENS = setOf("bipagem", "placa", "menu", "login", "outra")
-        val FUNCTIONS = setOf("manifesto", "coleta", "romaneio")
+        /** Nome da função (manifesto, carga_manifesto...): quem confere a lista é o servidor (o leitor vem dele). */
+        private val FUNCTION = Regex("^[a-z_]{1,30}$")
 
         /** null se o JSON não fizer sentido (a página mandou lixo). Textos cortados nos limites do servidor. */
         fun parse(json: String): Snapshot? {
@@ -46,12 +49,13 @@ data class Snapshot(
                 user = str("user", 64),
                 domain = str("domain", 20),
                 branch = str("branch", 20),
-                fn = str("fn", 20)?.lowercase()?.takeIf { it in FUNCTIONS },
+                fn = str("fn", 30)?.lowercase()?.takeIf { FUNCTION.matches(it) },
                 plate = str("plate", 20),
                 realPlate = str("realPlate", 20),
                 units = units.take(20),
                 total = Totals.parse(o.optJSONObject("total")),
                 read = Totals.parse(o.optJSONObject("read")),
+                diag = o.optJSONObject("diag")?.takeIf { it.optString("reason").isNotBlank() && it.optString("path").isNotBlank() },
             )
         }
     }
@@ -80,14 +84,36 @@ class OpsTracker(private val newId: () -> String = { UUID.randomUUID().toString(
     private var pendingEnd: PendingEnd? = null
     private var awaySince: Long? = null
     private var lastHeartbeat = 0L
+    private var lastBipagemAt = Long.MIN_VALUE / 2
+    private var lastDiagKey: String? = null
+    private var lastDiagAt = 0L
 
     val currentUser get() = user
     val hasOpenOperation get() = op != null
+
+    /**
+     * Alguém bipando: na tela de bipagem (ou com a carga aberta) e a tela mudou há menos de 15 min. O app adia a
+     * própria atualização enquanto isso (a instalação reinicia o app e tiraria o colaborador da bipagem).
+     */
+    fun busy(now: Long) = (screen == "bipagem" || op != null) && now - lastBipagemAt < BUSY_IDLE_MS
 
     fun onSnapshot(now: Long, s: Snapshot): List<JSONObject> {
         val out = mutableListOf<JSONObject>()
         val screenChanged = s.screen != screen
         screen = s.screen
+        if (s.screen == "bipagem") lastBipagemAt = now
+
+        // tela que o leitor não entendeu: a estrutura vai ao servidor (uma vez por tela a cada 10 min)
+        s.diag?.let { d ->
+            val key = d.optString("reason") + "|" + d.optString("path")
+            if (key != lastDiagKey || now - lastDiagAt >= DIAG_REPEAT_MS) {
+                val e = event(now, "diag").put("screen", s.screen)
+                for (k in DIAG_FIELDS) if (d.has(k) && !d.isNull(k)) e.put(k, d.get(k))
+                out += e
+                lastDiagKey = key
+                lastDiagAt = now
+            }
+        }
 
         // sessão: tela de login = ninguém; tela sem o nome do usuário mantém o último conhecido
         val newUser = if (s.screen == "login") null else s.user ?: user
@@ -200,5 +226,8 @@ class OpsTracker(private val newId: () -> String = { UUID.randomUUID().toString(
         const val HEARTBEAT_MS = 15_000L
         const val END_CONFIRM_MS = 10_000L
         const val AWAY_MS = 120_000L
+        const val BUSY_IDLE_MS = 15 * 60_000L
+        const val DIAG_REPEAT_MS = 10 * 60_000L
+        private val DIAG_FIELDS = listOf("reason", "path", "title", "ids", "inputs", "texts", "reader")
     }
 }

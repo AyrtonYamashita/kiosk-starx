@@ -6,6 +6,10 @@ resumo de cada descarga. O painel mostra isso ao vivo (2.3).
 ## Telas do SSW (mapeadas em 2026-11-17)
 
 Descarga de manifesto, coleta e romaneio usam a mesma tela de bipagem (`/bin/sswbar/descarga/{manifesto,coleta,romaneio}/<placa>@`).
+**Carga** (achada no piloto em 2026-11-18): `/bin/sswbar/carga/manifesto/<placa>` (sem `@`), título "Carga de Manifesto",
+`funcao` = número (`4`), "Placa provisória:" e "Unidades destino:" / "Centralizadoras:"; volumes, peso, valor e os
+campos `full_*` iguais aos da descarga; Concluir e Interromper são links (`#btn_concluir`, `#btn_sair`). Função no
+servidor: `carga_manifesto` (e `carga_coleta`/`carga_romaneio`, se aparecerem).
 
 | Dado | Onde |
 |---|---|
@@ -28,7 +32,15 @@ A tela não mostra a hora de cada bipagem: cada aumento de "Lidos" é uma bipage
   (`devices.ops_reader`: null = segue a chave, true/false = escolha do coletor; `ops_settings.reader_all` = chave). O
   check-in informa o app (`opsReader`, o que vale) e, a cada mudança, a API avisa os coletores na hora (~0,5 s). Com a
   leitura desligada, a API recusa os eventos (`403 ops_disabled`) e o app para e descarta a fila.
-- **Leitor da página** (`android/app/src/main/assets/ssw_reader.js`): injetado só em páginas `https://*.ssw.inf.br`.
+- **Leitor da página** (`server/reader/ssw_reader.js`): injetado só em páginas `https://*.ssw.inf.br`. Desde a 0.5.1
+  vem da API: o check-in informa `reader.sha256`, o app baixa `GET /v1/device/reader`, confere o sha256 e troca o
+  leitor na página aberta (a versão nova para a antiga). O mesmo arquivo vai no APK como reserva. **Ajuste de
+  mapeamento = mudar esse arquivo e publicar a API**, sem app novo.
+- **Diagnóstico** (0.5.1): bipagem sem função/placa/total, ou tela do SSW desconhecida, gera um evento `diag` (uma vez
+  por tela a cada 10 min) com endereço, título, ids, nomes dos campos (valor só de funcao/placa/dominio/filial) e
+  rótulos. Consulta: `SELECT at, data FROM ops_events WHERE type = 'diag' ORDER BY at DESC`.
+- **Atualização do app** (0.5.1): adiada enquanto há bipagem (tela de bipagem ou carga aberta, com mudança há menos de
+  15 min); instala no check-in seguinte, quando o colaborador sai da bipagem.
   Lê os campos da tabela acima, confere a cada mudança da página e a cada 500 ms (campos escondidos mudam sem gerar
   aviso) e manda um retrato ao app só quando algo mudou. Observa os toques em Concluir/Interromper. Não clica nem digita.
 - **Regras** (`OpsTracker.kt`):
@@ -60,10 +72,11 @@ Corpo (até 64 KB, 1–200 eventos):
 | `type` | Campos | Quando |
 |---|---|---|
 | `session` | `user` (null = saiu), `domain`, `branch` | usuário do SSW mudou |
-| `op_start` | `fn` (manifesto/coleta/romaneio), `plate`, `realPlate`, `units[]`, `total`, `read?` | abriu a tela de bipagem |
+| `op_start` | `fn` (manifesto/coleta/romaneio, carga_manifesto/carga_coleta/carga_romaneio), `plate`, `realPlate`, `units[]`, `total`, `read?` | abriu a tela de bipagem |
 | `progress` | `fn`, `plate`, `read`, `total?` | números de Lidos mudaram |
 | `op_end` | `fn`, `plate`, `reason` (concluded/interrupted/left) | Concluir, Interromper ou saiu da tela |
 | `heartbeat` | `screen` (bipagem/placa/menu/login/outra), `user?`, `fn?`, `plate?` | a cada 15 s |
+| `diag` | `screen`, `reason`, `path`, `title?`, `ids[]?`, `inputs[]?`, `texts[]?`, `reader?` | tela não entendida (0.5.1) |
 
 `total`/`read` = `{ "qty": n, "kg": n, "value": n }` (números, ponto decimal).
 

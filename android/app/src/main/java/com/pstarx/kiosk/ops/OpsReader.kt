@@ -39,6 +39,12 @@ object OpsReader {
     @Volatile private var retryAt = 0L
     @Volatile var running = false
         private set
+    /** Alguém bipando agora (ver OpsTracker.busy): o app adia a própria atualização. */
+    @Volatile private var busyNow = false
+    fun isBusy() = running && busyNow
+
+    /** Chamado (na thread principal) quando chega um leitor novo da API: a tela injeta de novo na página aberta. */
+    @Volatile var onScriptChanged: (() -> Unit)? = null
 
     @Synchronized
     private fun init(ctx: Context) {
@@ -70,6 +76,7 @@ object OpsReader {
         logic.execute { tracker = OpsTracker() }
         Log.i(TAG, "Leitura do SSW ligada (fila: ${queue.size})")
         tickTask = logic.scheduleWithFixedDelay({ safely { emit(tracker.tick(clock.now())) } }, 1, 1, TimeUnit.SECONDS)
+        busyNow = false
         kick(0)
     }
 
@@ -77,6 +84,7 @@ object OpsReader {
     fun stop() {
         if (!running) return
         running = false
+        busyNow = false
         tickTask?.cancel(false)
         tickTask = null
         Log.i(TAG, "Leitura do SSW parada")
@@ -94,7 +102,7 @@ object OpsReader {
         @JavascriptInterface
         fun report(json: String) {
             val at = System.currentTimeMillis()
-            if (!running || json.length > 16_000 || !pageIsSsw()) return
+            if (!running || json.length > 48_000 || !pageIsSsw()) return
             logic.execute { safely { Snapshot.parse(json)?.let { emit(tracker.onSnapshot(clock.now(at), it)) } } }
         }
 
@@ -114,14 +122,75 @@ object OpsReader {
         return BuildConfig.DEBUG && u.scheme == "http" && host == "10.0.2.2"
     }
 
-    /** O leitor da página (assets/ssw_reader.js). */
-    fun script(ctx: Context): String = readerScript ?: ctx.assets.open("ssw_reader.js").bufferedReader().use { it.readText() }.also { readerScript = it }
+    /**
+     * O leitor da página: o último entregue pela API (conferido pelo sha256) ou, sem ele, o embutido no APK
+     * (assets/ssw_reader.js, a mesma fonte: server/reader).
+     */
+    fun script(ctx: Context): String {
+        readerScript?.let { return it }
+        val prefs = ctx.getSharedPreferences("ops", Context.MODE_PRIVATE)
+        val sha = prefs.getString("reader_sha", null)
+        val file = readerFile(ctx)
+        val fromApi = if (sha != null && file.exists()) file.readText().takeIf { OpsSign.sha256hex(it) == sha } else null
+        return (fromApi ?: ctx.assets.open("ssw_reader.js").bufferedReader().use { it.readText() }).also { readerScript = it }
+    }
     @Volatile private var readerScript: String? = null
+
+    private fun readerFile(ctx: Context) = File(ctx.applicationContext.filesDir, "ops/reader.js")
+
+    /** sha256 do leitor que a API entrega (check-in). Diferente do guardado: baixa, confere e passa a usar. */
+    fun onReaderInfo(ctx: Context, sha256: String?) {
+        if (sha256 == null || !Regex("^[0-9a-f]{64}$").matches(sha256)) return
+        init(ctx)
+        val prefs = app.getSharedPreferences("ops", Context.MODE_PRIVATE)
+        if (prefs.getString("reader_sha", null) == sha256 && readerFile(app).exists()) return
+        if (!readerFetching.compareAndSet(false, true)) return
+        net.execute {
+            try {
+                val s = PanelStore.get(app).state
+                val url = s.serverUrl ?: return@execute
+                val token = s.token ?: return@execute
+                val conn = URL("$url/v1/device/reader").openConnection() as HttpURLConnection
+                val body = try {
+                    conn.connectTimeout = 10_000
+                    conn.readTimeout = 15_000
+                    conn.setRequestProperty("Authorization", "Bearer $token")
+                    conn.setRequestProperty("User-Agent", "StarXKiosk/${BuildConfig.VERSION_NAME}")
+                    if (conn.responseCode != 200) return@execute
+                    conn.inputStream.use { it.readBytes().toString(Charsets.UTF_8) }
+                } finally {
+                    conn.disconnect()
+                }
+                if (OpsSign.sha256hex(body) != sha256) {
+                    Log.w(TAG, "leitor da API recusado: sha256 não confere")
+                    return@execute
+                }
+                val f = readerFile(app)
+                f.parentFile?.mkdirs()
+                val tmp = File(f.parentFile, "reader.js.tmp")
+                tmp.writeText(body)
+                if (!tmp.renameTo(f)) {
+                    f.delete()
+                    tmp.renameTo(f)
+                }
+                prefs.edit().putString("reader_sha", sha256).apply()
+                readerScript = body
+                Log.i(TAG, "leitor do SSW atualizado pela API (${sha256.take(12)})")
+                onScriptChanged?.let { cb -> android.os.Handler(android.os.Looper.getMainLooper()).post(cb) }
+            } catch (e: Exception) {
+                Log.w(TAG, "falha ao baixar o leitor da API: ${e.message}")
+            } finally {
+                readerFetching.set(false)
+            }
+        }
+    }
+    private val readerFetching = AtomicBoolean(false)
 
     // ---------------------------------------------------------------- interno
 
     /** Na thread `logic`. Sinal de vida fica só na memória (o último); o resto vai para a fila no disco. */
     private fun emit(events: List<JSONObject>) {
+        busyNow = tracker.busy(clock.now())
         if (events.isEmpty()) return
         val (beats, rest) = events.partition { it.optString("type") == "heartbeat" }
         beats.lastOrNull()?.let { sender.heartbeat = it }
