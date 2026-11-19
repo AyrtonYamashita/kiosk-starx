@@ -11,7 +11,7 @@ export default async function NewProfilePage() {
   ]);
   return (
     <div className="stack">
-      <Link href="/profiles" className="muted">
+      <Link href="/profiles" className="muted" transitionTypes={["nav-back"]}>
         ← Perfis
       </Link>
       <h1>Novo perfil</h1>

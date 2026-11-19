@@ -20,7 +20,6 @@ export default async function AccountPage() {
           <span className="mono">{me.username}</span> · {me.email ?? "sem e-mail cadastrado"} · {me.role === "admin" ? "administrador" : "operador"}
         </p>
       </div>
-      {/* no celular o menu lateral (com "Sair") some: sair também por aqui */}
       <form action={logout}>
         <button>Sair desta sessão</button>
       </form>

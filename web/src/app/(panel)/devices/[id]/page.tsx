@@ -116,7 +116,6 @@ export default async function DevicePage({ params }: { params: Promise<{ id: str
 
   return (
     <div className={`device-page wide${hasMap ? " has-map" : ""}`}>
-      {/* comando em andamento: acompanha de perto (o aparelho responde em ~1 s) */}
       <AutoRefresh seconds={commands.some((c) => c.status === "pending" || c.status === "sent") ? 2 : 15} />
       <LiquidGlassDefs />
       {hasMap && <DeviceMapLazy lat={loc.lat} lon={loc.lon} accuracyM={loc.accuracyM} />}
@@ -124,7 +123,7 @@ export default async function DevicePage({ params }: { params: Promise<{ id: str
       <div className="device-col device-left">
         <section className="liquid-glass device-card device-head">
           <div className="row" style={{ gap: 8 }}>
-            <Link href="/" className="device-back small">
+            <Link href="/" className="device-back small" transitionTypes={["nav-back"]}>
               ← Aparelhos
             </Link>
           </div>
@@ -260,7 +259,6 @@ export default async function DevicePage({ params }: { params: Promise<{ id: str
         <section className="liquid-glass device-card device-config">
           <h2>Configuração pelo painel</h2>
           <DeviceConfig device={d} profiles={profiles.map((p) => ({ id: p.id, name: p.name, config: p.config }))} catalog={catalog}>
-            {/* perfil sem apps gerenciados: a seção nem aparece */}
             {d.managedApps.length > 0 && (
               <div className="stack" style={{ gap: 8 }}>
                 <strong className="small">Apps gerenciados pelo perfil</strong>

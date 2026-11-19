@@ -26,7 +26,7 @@ export default async function ProfilePage({ params, searchParams }: { params: Pr
   }
   return (
     <div className="stack">
-      <Link href="/profiles" className="muted">
+      <Link href="/profiles" className="muted" transitionTypes={["nav-back"]}>
         ← Perfis
       </Link>
       <h1>{profile.name}</h1>

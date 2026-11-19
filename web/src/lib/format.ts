@@ -48,7 +48,7 @@ export const configStatusLabel: Record<"none" | "applied" | "modified" | "pendin
   applied: ["ok", "aplicada", "o aparelho está com a configuração do painel"],
   modified: ["warn", "alterada no aparelho", "aplicada, mas alterada depois no próprio aparelho; reaplique para desfazer"],
   pending: ["warn", "pendente", "o aparelho recebe no próximo contato"],
-  error: ["danger", "erro", "o aparelho recusou a configuração"],
+  error: ["danger", "configuração recusada", "o aparelho recusou a configuração do painel"],
 };
 
 export const commandLabel: Record<string, string> = {

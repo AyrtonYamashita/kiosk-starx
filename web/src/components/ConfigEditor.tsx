@@ -243,30 +243,22 @@ export function ConfigEditor({
   return (
     <div className="stack">
       <input type="hidden" name={name} value={JSON.stringify(out)} />
-      {overrideMode && (
-        <div className={changedFields.length ? "alert warn" : "alert ok"} style={{ alignItems: "center" }}>
-          <span style={{ flex: 1 }}>
-            {changedFields.length ? (
-              <>
-                Diferente do perfil neste aparelho: <strong>{changedFields.join(", ")}</strong>. O resto segue o perfil (e acompanha quando ele mudar).
-              </>
-            ) : (
-              <>Igual ao perfil. Mude só o que este aparelho precisa diferente (ex.: o site) — o resto continua seguindo o perfil.</>
-            )}
+      {overrideMode && changedFields.length > 0 && (
+        <div className="row small" style={{ gap: 8 }}>
+          <span className="muted">
+            Diferente do perfil: <strong style={{ color: "var(--ink)" }}>{changedFields.join(", ")}</strong>
           </span>
-          {changedFields.length > 0 && (
-            <button
-              type="button"
-              className="link-button"
-              onClick={() => {
-                setCfg(structuredClone(baseFull));
-                setPinMode("device");
-                setPin("");
-              }}
-            >
-              voltar tudo ao perfil
-            </button>
-          )}
+          <button
+            type="button"
+            className="link-button"
+            onClick={() => {
+              setCfg(structuredClone(baseFull));
+              setPinMode("device");
+              setPin("");
+            }}
+          >
+            voltar tudo ao perfil
+          </button>
         </div>
       )}
       <datalist id="catalog-apps">

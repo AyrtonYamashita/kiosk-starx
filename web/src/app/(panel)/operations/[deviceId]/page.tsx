@@ -25,7 +25,7 @@ export default async function OpsDetailPage({ params, searchParams }: { params: 
   return (
     <div className="stack wide">
       <div className="row">
-        <Link href="/operations" className="link-button">
+        <Link href="/operations" className="link-button" transitionTypes={["nav-back"]}>
           ← Acompanhamento
         </Link>
       </div>

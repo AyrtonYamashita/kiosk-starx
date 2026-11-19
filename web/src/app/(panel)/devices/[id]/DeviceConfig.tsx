@@ -5,7 +5,6 @@ import { useActionState, useState } from "react";
 import { ConfigEditor } from "@/components/ConfigEditor";
 import { reapplyConfig, setDeviceConfig } from "@/lib/actions";
 import type { CatalogApp, DeviceDetail, Json, Profile } from "@/lib/api";
-import { ago, configStatusLabel } from "@/lib/format";
 
 /**
  * Configuração do aparelho pelo painel: o perfil e, por cima dele, os ajustes só deste aparelho. O editor abre com
@@ -25,19 +24,13 @@ export function DeviceConfig({
 }) {
   const [state, action, pending] = useActionState(setDeviceConfig, undefined);
   const [profileId, setProfileId] = useState(device.profileId ?? "");
-  const [cls, label, hint] = configStatusLabel[device.configStatus];
   const profile = profiles.find((p) => p.id === profileId) ?? null;
   // trocar o perfil no seletor redesenha o editor com o novo perfil como base (os ajustes continuam por cima)
   const editorKey = `${profileId}:${device.appliedAt ?? ""}`;
 
   return (
     <div className="stack">
-      <div className="row">
-        <span className={`badge ${cls}`}>{label}</span>
-        <span className="muted small">{hint}</span>
-        {device.appliedAt && <span className="muted small">· última aplicação {ago(device.appliedAt)}</span>}
-      </div>
-      {device.configStatus === "error" && device.applyError && <div className="alert error">O aparelho recusou: {device.applyError}</div>}
+      {device.configStatus === "error" && <div className="alert error">O aparelho recusou a configuração{device.applyError ? `: ${device.applyError}` : "."}</div>}
       {device.applyWarnings.length > 0 && device.configStatus !== "error" && (
         <div className="alert warn small">Avisos do aparelho: {device.applyWarnings.join("; ")}</div>
       )}
@@ -82,11 +75,10 @@ export function DeviceConfig({
         </div>
       </form>
 
-      {device.configStatus !== "none" && (
+      {(device.configStatus === "modified" || device.configStatus === "error") && (
         <form action={reapplyConfig} className="row">
           <input type="hidden" name="id" value={device.id} />
           <button>Reaplicar configuração do painel</button>
-          <span className="muted small">Desfaz mudanças feitas no próprio aparelho (tela ou ADB).</span>
         </form>
       )}
     </div>

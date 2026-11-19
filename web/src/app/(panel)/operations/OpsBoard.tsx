@@ -22,7 +22,7 @@ export function OpsBoard({ initial, initialServerTime }: { initial: OpsCard[]; i
         return next;
       }),
   });
-  const now = useNow(initialServerTime, offsetMs, 10_000);
+  const now = useNow(initialServerTime, offsetMs);
 
   const list = useMemo(() => {
     const rank = (c: OpsCard) => (isOffline(c.lastSeenAt, now) ? 3 : c.operation ? 0 : c.user ? 1 : 2);

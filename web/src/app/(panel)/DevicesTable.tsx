@@ -137,7 +137,7 @@ export function DevicesTable({
           </thead>
           <tbody>
             {devices.map((d) => {
-              const [cls, label, hint] = configStatusLabel[d.configStatus];
+              const [, label, hint] = configStatusLabel[d.configStatus];
               return (
                 <tr key={d.id}>
                   <td>
@@ -199,7 +199,6 @@ export function DevicesTable({
                       <span className="muted">—</span>
                     ) : (
                       <>
-                        {/* online: soma o tempo desde o último contato; offline: o que era no último contato */}
                         <span className="mono" suppressHydrationWarning>
                           {uptime(d.uptimeMs + (d.online ? msSince(d.infoUpdatedAt) : 0))}
                         </span>
@@ -211,9 +210,9 @@ export function DevicesTable({
                     {d.kioskEnabled ? kioskModeLabel[d.kioskMode ?? ""] ?? d.kioskMode : d.kioskEnabled === false ? <span className="muted">kiosk desligado</span> : "—"}
                     <div className="small">
                       {d.profileName ? <>perfil {d.profileName}{d.hasOverrides ? " + ajustes" : ""}</> : <span className="muted">sem perfil</span>}{" "}
-                      {d.configStatus !== "none" && (
-                        <span className={`badge ${cls}`} title={hint}>
-                          {label}
+                      {d.configStatus === "error" && (
+                        <span className="badge danger" title={hint}>
+                          <span className="dot" /> {label}
                         </span>
                       )}
                     </div>

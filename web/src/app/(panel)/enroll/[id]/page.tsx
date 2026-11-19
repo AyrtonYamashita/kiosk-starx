@@ -36,7 +36,7 @@ export default async function EnrollmentPage({ params }: { params: Promise<{ id:
 
   return (
     <div className="stack">
-      <Link href="/enroll" className="muted">
+      <Link href="/enroll" className="muted" transitionTypes={["nav-back"]}>
         ← Cadastro
       </Link>
       <div className="row">
