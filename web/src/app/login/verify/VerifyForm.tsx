@@ -1,7 +1,8 @@
 "use client";
 
 import { browserSupportsWebAuthn } from "@simplewebauthn/browser";
-import { KeyRound } from "lucide-react";
+import { AnimateIcon } from "@animate-ui/react/icons";
+import { KeyRound } from "@/components/animate-ui/icons/key-round";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useState } from "react";
 import { cancelMfa, mfaPasskeyFinish, mfaPasskeyOptions, resendMfaCode, verifyMfa } from "@/lib/actions";
@@ -124,9 +125,11 @@ export function VerifyForm({
         <div className="stack">
           {trustBox}
           {passkeyErr && <div className="alert error">{passkeyErr}</div>}
-          <button type="button" className="primary" onClick={usePasskey} disabled={passkeyBusy} style={{ justifyContent: "center" }}>
-            <KeyRound size={16} aria-hidden /> {passkeyBusy ? "Aguardando a biometria…" : "Usar passkey"}
-          </button>
+          <AnimateIcon animateOnHover animateOnTap asChild>
+            <button type="button" className="primary" onClick={usePasskey} disabled={passkeyBusy} style={{ justifyContent: "center" }}>
+              <KeyRound size={20} strokeWidth={1.75} aria-hidden /> {passkeyBusy ? "Aguardando a biometria…" : "Usar passkey"}
+            </button>
+          </AnimateIcon>
         </div>
       ) : (
         <form action={action} className="stack">

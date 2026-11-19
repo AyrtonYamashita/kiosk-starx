@@ -211,6 +211,7 @@ button.danger:hover { color: var(--bad); }
 button.danger:disabled { background: none; color: var(--soft); }
 .link-button, .link-button:hover { height: auto; padding: 0; background: none; border: none; color: var(--soft); font-weight: 400; font-size: 11px; }
 .link-button:hover { color: var(--ink); }
+.icon-link { display: inline-flex; align-items: center; gap: 6px; }
 
 /* ---------------------------------------------------------------- faixas de aviso (raio 8, ponto da cor do estado) */
 

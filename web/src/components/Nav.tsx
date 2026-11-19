@@ -2,12 +2,21 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, LogOut, Package, QrCode, ShieldCheck, SlidersHorizontal, Smartphone, UserRound, type LucideIcon } from "lucide-react";
+import type { ComponentType } from "react";
+import { AnimateIcon } from "@animate-ui/react/icons";
+import { Activity } from "@/components/animate-ui/icons/activity";
+import { LogOut } from "@/components/animate-ui/icons/log-out";
+import { Package } from "@/components/animate-ui/icons/package";
+import { QrCode } from "@/components/animate-ui/icons/qr-code";
+import { ShieldCheck } from "@/components/animate-ui/icons/shield-check";
+import { SlidersHorizontal } from "@/components/animate-ui/icons/sliders-horizontal";
+import { Smartphone } from "@/components/animate-ui/icons/smartphone";
+import { UserRound } from "@/components/animate-ui/icons/user-round";
 import { logout } from "@/lib/actions";
 import { StarxLogo } from "@/components/brand/Logo";
 import { ThemeToggle } from "@/components/brand/ThemeToggle";
 
-const LINKS: { href: string; label: string; short: string; icon: LucideIcon; match: (p: string) => boolean; adminOnly?: boolean }[] = [
+const LINKS: { href: string; label: string; short: string; icon: ComponentType<{ size?: number; strokeWidth?: number; "aria-hidden"?: boolean }>; match: (p: string) => boolean; adminOnly?: boolean }[] = [
   { href: "/operations", label: "Acompanhamento", short: "Ao vivo", icon: Activity, match: (p) => p.startsWith("/operations") },
   { href: "/", label: "Aparelhos", short: "Aparelhos", icon: Smartphone, match: (p) => p === "/" || p.startsWith("/devices") },
   { href: "/profiles", label: "Perfis", short: "Perfis", icon: SlidersHorizontal, match: (p) => p.startsWith("/profiles") },
@@ -35,10 +44,12 @@ export function Sidebar({ username, role }: { username: string; role: "admin" | 
       <span className="section-label">Operação</span>
       <nav>
         {links.map((l) => (
-          <Link key={l.href} href={l.href} className={`nav-item${l.match(path) ? " active" : ""}`} aria-current={l.match(path) ? "page" : undefined}>
-            <l.icon size={15} />
-            <span>{l.label}</span>
-          </Link>
+          <AnimateIcon key={l.href} animateOnHover animateOnTap asChild>
+            <Link href={l.href} className={`nav-item${l.match(path) ? " active" : ""}`} aria-current={l.match(path) ? "page" : undefined}>
+              <l.icon size={18} strokeWidth={1.75} aria-hidden />
+              <span>{l.label}</span>
+            </Link>
+          </AnimateIcon>
         ))}
       </nav>
       <div className="user">
@@ -50,9 +61,11 @@ export function Sidebar({ username, role }: { username: string; role: "admin" | 
           </span>
         </Link>
         <form action={logout}>
-          <button className="logout">
-            <LogOut size={14} /> Sair
-          </button>
+          <AnimateIcon animateOnHover animateOnTap asChild>
+            <button className="logout">
+              <LogOut size={18} strokeWidth={1.75} aria-hidden /> Sair
+            </button>
+          </AnimateIcon>
         </form>
       </div>
     </aside>
@@ -77,10 +90,12 @@ export function TabBar({ role }: { role: "admin" | "operator" }) {
   return (
     <nav className="tabbar" aria-label="Navegação">
       {links.map((l) => (
-        <Link key={l.href} href={l.href} className={l.match(path) ? "active" : undefined} aria-current={l.match(path) ? "page" : undefined}>
-          <l.icon size={19} />
-          <span>{l.short}</span>
-        </Link>
+        <AnimateIcon key={l.href} animateOnTap asChild>
+          <Link href={l.href} className={l.match(path) ? "active" : undefined} aria-current={l.match(path) ? "page" : undefined}>
+            <l.icon size={20} strokeWidth={1.75} aria-hidden />
+            <span>{l.short}</span>
+          </Link>
+        </AnimateIcon>
       ))}
     </nav>
   );

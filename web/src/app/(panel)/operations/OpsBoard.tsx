@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { AnimateIcon } from "@animate-ui/react/icons";
+import { ScanBarcode } from "@/components/animate-ui/icons/scan-barcode";
 import type { OpsCard } from "@/lib/api";
 import { fmtAgo, fmtDuration, fmtMoney, fmtQty, fmtTime, isOffline, SCREEN_LABEL } from "@/lib/opsFormat";
 import { useNow, useOpsStream } from "@/lib/useOpsStream";
@@ -58,9 +60,12 @@ export function OpsBoard({ initial, initialServerTime }: { initial: OpsCard[]; i
           <input type="checkbox" checked={onlyLogged} onChange={(e) => setOnlyLogged(e.target.checked)} />
           só com colaborador
         </label>
-        <Link href="/operations/codigo" className="link-button small">
-          Consultar código de barras
-        </Link>
+        <AnimateIcon animateOnHover animateOnTap asChild>
+          <Link href="/operations/codigo" className="link-button small icon-link">
+            <ScanBarcode size={18} strokeWidth={1.75} aria-hidden />
+            Consultar código de barras
+          </Link>
+        </AnimateIcon>
       </div>
 
       {list.length === 0 ? (

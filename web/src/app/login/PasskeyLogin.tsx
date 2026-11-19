@@ -1,7 +1,8 @@
 "use client";
 
 import { browserSupportsWebAuthn } from "@simplewebauthn/browser";
-import { KeyRound } from "lucide-react";
+import { AnimateIcon } from "@animate-ui/react/icons";
+import { KeyRound } from "@/components/animate-ui/icons/key-round";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { passkeyLoginFinish, passkeyLoginOptions } from "@/lib/actions";
@@ -41,9 +42,11 @@ export function PasskeyLogin() {
         ou
         <span style={{ flex: 1, borderTop: "1px solid var(--rule)" }} />
       </div>
-      <button type="button" onClick={go} disabled={busy} style={{ justifyContent: "center" }}>
-        <KeyRound size={16} aria-hidden /> {busy ? "Aguardando a biometria…" : "Entrar com passkey"}
-      </button>
+      <AnimateIcon animateOnHover animateOnTap asChild>
+        <button type="button" onClick={go} disabled={busy} style={{ justifyContent: "center" }}>
+          <KeyRound size={20} strokeWidth={1.75} aria-hidden /> {busy ? "Aguardando a biometria…" : "Entrar com passkey"}
+        </button>
+      </AnimateIcon>
       {error && <div className="alert error">{error}</div>}
     </div>
   );
