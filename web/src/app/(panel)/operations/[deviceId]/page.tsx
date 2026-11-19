@@ -49,11 +49,6 @@ export default async function OpsDetailPage({ params, searchParams }: { params: 
                   <span className="dot" /> {END_LABEL[op.endReason ?? ""] ?? "encerrada"} às {fmtTime(op.endedAt)}
                 </span>
               )}
-              {opId && (
-                <Link href={`/operations/${d.device.id}`} className="link-button small">
-                  ver a carga atual
-                </Link>
-              )}
             </>
           )}
           <span className="spacer" />
@@ -66,6 +61,36 @@ export default async function OpsDetailPage({ params, searchParams }: { params: 
           </span>
         </div>
       </header>
+
+      {d.today.length > 0 && (
+        <nav className="ops-loads" aria-label="Cargas de hoje neste coletor">
+          <span className="section-label">Cargas de hoje</span>
+          <div className="ops-loads-list">
+            {d.today.map((o) => {
+              const live = !o.endedAt;
+              const active = op?.id === o.id;
+              return (
+                <Link
+                  key={o.id}
+                  href={live && d.card?.operation?.id === o.id ? `/operations/${d.device.id}` : `/operations/${d.device.id}?op=${o.id}`}
+                  className={`ops-load${active ? " active" : ""}`}
+                  aria-current={active ? "page" : undefined}
+                  scroll={false}
+                >
+                  <span className="ops-load-top">
+                    <span className="mono">{o.plate}</span>
+                    <span className="muted">{fmtTime(o.startedAt)}</span>
+                  </span>
+                  <span className="ops-load-sub">
+                    <span className={`dot ${live ? "good" : o.endReason === "concluded" ? "good" : "off"}`} />
+                    {live ? "em andamento" : END_LABEL[o.endReason ?? ""] ?? "encerrada"} · {fmtQty(o.readQty)}/{fmtQty(o.totalQty)}
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
+        </nav>
+      )}
 
       {!op ? (
         <div className="card muted">
@@ -243,59 +268,6 @@ export default async function OpsDetailPage({ params, searchParams }: { params: 
                       </tbody>
                     </table>
                   ),
-                },
-                {
-                  value: "hoje",
-                  label: `Cargas de hoje (${d.today.length})`,
-                  content:
-                    d.today.length === 0 ? (
-                      <span className="muted small">Nenhuma carga hoje.</span>
-                    ) : (
-                      <table>
-                        <thead>
-                          <tr>
-                            <th>Carro</th>
-                            <th>Início</th>
-                            <th style={{ textAlign: "right" }}>Duração</th>
-                            <th style={{ textAlign: "right" }}>Volumes</th>
-                            <th>Situação</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {d.today.map((o) => (
-                            <tr key={o.id} className={o.id === op.id ? "selected" : undefined}>
-                              <td>
-                                <Link href={`/operations/${d.device.id}?op=${o.id}`} className="mono">
-                                  {o.plate}
-                                </Link>
-                                <div className="muted small">
-                                  {o.fnLabel}
-                                  {o.user ? ` · ${o.user}` : ""}
-                                </div>
-                              </td>
-                              <td className="mono">{fmtTime(o.startedAt)}</td>
-                              <td className="mono" style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                                {fmtDuration(o.durationSec)}
-                              </td>
-                              <td className="mono" style={{ textAlign: "right" }}>
-                                {fmtQty(o.readQty)}/{fmtQty(o.totalQty)}
-                              </td>
-                              <td>
-                                {o.endedAt ? (
-                                  <span className={`badge ${o.endReason === "concluded" ? "ok" : "off"}`}>
-                                    <span className="dot" /> {END_LABEL[o.endReason ?? ""] ?? "encerrada"}
-                                  </span>
-                                ) : (
-                                  <span className="badge blue">
-                                    <span className="dot" /> em andamento
-                                  </span>
-                                )}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    ),
                 },
               ]}
             />
