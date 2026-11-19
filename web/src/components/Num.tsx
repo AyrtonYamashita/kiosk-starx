@@ -8,9 +8,11 @@ import { SlidingNumber } from "@animate-ui/react/primitives/texts/sliding-number
  */
 export function Num({ value, decimals = 0, prefix, suffix, className }: { value: number; decimals?: number; prefix?: string; suffix?: string; className?: string }) {
   const v = Number.isFinite(value) ? value : 0;
+  const pre = prefix?.replace(/ /g, " ");
+  const suf = suffix?.replace(/ /g, " ");
   return (
     <span className={`num${className ? ` ${className}` : ""}`} aria-label={`${prefix ?? ""}${v.toLocaleString("pt-BR", { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}${suffix ?? ""}`}>
-      {prefix && <span aria-hidden>{prefix}</span>}
+      {pre && <span aria-hidden>{pre}</span>}
       <SlidingNumber
         aria-hidden
         number={v}
@@ -19,7 +21,7 @@ export function Num({ value, decimals = 0, prefix, suffix, className }: { value:
         thousandSeparator="."
         initiallyStable
       />
-      {suffix && <span aria-hidden>{suffix}</span>}
+      {suf && <span aria-hidden>{suf}</span>}
     </span>
   );
 }
