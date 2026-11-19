@@ -230,7 +230,7 @@ export function ConfigEditor({
   const check = (path: string, label: string, hint?: string) => {
     const value = path.split(".").reduce((o: Json, key) => o?.[key], cfg);
     return (
-      <label className="inline">
+      <label className="check-label">
         <input type="checkbox" checked={!!value} onChange={(e) => set(path, e.target.checked)} />
         <span>
           {label}
@@ -366,7 +366,7 @@ export function ConfigEditor({
           <span className="muted small">
             Sem carregar e com a bateria nesse nível, o aviso abre por cima de qualquer tela do coletor; repete a cada 5% a menos e fecha sozinho ao começar a carregar.
           </span>
-          <label className="inline">
+          <label className="check-label">
             <input type="checkbox" checked={d.brightness !== null} onChange={(e) => set("display.brightness", e.target.checked ? 80 : null)} />
             Brilho fixo
           </label>

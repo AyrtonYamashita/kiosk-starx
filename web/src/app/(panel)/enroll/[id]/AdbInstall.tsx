@@ -238,7 +238,7 @@ export function AdbInstall({ enrollment, release }: { enrollment: Enrollment; re
           {running ? "Instalando…" : "Conectar coletor e instalar"}
         </button>
       </div>
-      <label className="inline" style={{ alignItems: "flex-start" }}>
+      <label className="check-label" style={{ alignItems: "flex-start" }}>
         <input type="checkbox" checked={disableVerifier} onChange={(e) => setDisableVerifier(e.target.checked)} style={{ marginTop: 2 }} />
         <span>
           Desligar a verificação do Play Protect (só em aparelhos com serviços do Google)

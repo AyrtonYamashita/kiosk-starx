@@ -83,8 +83,38 @@ function haystack(d: DeviceSummary) {
     .toLowerCase();
 }
 
-type Filters = { q: string; status: "online" | "offline" | "all"; user: string; profile: string; model: string };
-const DEFAULTS: Filters = { q: "", status: "online", user: "", profile: "", model: "" };
+type Group = "status" | "user" | "profile" | "model";
+type Filters = { q: string } & Record<Group, string[]>;
+const DEFAULTS: Filters = { q: "", status: ["online"], user: [], profile: [], model: [] };
+const NONE = "__none__";
+
+function keyOf(g: Group, d: DeviceSummary): string {
+  if (g === "status") return d.online ? "online" : "offline";
+  if (g === "user") return d.loggedUser ?? NONE;
+  if (g === "profile") return d.profileId ?? NONE;
+  return modelOf(d);
+}
+
+/** Grupo de checkboxes; nada marcado = todos. Cada opção mostra quantos aparelhos tem. */
+function CheckGroup({ title, options, value, onChange }: { title: string; options: { key: string; label: string; count: number }[]; value: string[]; onChange: (v: string[]) => void }) {
+  if (options.length === 0) return null;
+  return (
+    <fieldset className="dev-group">
+      <legend className="section-label">{title}</legend>
+      {options.map((o) => (
+        <label key={o.key} className="check-label dev-check">
+          <input
+            type="checkbox"
+            checked={value.includes(o.key)}
+            onChange={(e) => onChange(e.target.checked ? [...value, o.key] : value.filter((v) => v !== o.key))}
+          />
+          <span className="dev-check-label">{o.label}</span>
+          <span className="muted small">{o.count}</span>
+        </label>
+      ))}
+    </fieldset>
+  );
+}
 
 export function DevicesTable({
   devices,
@@ -100,24 +130,39 @@ export function DevicesTable({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [state, action, pending] = useActionState(bulkAssignProfile, undefined);
 
-  const options = useMemo(
-    () => ({
-      users: [...new Set(devices.map((d) => d.loggedUser).filter((u): u is string => !!u))].sort((a, b) => a.localeCompare(b, "pt-BR")),
-      models: [...new Set(devices.map(modelOf))].sort((a, b) => a.localeCompare(b, "pt-BR")),
-    }),
-    [devices],
-  );
+  const groups = useMemo(() => {
+    const count = (g: Group) => {
+      const m = new Map<string, number>();
+      devices.forEach((d) => m.set(keyOf(g, d), (m.get(keyOf(g, d)) ?? 0) + 1));
+      return m;
+    };
+    const byName = (a: { label: string }, b: { label: string }) => a.label.localeCompare(b.label, "pt-BR");
+    const st = count("status");
+    const us = count("user");
+    const pr = count("profile");
+    const mo = count("model");
+    const profileName = new Map(profiles.map((p) => [p.id, p.name]));
+    return {
+      status: [
+        { key: "online", label: "Online", count: st.get("online") ?? 0 },
+        { key: "offline", label: "Offline", count: st.get("offline") ?? 0 },
+      ],
+      user: [
+        ...[...us].filter(([k]) => k !== NONE).map(([k, n]) => ({ key: k, label: k, count: n })).sort(byName),
+        ...(us.has(NONE) ? [{ key: NONE, label: "Sem usuário", count: us.get(NONE)! }] : []),
+      ],
+      profile: [
+        ...[...pr].filter(([k]) => k !== NONE).map(([k, n]) => ({ key: k, label: profileName.get(k) ?? "perfil removido", count: n })).sort(byName),
+        ...(pr.has(NONE) ? [{ key: NONE, label: "Sem perfil", count: pr.get(NONE)! }] : []),
+      ],
+      model: [...mo].map(([k, n]) => ({ key: k, label: k, count: n })).sort(byName),
+    };
+  }, [devices, profiles]);
 
   const list = useMemo(() => {
     const q = f.q.trim().toLowerCase();
-    return devices.filter(
-      (d) =>
-        (f.status === "all" || (f.status === "online") === d.online) &&
-        (!f.user || (f.user === "__any__" ? !!d.loggedUser : f.user === "__none__" ? !d.loggedUser : d.loggedUser === f.user)) &&
-        (!f.profile || (f.profile === "__none__" ? !d.profileId : d.profileId === f.profile)) &&
-        (!f.model || modelOf(d) === f.model) &&
-        (!q || haystack(d).includes(q)),
-    );
+    const pass = (g: Group, d: DeviceSummary) => f[g].length === 0 || f[g].includes(keyOf(g, d));
+    return devices.filter((d) => pass("status", d) && pass("user", d) && pass("profile", d) && pass("model", d) && (!q || haystack(d).includes(q)));
   }, [devices, f]);
 
   const changed = JSON.stringify(f) !== JSON.stringify(DEFAULTS);
@@ -131,54 +176,29 @@ export function DevicesTable({
     });
 
   return (
-    <div className="stack">
-      <div className="dev-filters" role="search">
+    <div className="dev-layout">
+      <aside className="dev-filters" aria-label="Filtros">
         <label className="dev-search">
           <Search size={16} strokeWidth={1.75} aria-hidden />
-          <input type="search" value={f.q} onChange={(e) => set({ q: e.target.value })} placeholder="Buscar série, modelo, MAC, IP ou rede" aria-label="Buscar aparelho" />
+          <input type="search" value={f.q} onChange={(e) => set({ q: e.target.value })} placeholder="Buscar" title="Série, modelo, MAC, IP ou rede" aria-label="Buscar por série, modelo, MAC, IP ou rede" />
         </label>
-        <select value={f.status} onChange={(e) => set({ status: e.target.value as Filters["status"] })} aria-label="Status">
-          <option value="online">Online</option>
-          <option value="offline">Offline</option>
-          <option value="all">Online e offline</option>
-        </select>
-        <select value={f.user} onChange={(e) => set({ user: e.target.value })} aria-label="Usuário no SSW">
-          <option value="">Qualquer usuário</option>
-          <option value="__any__">Com usuário logado</option>
-          <option value="__none__">Sem usuário</option>
-          {options.users.map((u) => (
-            <option key={u} value={u}>
-              {u}
-            </option>
-          ))}
-        </select>
-        <select value={f.profile} onChange={(e) => set({ profile: e.target.value })} aria-label="Perfil">
-          <option value="">Qualquer perfil</option>
-          <option value="__none__">Sem perfil</option>
-          {profiles.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
-        <select value={f.model} onChange={(e) => set({ model: e.target.value })} aria-label="Modelo">
-          <option value="">Qualquer modelo</option>
-          {options.models.map((m) => (
-            <option key={m} value={m}>
-              {m}
-            </option>
-          ))}
-        </select>
-        <span className="muted small dev-count">
-          {list.length} de {devices.length}
-        </span>
-        {changed && (
-          <button type="button" className="link-button" onClick={() => setF(DEFAULTS)}>
-            limpar filtros
-          </button>
-        )}
-      </div>
+        <CheckGroup title="Status" options={groups.status} value={f.status} onChange={(v) => set({ status: v })} />
+        <CheckGroup title="Usuário no SSW" options={groups.user} value={f.user} onChange={(v) => set({ user: v })} />
+        <CheckGroup title="Perfil" options={groups.profile} value={f.profile} onChange={(v) => set({ profile: v })} />
+        <CheckGroup title="Modelo" options={groups.model} value={f.model} onChange={(v) => set({ model: v })} />
+        <div className="row small" style={{ gap: 8 }}>
+          <span className="muted">
+            {list.length} de {devices.length}
+          </span>
+          {changed && (
+            <button type="button" className="link-button" onClick={() => setF(DEFAULTS)}>
+              limpar filtros
+            </button>
+          )}
+        </div>
+      </aside>
 
+      <div className="stack dev-main">
       {selected.size > 0 && (
         <div className="card stack" style={{ padding: "10px 14px", gap: 10 }}>
           <form action={action} className="row">
@@ -231,7 +251,6 @@ export function DevicesTable({
                   />
                 </th>
                 <th>Aparelho</th>
-                <th>Status</th>
                 <th className="hide-sm">Usuário</th>
                 <th className="hide-sm">Bateria</th>
                 <th className="hide-sm">Rede</th>
@@ -250,14 +269,17 @@ export function DevicesTable({
                       <input type="checkbox" aria-label={`Selecionar ${d.name}`} checked={selected.has(d.id)} onChange={() => toggle(d.id)} />
                     </td>
                     <td>
-                      <Link href={`/devices/${d.id}`}>
-                        <strong>{d.name}</strong>
-                      </Link>
-                      {d.opsReader && (
-                        <span className="badge blue" style={{ marginLeft: 6 }} title="Leitura do SSW ligada">
-                          SSW
-                        </span>
-                      )}
+                      <span className="dev-name">
+                        <span
+                          className={`dot ${d.online ? "good" : "off"}`}
+                          role="img"
+                          aria-label={d.online ? "online" : "offline"}
+                          title={`${d.online ? "online" : "offline"} · último contato ${ago(d.lastSeenAt)}`}
+                        />
+                        <Link href={`/devices/${d.id}`}>
+                          <strong>{d.name}</strong>
+                        </Link>
+                      </span>
                       <div className="muted small">
                         {modelOf(d)} · {d.serial ?? "sem serial"}
                       </div>
@@ -265,12 +287,6 @@ export function DevicesTable({
                         {d.loggedUser && <span className="mono">{d.loggedUser}</span>}
                         <Battery b={d.battery} online={d.online} />
                       </div>
-                    </td>
-                    <td>
-                      <span className={`badge ${d.online ? "ok" : "off"}`}>
-                        <span className="dot" /> {d.online ? "online" : "offline"}
-                      </span>
-                      <div className="muted small">{ago(d.lastSeenAt)}</div>
                     </td>
                     <td className="hide-sm">{d.loggedUser ? <span className="mono">{d.loggedUser}</span> : <span className="muted small">—</span>}</td>
                     <td className="hide-sm">
@@ -284,7 +300,7 @@ export function DevicesTable({
                             {d.network.ip ?? ""}
                             {d.network.type === "wifi" && d.network.rssi !== null ? ` · ${d.network.rssi} dBm` : ""}
                           </div>
-                          {d.network.mac && <div className="muted small mono">MAC {d.network.mac}</div>}
+                          {d.network.mac && <div className="muted small mono">{d.network.mac}</div>}
                         </>
                       ) : (
                         <span className="muted">—</span>
@@ -325,6 +341,7 @@ export function DevicesTable({
           </table>
         </div>
       )}
+      </div>
     </div>
   );
 }

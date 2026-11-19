@@ -68,7 +68,7 @@ export function OpsBoard({ initial, initialServerTime }: { initial: OpsCard[]; i
           )}
         </div>
         <div className="ops-tools">
-          <label className="inline small">
+          <label className="check-label small">
             <input type="checkbox" checked={onlyLogged} onChange={(e) => setOnlyLogged(e.target.checked)} />
             só com colaborador
           </label>

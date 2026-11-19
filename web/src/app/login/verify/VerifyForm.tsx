@@ -103,7 +103,7 @@ export function VerifyForm({
               : `Um código já foi enviado para ${emailHint} há pouco. Use-o ou peça outro.`;
 
   const trustBox = (
-    <label className="inline">
+    <label className="check-label">
       <input type="checkbox" name="trust" checked={trust} onChange={(e) => setTrust(e.target.checked)} />
       Confiar neste navegador por {trustDays} dias (não pedir o código aqui)
     </label>

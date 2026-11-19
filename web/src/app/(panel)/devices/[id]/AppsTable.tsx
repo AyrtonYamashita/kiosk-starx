@@ -18,7 +18,7 @@ export function AppsTable({ apps }: { apps: DeviceDetail["apps"] }) {
     <>
       <div className="row">
         <input placeholder="Buscar app ou pacote" value={query} onChange={(e) => setQuery(e.target.value)} style={{ maxWidth: 320 }} />
-        <label className="inline">
+        <label className="check-label">
           <input type="checkbox" checked={showSystem} onChange={(e) => setShowSystem(e.target.checked)} /> mostrar apps do sistema
         </label>
         <span className="muted small">{filtered.length} exibidos</span>

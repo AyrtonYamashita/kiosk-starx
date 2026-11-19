@@ -14,17 +14,13 @@ export default async function DevicesPage() {
     api<OpsSettings>("/v1/admin/ops/settings"),
     api<Me>("/v1/admin/me"),
   ]);
-  const online = devices.filter((d) => d.online).length;
   return (
     <div className="stack wide">
       <AutoRefresh seconds={15} />
       <div className="row">
         <h1 style={{ margin: 0 }}>Aparelhos</h1>
-        <span className="badge ok">
-          <span className="dot" /> {online} online
-        </span>
-        <span className="badge off">{devices.length - online} offline</span>
         <span className="spacer" />
+        <ReaderAll settings={settings} canEdit={me.role === "admin"} />
         <Link href="/enroll" className="button">
           + Cadastrar aparelho
         </Link>
@@ -38,7 +34,6 @@ export default async function DevicesPage() {
       ) : (
         <DevicesTable devices={devices} profiles={profiles.map((p) => ({ id: p.id, name: p.name }))} repo={repo.map((a) => ({ packageName: a.packageName, label: a.label }))} />
       )}
-      <ReaderAll settings={settings} canEdit={me.role === "admin"} />
     </div>
   );
 }

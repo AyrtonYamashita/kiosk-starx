@@ -19,7 +19,7 @@ export function QrGenerator({ id }: { id: string }) {
             <input name="password" type="password" maxLength={128} autoComplete="new-password" />
           </label>
         </div>
-        <label className="inline small">
+        <label className="check-label small">
           <input type="checkbox" name="hidden" /> rede oculta
         </label>
         <span className="muted small">A senha do Wi-Fi entra só no QR; não fica gravada no servidor.</span>
