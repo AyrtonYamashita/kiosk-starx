@@ -258,7 +258,15 @@ pre.json { background: var(--canvas); border: 1px solid var(--line); border-radi
 a.ops-card { position: relative; display: flex; flex-direction: column; gap: 10px; min-width: 0; color: var(--ink); text-decoration: none; transition: border-color .12s ease-out; }
 a.ops-card:hover { border-color: var(--blue-edge); }
 a.ops-card:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
-.ops-card.offline { opacity: .6; }
+/* sem sinal (card) e carga encerrada (detalhe): dados em tons neutros; o selo de estado continua com cor */
+.ops-card.offline, .mono-data {
+  --good-deep: var(--mid); --bad-deep: var(--mid); --warn-deep: var(--mid); --blue: var(--faint);
+  --good: var(--faint); --bad: var(--faint); --warn: var(--faint);
+  --good-tint: var(--subtle); --bad-tint: var(--subtle); --warn-tint: var(--subtle); --blue-tint: var(--subtle);
+  --good-edge: var(--line); --bad-edge: var(--line); --warn-edge: var(--line); --blue-edge: var(--line);
+}
+.ops-card.offline { opacity: .85; }
+.ops-scan-table { max-height: 440px; overflow-y: auto; }
 .ops-pulse {
   position: absolute; inset: -1px; border-radius: inherit; pointer-events: none; opacity: 0;
   border: 2px solid var(--good); box-shadow: 0 0 0 4px color-mix(in srgb, var(--good) 22%, transparent);
@@ -305,7 +313,6 @@ a.ops-load:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; 
 .ops-tile { display: flex; flex-direction: column; justify-content: center; gap: 4px; padding: 12px 16px; min-width: 0; }
 .ops-tile-wide { grid-column: 1 / -1; }
 .ops-tile-main { font-family: var(--font-display); font-size: 22px; line-height: 28px; font-weight: 600; letter-spacing: -0.02em; white-space: nowrap; }
-.ops-detail-tabs .device-tab-panel { max-height: 440px; }
 @media (max-width: 1023.98px) { .ops-detail-top { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 640px) {
   .ops-detail-top table :is(th, td) { padding: 8px 4px; }

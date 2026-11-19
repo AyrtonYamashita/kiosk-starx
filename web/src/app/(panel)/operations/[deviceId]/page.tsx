@@ -1,13 +1,36 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Num } from "@/components/Num";
-import { UnderlineTabs } from "@/components/UnderlineTabs";
 import { ApiError, api, type OpsDetail } from "@/lib/api";
 import { CODE_KIND, END_LABEL, fmtClock, fmtDuration, fmtQty, fmtTime, SCREEN_LABEL } from "@/lib/opsFormat";
 import { Elapsed, Eta, LiveDetail, SinceClock } from "./LiveDetail";
 import { ProgressChart } from "./ProgressChart";
 
 export const dynamic = "force-dynamic";
+
+type Row = { at: string; kind: string; codes: string[]; qty: number | null; delta: number; intervalSec: number | null; counted: boolean };
+
+/**
+ * Uma linha por bipagem (o "lidos" subiu), com o código lido nela, mais os códigos que não contaram (outra carga,
+ * repetido), na hora em que apareceram. O código casa com a bipagem pela contagem de lidos no momento da leitura.
+ */
+function scanRows(d: OpsDetail): Row[] {
+  const lido = new Map<number, string[]>();
+  for (const c of d.codes ?? []) {
+    if (c.kind !== "lido" || c.readQty === null) continue;
+    lido.set(c.readQty, [...(lido.get(c.readQty) ?? []), c.code]);
+  }
+  const rows: Row[] = d.scans.map((s) => {
+    const codes: string[] = [];
+    for (let q = s.qty - Math.max(1, s.delta) + 1; q <= s.qty; q++) codes.push(...(lido.get(q) ?? []));
+    return { at: s.at, kind: "lido", codes, qty: s.qty, delta: s.delta, intervalSec: s.intervalSec, counted: true };
+  });
+  for (const c of d.codes ?? []) {
+    if (c.kind === "lido") continue;
+    rows.push({ at: c.at, kind: c.kind, codes: [c.code], qty: c.readQty, delta: 0, intervalSec: null, counted: false });
+  }
+  return rows.sort((a, b) => b.at.localeCompare(a.at));
+}
 
 export default async function OpsDetailPage({ params, searchParams }: { params: Promise<{ deviceId: string }>; searchParams: Promise<{ op?: string }> }) {
   const { deviceId } = await params;
@@ -23,6 +46,7 @@ export default async function OpsDetailPage({ params, searchParams }: { params: 
   const open = !!op && !op.endedAt;
   const user = op?.user ?? d.card?.user ?? null;
   const pct = op && op.total.qty > 0 ? Math.min(100, (op.read.qty / op.total.qty) * 100) : 0;
+  const rows = scanRows(d);
 
   return (
     <div className="stack wide ops-detail">
@@ -98,7 +122,7 @@ export default async function OpsDetailPage({ params, searchParams }: { params: 
         </div>
       ) : (
         <>
-          <div className="ops-detail-top">
+          <div className={`ops-detail-top${open ? "" : " mono-data"}`}>
             <section className="card stack">
               <div className="row" style={{ justifyContent: "space-between" }}>
                 <h2>Carga</h2>
@@ -187,90 +211,67 @@ export default async function OpsDetailPage({ params, searchParams }: { params: 
           </div>
 
           {d.scans.length > 0 && (
-            <section className="card stack">
+            <section className={`card stack${open ? "" : " mono-data"}`}>
               <h2>Progresso da carga</h2>
               <ProgressChart scans={d.scans} total={op.total.qty} startedAt={op.startedAt} endAt={op.endedAt ? new Date(op.endedAt).getTime() : d.serverTime} />
             </section>
           )}
 
-          <section className="card ops-detail-tabs">
-            <UnderlineTabs
-              label="Detalhes da carga"
-              tabs={[
-                {
-                  value: "bipagens",
-                  label: `Bipagens (${fmtQty(d.scans.length)})`,
-                  content:
-                    d.scans.length === 0 ? (
-                      <span className="muted small">Nenhuma bipagem ainda.</span>
-                    ) : (
-                      <table>
-                        <thead>
-                          <tr>
-                            <th>Hora</th>
-                            <th style={{ textAlign: "right" }}>Lidos</th>
-                            <th style={{ textAlign: "right" }}>Intervalo</th>
-                          </tr>
-                        </thead>
-                        <tbody className="mono">
-                          {d.scans.map((s) => (
-                            <tr key={s.at}>
-                              <td>{fmtClock(s.at)}</td>
-                              <td style={{ textAlign: "right" }}>
-                                {fmtQty(s.qty)}
-                                {s.delta > 1 && <span className="muted"> (+{s.delta})</span>}
-                              </td>
-                              <td style={{ textAlign: "right" }}>{s.intervalSec === null ? "—" : `${s.intervalSec.toLocaleString("pt-BR")} s`}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    ),
-                },
-                {
-                  value: "codigos",
-                  label: `Códigos (${fmtQty(d.codes?.length ?? 0)})`,
-                  content: !d.codes?.length ? (
-                    <span className="muted small">
-                      Nenhum código registrado nesta carga. Para achar um código em qualquer carga, use a{" "}
-                      <Link href="/operations/codigo">consulta por código de barras</Link>.
-                    </span>
-                  ) : (
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Hora</th>
-                          <th>Código</th>
-                          <th>Tipo</th>
-                          <th style={{ textAlign: "right" }}>Lidos</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {d.codes.map((c, i) => {
-                          const [cls, label] = CODE_KIND[c.kind] ?? ["off", c.kind];
-                          return (
-                            <tr key={`${c.at}-${i}`}>
-                              <td className="mono">{fmtClock(c.at)}</td>
-                              <td className="mono">
-                                <Link href={`/operations/codigo?code=${encodeURIComponent(c.code)}`}>{c.code}</Link>
-                              </td>
-                              <td>
-                                <span className={`badge ${cls}`}>
-                                  <span className="dot" /> {label}
+          <section className="card stack">
+            <h2>
+              Bipagens (<Num value={rows.filter((r) => r.counted).length} />)
+            </h2>
+            {rows.length === 0 ? (
+              <span className="muted small">Nenhuma bipagem ainda.</span>
+            ) : (
+              <div className="table-wrap ops-scan-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Hora</th>
+                      <th>Código</th>
+                      <th>Tipo</th>
+                      <th style={{ textAlign: "right" }}>Lidos</th>
+                      <th style={{ textAlign: "right" }}>Intervalo</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((r, i) => {
+                      const [cls, label] = CODE_KIND[r.kind] ?? ["off", r.kind];
+                      return (
+                        <tr key={`${r.at}-${i}`}>
+                          <td className="mono">{fmtClock(r.at)}</td>
+                          <td className="mono">
+                            {r.codes.length ? (
+                              r.codes.map((c, k) => (
+                                <span key={c}>
+                                  {k > 0 && ", "}
+                                  <Link href={`/operations/codigo?code=${encodeURIComponent(c)}`}>{c}</Link>
                                 </span>
-                              </td>
-                              <td className="mono" style={{ textAlign: "right" }}>
-                                {c.readQty === null ? "—" : fmtQty(c.readQty)}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  ),
-                },
-              ]}
-            />
+                              ))
+                            ) : (
+                              <span className="muted">—</span>
+                            )}
+                          </td>
+                          <td>
+                            <span className={`badge ${cls}`}>
+                              <span className="dot" /> {label}
+                            </span>
+                          </td>
+                          <td className="mono" style={{ textAlign: "right" }}>
+                            {r.qty === null ? "—" : fmtQty(r.qty)}
+                            {r.delta > 1 && <span className="muted"> (+{r.delta})</span>}
+                          </td>
+                          <td className="mono" style={{ textAlign: "right" }}>
+                            {r.intervalSec === null ? "—" : `${r.intervalSec.toLocaleString("pt-BR")} s`}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </section>
         </>
       )}
