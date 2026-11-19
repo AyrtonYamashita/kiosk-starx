@@ -1,0 +1,169 @@
+/*
+  Starx Kiosk — tokens do brand (claro e escuro).
+  Mantém os NOMES de variável que o painel já usa (--ink, --mid, --soft, --line, --canvas, --surface, --blue...),
+  então o CSS existente continua funcionando; só os valores mudam. Nada de cor literal fora deste arquivo.
+  Modo escuro por classe `.dark` no <html> (next-themes, attribute="class", defaultTheme="system").
+*/
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  color-scheme: light;
+
+  /* neutros (azul-ardósia) */
+  --canvas: #F8FAFC;
+  --surface: #FFFFFF;
+  --subtle: #F1F5F9;
+  --line: #E2E8F0;
+  --rule: #EDF1F6;
+  --muted: #CBD5E1;   /* só decorativo */
+  --faint: #94A3B8;   /* só decorativo, nunca texto */
+  --soft: #5B6B80;    /* rótulos: 5,4:1 sobre branco */
+  --mid: #334155;
+  --ink: #0A1A2F;
+  --on-ink: #FFFFFF;
+
+  /* marca (azul de ação) */
+  --blue: #1560D4;
+  --on-blue: #FFFFFF;
+  --blue-deep: #0F4DB0;   /* texto e links em azul */
+  --blue-press: #0F4DB0;
+  --blue-soft: #5B9BF5;
+  --blue-tint: #EEF4FD;
+  --blue-edge: #DCE9FC;
+
+  /* estado: sempre ponto + texto, nunca só cor */
+  --good: #15803D; --good-deep: #15803D; --good-tint: #ECFDF3; --good-edge: #BBF7D0;
+  --warn: #B45309; --warn-deep: #B45309; --warn-tint: #FFF7E6; --warn-edge: #FDE68A;
+  --bad:  #B91C1C; --bad-deep:  #B91C1C; --bad-tint:  #FEF1F1; --bad-edge:  #FECACA;
+
+  /* vidro sobre o Bubble */
+  --glass: rgb(255 255 255 / 0.74);
+  --glass-border: rgb(10 26 47 / 0.08);
+  --glass-head: rgb(241 245 249 / 0.85);
+  --glass-blur: 18px;
+
+  /* base do Bubble (gradiente) */
+  --bubble-from: #F3F7FD;
+  --bubble-to: #DCE9FC;
+
+  /* raios (maiores que os antigos: 10/8 → 16/12) */
+  --radius-bar: 2px;
+  --radius-chip: 6px;
+  --radius-nav: 10px;
+  --radius-field: 12px;
+  --radius-card: 16px;
+  --radius-pill: 20px;
+  --radius-glass: 28px; /* cards de vidro e menu lateral na página do dispositivo */
+  --glass-pad: 16px;
+
+  --control: 44px;       /* alvo de toque mínimo */
+  --sidebar: 232px;
+
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+  --font-display: var(--font-space-grotesk), var(--font-inter), system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace; /* serial, IP, pacote, versão, hora */
+
+  --shadow-float: 0 6px 20px rgb(10 26 47 / 0.16); /* só Toast, Modal e Drawer */
+}
+
+.dark {
+  color-scheme: dark;
+
+  --canvas: #050B14;
+  --surface: #0E1A2B;
+  --subtle: #14243A;
+  --line: #1E3350;
+  --rule: #182B45;
+  --muted: #2A4466;
+  --faint: #5F7592;
+  --soft: #93A4BA;
+  --mid: #B3C2D6;
+  --ink: #E8EEF7;
+  --on-ink: #070E1A;
+
+  --blue: #5B9BF5;
+  --on-blue: #071326;
+  --blue-deep: #8DBBFA;
+  --blue-press: #7FB1F8;
+  --blue-soft: #5B9BF5;
+  --blue-tint: #12294A;
+  --blue-edge: #1E3F6E;
+
+  --good: #4ADE80; --good-deep: #4ADE80; --good-tint: #0D2A1A; --good-edge: #1A5232;
+  --warn: #FBBF24; --warn-deep: #FBBF24; --warn-tint: #2B1F0A; --warn-edge: #5C420F;
+  --bad:  #F87171; --bad-deep:  #F87171; --bad-tint:  #2D1313; --bad-edge:  #6B2424;
+
+  --glass: rgb(14 26 43 / 0.72);
+  --glass-border: rgb(147 164 186 / 0.16);
+  --glass-head: rgb(20 36 58 / 0.85);
+
+  --bubble-from: #04080F;
+  --bubble-to: #070F1D;
+
+  --shadow-float: 0 6px 20px rgb(0 0 0 / 0.55);
+}
+
+/* Tailwind v4: expõe os tokens como utilitários (bg-surface, text-soft, border-line, bg-blue, rounded-card...) */
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-subtle: var(--subtle);
+  --color-line: var(--line);
+  --color-rule: var(--rule);
+  --color-soft: var(--soft);
+  --color-mid: var(--mid);
+  --color-ink: var(--ink);
+  --color-blue: var(--blue);
+  --color-on-blue: var(--on-blue);
+  --color-blue-deep: var(--blue-deep);
+  --color-blue-tint: var(--blue-tint);
+  --color-blue-edge: var(--blue-edge);
+  --color-good: var(--good);   --color-good-tint: var(--good-tint);
+  --color-warn: var(--warn);   --color-warn-tint: var(--warn-tint);
+  --color-bad: var(--bad);     --color-bad-tint: var(--bad-tint);
+  --color-glass: var(--glass);
+  --color-glass-border: var(--glass-border);
+  --radius-chip: var(--radius-chip);
+  --radius-nav: var(--radius-nav);
+  --radius-field: var(--radius-field);
+  --radius-card: var(--radius-card);
+  --radius-pill: var(--radius-pill);
+  --font-sans: var(--font-sans);
+  --font-display: var(--font-display);
+  --font-mono: var(--font-mono);
+}
+
+/* Vidro: cartões e menu sobre o Bubble */
+.glass {
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+}
+
+/* Vidro líquido (refração) — página do dispositivo, cards sobre o mapa.
+   Precisa do <LiquidGlassDefs /> uma vez na página. Chromium aplica a refração (filtro SVG no backdrop-filter);
+   Safari e Firefox ignoram essa linha e ficam com o vidro fosco (blur + saturação). */
+:root {
+  --lg-bg: rgb(255 255 255 / 0.62);
+  --lg-border: rgb(10 26 47 / 0.10);
+  --lg-hi: rgb(255 255 255 / 0.95);
+  --lg-hi2: rgb(255 255 255 / 0.70);
+}
+.dark {
+  --lg-bg: rgb(8 16 30 / 0.60);
+  --lg-border: rgb(190 210 240 / 0.14);
+  --lg-hi: rgb(255 255 255 / 0.20);
+  --lg-hi2: rgb(255 255 255 / 0.07);
+}
+.liquid-glass {
+  background: var(--lg-bg);
+  border: 1px solid var(--lg-border);
+  /* Raios concêntricos: raio interno = raio externo − padding. 28 − 16 = 12 (controles internos = --radius-field). */
+  border-radius: var(--radius-glass);
+  padding: var(--glass-pad);
+  box-shadow: inset 0 1px 0 var(--lg-hi), inset 0 -18px 30px -20px var(--lg-hi2);
+  -webkit-backdrop-filter: blur(16px) saturate(1.5);
+  backdrop-filter: blur(16px) saturate(1.5);
+  backdrop-filter: url(#liquid-glass) blur(16px) saturate(1.5);
+}

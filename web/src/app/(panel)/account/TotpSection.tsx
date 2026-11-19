@@ -62,7 +62,7 @@ export function TotpSection({ enabled, since }: { enabled: boolean; since: strin
         </span>
         <div
           aria-label="QR Code do app autenticador"
-          style={{ width: 184, height: 184, background: "#fff", borderRadius: 8, padding: 4 }}
+          style={{ width: 184, height: 184, background: "var(--qr-bg)", borderRadius: "var(--radius-field)", padding: 4 }}
           // SVG gerado no servidor pela biblioteca qrcode a partir do otpauth:// da API
           dangerouslySetInnerHTML={{ __html: setup.svg }}
         />

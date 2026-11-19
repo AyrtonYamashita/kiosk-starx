@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Espelho dos tokens do brand (modo claro). Os valores escuros vão em values-night/ se algum dia as telas de configuração ganharem tema escuro. -->
+<resources>
+    <color name="starx_blue">#1560D4</color>
+    <color name="starx_blue_deep">#0F4DB0</color>
+    <color name="starx_blue_soft">#5B9BF5</color>
+    <color name="starx_blue_tint">#EEF4FD</color>
+    <color name="starx_blue_edge">#DCE9FC</color>
+    <color name="starx_ink">#0A1A2F</color>
+    <color name="starx_mid">#334155</color>
+    <color name="starx_soft">#5B6B80</color>
+    <color name="starx_line">#E2E8F0</color>
+    <color name="starx_subtle">#F1F5F9</color>
+    <color name="starx_canvas">#F8FAFC</color>
+    <color name="starx_surface">#FFFFFF</color>
+    <!-- superfícies escuras (tela do kiosk, rodapé) -->
+    <color name="starx_night">#070E1A</color>
+    <color name="starx_night_surface">#0E1A2B</color>
+    <color name="starx_night_ink">#E8EEF7</color>
+    <color name="starx_night_soft">#93A4BA</color>
+</resources>

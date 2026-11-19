@@ -22,7 +22,7 @@ const DEFAULTS: Cfg = {
     orientation: "auto",
     showStatusBar: false,
   },
-  appearance: { title: "", backgroundColor: "#001425", textColor: "#FFFFFF", columns: 4 },
+  appearance: { title: "", backgroundColor: "#070E1A", textColor: "#FFFFFF", columns: 4 },
   security: {
     exitCorner: "bottom_right",
     exitTaps: 5,
