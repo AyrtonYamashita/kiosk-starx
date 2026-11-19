@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { memo, useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { AnimateIcon } from "@animate-ui/react/icons";
 import { ScanBarcode } from "@/components/animate-ui/icons/scan-barcode";
 import { Num } from "@/components/Num";
@@ -96,6 +96,24 @@ export function OpsBoard({ initial, initialServerTime }: { initial: OpsCard[]; i
   );
 }
 
+/**
+ * Pulso na borda do card a cada bipagem ("lidos" subiu na mesma carga). Só opacidade, pela Web Animations API:
+ * não anima na abertura da página nem quando a carga troca.
+ */
+function useScanPulse(key: string | null, read: number | null) {
+  const el = useRef<HTMLSpanElement>(null);
+  const prev = useRef<{ key: string | null; read: number | null }>({ key, read });
+  useEffect(() => {
+    const p = prev.current;
+    const sameOp = key !== null && p.key !== null && key.split(":")[0] === p.key.split(":")[0];
+    if (sameOp && read !== null && p.read !== null && read > p.read) {
+      el.current?.animate([{ opacity: 0 }, { opacity: 1, offset: 0.15 }, { opacity: 0 }], { duration: 1100, easing: "ease-out" });
+    }
+    prev.current = { key, read };
+  }, [key, read]);
+  return el;
+}
+
 /** "sem sinal há X" e o estado do card: redesenha só quando o texto muda. */
 function useOffline(lastSeenAt: string | null, serverNow: number) {
   return useClockValue((now) => (isOffline(lastSeenAt, now) ? fmtAgo(lastSeenAt, now) : null), serverNow);
@@ -121,9 +139,11 @@ const OpsCardView = memo(function OpsCardView({ c, serverNow }: { c: OpsCard; se
   const offlineFor = useOffline(c.lastSeenAt, serverNow);
   const op = c.operation;
   const pct = op && op.total.qty > 0 ? Math.min(100, (op.read.qty / op.total.qty) * 100) : 0;
+  const pulse = useScanPulse(op ? `${op.id}:${op.read.qty}` : null, op?.read.qty ?? null);
 
   return (
     <Link href={`/operations/${c.deviceId}`} className={`card ops-card${offlineFor ? " offline" : ""}`}>
+      <span ref={pulse} className="ops-pulse" aria-hidden />
       <div className="ops-card-head">
         <strong className="ops-user">{c.user ?? "Ninguém logado"}</strong>
         {offlineFor ? (

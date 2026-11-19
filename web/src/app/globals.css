@@ -255,10 +255,14 @@ pre.json { background: var(--canvas); border: 1px solid var(--line); border-radi
 .ops-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
 .ops-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
 .ops-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); }
-a.ops-card { display: flex; flex-direction: column; gap: 10px; min-width: 0; color: var(--ink); text-decoration: none; transition: border-color .12s ease-out; }
+a.ops-card { position: relative; display: flex; flex-direction: column; gap: 10px; min-width: 0; color: var(--ink); text-decoration: none; transition: border-color .12s ease-out; }
 a.ops-card:hover { border-color: var(--blue-edge); }
 a.ops-card:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 .ops-card.offline { opacity: .6; }
+.ops-pulse {
+  position: absolute; inset: -1px; border-radius: inherit; pointer-events: none; opacity: 0;
+  border: 2px solid var(--good); box-shadow: 0 0 0 4px color-mix(in srgb, var(--good) 22%, transparent);
+}
 .ops-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
 .ops-user { font-family: var(--font-display); font-size: 15px; font-weight: 600; letter-spacing: -0.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .ops-fn { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 12.5px; color: var(--mid); }
