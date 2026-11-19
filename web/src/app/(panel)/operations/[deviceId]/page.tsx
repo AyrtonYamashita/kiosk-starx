@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { ApiError, api, type OpsDetail } from "@/lib/api";
-import { CODE_KIND, END_LABEL, fmtClock, fmtDuration, fmtKg, fmtMoney, fmtQty, fmtTime, SCREEN_LABEL } from "@/lib/opsFormat";
+import { CODE_KIND, END_LABEL, fmtClock, fmtDuration, fmtQty, fmtTime, SCREEN_LABEL } from "@/lib/opsFormat";
 import { notFound } from "next/navigation";
+import { Num } from "@/components/Num";
 import { Elapsed, LiveDetail } from "./LiveDetail";
 
 export const dynamic = "force-dynamic";
 
-/** Acompanhamento completo de um coletor: a carga atual (ou outra de hoje, ?op=), bipagens e cargas do dia. */
 export default async function OpsDetailPage({ params, searchParams }: { params: Promise<{ deviceId: string }>; searchParams: Promise<{ op?: string }> }) {
   const { deviceId } = await params;
   const { op: opId } = await searchParams;
@@ -65,7 +65,10 @@ export default async function OpsDetailPage({ params, searchParams }: { params: 
 
           <div className="grid" style={{ alignItems: "start" }}>
             <section className="card stack">
-              <h2>Carga</h2>
+              <div className="row" style={{ justifyContent: "space-between" }}>
+                <h2>Carga</h2>
+                <Num value={Math.round(pct)} suffix="%" className="ops-pct" />
+              </div>
               <div className="ops-bar" role="progressbar" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100} aria-label="volumes lidos">
                 <span style={{ width: `${pct}%` }} />
               </div>
@@ -82,21 +85,21 @@ export default async function OpsDetailPage({ params, searchParams }: { params: 
                   <tbody className="mono">
                     <tr>
                       <td className="sans">Volumes</td>
-                      <td style={{ textAlign: "right" }}>{fmtQty(op.total.qty)}</td>
-                      <td style={{ textAlign: "right" }} className="good">{fmtQty(op.read.qty)}</td>
-                      <td style={{ textAlign: "right" }} className={op.missing.qty ? "bad" : ""}>{fmtQty(op.missing.qty)}</td>
+                      <td style={{ textAlign: "right" }}><Num value={op.total.qty} /></td>
+                      <td style={{ textAlign: "right" }} className="good"><Num value={op.read.qty} /></td>
+                      <td style={{ textAlign: "right" }} className={op.missing.qty ? "bad" : ""}><Num value={op.missing.qty} /></td>
                     </tr>
                     <tr>
                       <td className="sans">Peso</td>
-                      <td style={{ textAlign: "right" }}>{fmtKg(op.total.kg)}</td>
-                      <td style={{ textAlign: "right" }} className="good">{fmtKg(op.read.kg)}</td>
-                      <td style={{ textAlign: "right" }} className={op.missing.kg ? "bad" : ""}>{fmtKg(op.missing.kg)}</td>
+                      <td style={{ textAlign: "right" }}><Num value={op.total.kg} decimals={1} suffix=" kg" /></td>
+                      <td style={{ textAlign: "right" }} className="good"><Num value={op.read.kg} decimals={1} suffix=" kg" /></td>
+                      <td style={{ textAlign: "right" }} className={op.missing.kg ? "bad" : ""}><Num value={op.missing.kg} decimals={1} suffix=" kg" /></td>
                     </tr>
                     <tr>
                       <td className="sans">Valor</td>
-                      <td style={{ textAlign: "right" }}>{fmtMoney(op.total.value)}</td>
-                      <td style={{ textAlign: "right" }} className="good">{fmtMoney(op.read.value)}</td>
-                      <td style={{ textAlign: "right" }} className={op.missing.value ? "bad" : ""}>{fmtMoney(op.missing.value)}</td>
+                      <td style={{ textAlign: "right" }}><Num value={op.total.value} decimals={2} prefix="R$ " /></td>
+                      <td style={{ textAlign: "right" }} className="good"><Num value={op.read.value} decimals={2} prefix="R$ " /></td>
+                      <td style={{ textAlign: "right" }} className={op.missing.value ? "bad" : ""}><Num value={op.missing.value} decimals={2} prefix="R$ " /></td>
                     </tr>
                   </tbody>
                 </table>
@@ -117,10 +120,10 @@ export default async function OpsDetailPage({ params, searchParams }: { params: 
                   <span className="muted"> · desde {fmtTime(op.startedAt)}</span>
                 </dd>
                 <dt>Tempo médio por volume</dt>
-                <dd className="mono">{op.avgSecPerVolume !== null ? `${op.avgSecPerVolume.toLocaleString("pt-BR")} s` : "—"}</dd>
+                <dd className="mono">{op.avgSecPerVolume !== null ? <Num value={op.avgSecPerVolume} decimals={1} suffix=" s" /> : "—"}</dd>
                 <dt>Volumes bipados</dt>
                 <dd className="mono">
-                  {fmtQty(op.scans)}
+                  <Num value={op.scans} />
                   <span className="muted"> · último às {fmtClock(op.lastScanAt)}</span>
                 </dd>
                 <dt>Estimativa de término</dt>
@@ -136,7 +139,9 @@ export default async function OpsDetailPage({ params, searchParams }: { params: 
 
           <div className="grid" style={{ alignItems: "start" }}>
             <section className="card stack">
-              <h2>Bipagens ({fmtQty(d.scans.length)})</h2>
+              <h2>
+                Bipagens (<Num value={d.scans.length} />)
+              </h2>
               {d.scans.length === 0 ? (
                 <span className="muted small">Nenhuma bipagem ainda.</span>
               ) : (
@@ -203,9 +208,13 @@ export default async function OpsDetailPage({ params, searchParams }: { params: 
                           </td>
                           <td>
                             {o.endedAt ? (
-                              <span className={`badge ${o.endReason === "concluded" ? "ok" : "off"}`}>{END_LABEL[o.endReason ?? ""] ?? "encerrada"}</span>
+                              <span className={`badge ${o.endReason === "concluded" ? "ok" : "off"}`}>
+                                <span className="dot" /> {END_LABEL[o.endReason ?? ""] ?? "encerrada"}
+                              </span>
                             ) : (
-                              <span className="badge blue">em andamento</span>
+                              <span className="badge blue">
+                                <span className="dot" /> em andamento
+                              </span>
                             )}
                           </td>
                         </tr>
@@ -218,7 +227,9 @@ export default async function OpsDetailPage({ params, searchParams }: { params: 
           </div>
 
             <section className="card stack">
-              <h2>Códigos bipados ({fmtQty(d.codes?.length ?? 0)})</h2>
+              <h2>
+                Códigos bipados (<Num value={d.codes?.length ?? 0} />)
+              </h2>
               {!d.codes?.length ? (
                 <span className="muted small">
                   Nenhum código registrado nesta carga. Os códigos aparecem a partir do app 0.5.2 e ficam guardados por 1 ano; para achar um
@@ -245,7 +256,9 @@ export default async function OpsDetailPage({ params, searchParams }: { params: 
                               <Link href={`/operations/codigo?code=${encodeURIComponent(c.code)}`}>{c.code}</Link>
                             </td>
                             <td>
-                              <span className={`badge ${cls}`}>{label}</span>
+                              <span className={`badge ${cls}`}>
+                                <span className="dot" /> {label}
+                              </span>
                             </td>
                             <td className="mono" style={{ textAlign: "right" }}>
                               {c.readQty === null ? "—" : fmtQty(c.readQty)}

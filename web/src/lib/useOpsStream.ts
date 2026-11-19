@@ -75,23 +75,3 @@ export function useOpsStream(handlers: { snapshot?: (cards: OpsCard[]) => void; 
 
   return { status, offsetMs };
 }
-
-/**
- * Relógio (hora do servidor) que atualiza a cada segundo (tempos "há X s", offline). Começa em `initial` — a hora que
- * o servidor usou para montar a página — para o HTML do servidor e o do navegador baterem.
- */
-export function useNow(initial: number, offsetMs: number | null, everyMs = 1000) {
-  const [now, setNow] = useState(initial);
-  const [initOffset] = useState(() => initial - Date.now());
-  const off = offsetMs ?? initOffset;
-  useEffect(() => {
-    const tick = () => setNow(Date.now() + off);
-    const first = setTimeout(tick, 0);
-    const t = setInterval(tick, everyMs);
-    return () => {
-      clearTimeout(first);
-      clearInterval(t);
-    };
-  }, [off, everyMs]);
-  return now;
-}

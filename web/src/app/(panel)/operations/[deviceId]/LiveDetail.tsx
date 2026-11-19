@@ -3,7 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useRef } from "react";
 import { fmtDuration } from "@/lib/opsFormat";
-import { useNow, useOpsStream } from "@/lib/useOpsStream";
+import { useClockValue } from "@/lib/clock";
+import { useOpsStream } from "@/lib/useOpsStream";
 
 /** Mantém o detalhe ao vivo: quando o card deste coletor muda, relê a página (no máximo 1×/s). */
 export function LiveDetail({ deviceId }: { deviceId: string }) {
@@ -36,6 +37,5 @@ export function LiveDetail({ deviceId }: { deviceId: string }) {
 
 /** Tempo correndo desde `since` (ex.: duração da carga aberta). */
 export function Elapsed({ since, serverTime, extraSec = 0 }: { since: string; serverTime: number; extraSec?: number }) {
-  const now = useNow(serverTime, null);
-  return <>{fmtDuration((now - new Date(since).getTime()) / 1000 + extraSec)}</>;
+  return <>{useClockValue((now) => fmtDuration((now - new Date(since).getTime()) / 1000 + extraSec), serverTime)}</>;
 }
