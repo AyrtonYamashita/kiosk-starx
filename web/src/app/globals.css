@@ -110,6 +110,8 @@ button:not(:disabled), [role='button'] { cursor: pointer; }
 
 /* fundo Bubble: intensidade das bolhas pelo token (o gradiente de base fica inteiro) */
 .starx-bg > div[aria-hidden] { opacity: var(--bubble-opacity); }
+/* com o mapa de fundo (página do dispositivo) as bolhas ficam escondidas atrás dele: nem desenha nem anima */
+body:has(.device-page.has-map) .starx-bg { display: none; }
 
 /* vidro: só o menu e a barra de abas desfocam o fundo; os cartões são quase opacos (sem backdrop-filter, que
    refaz o desfoque a cada quadro com o fundo animado atrás) */

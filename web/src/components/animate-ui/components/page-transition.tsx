@@ -3,7 +3,8 @@
 import * as React from 'react';
 import { usePathname } from 'next/navigation';
 import type { TargetAndTransition } from 'motion/react';
-import { AnimateView } from 'motion/react-animate-view';
+import { AnimateView as MotionAnimateView } from 'motion/react-animate-view';
+import { AnimateView } from '@/components/animate-ui/components/animate-view';
 
 import {
   blur,
@@ -476,7 +477,7 @@ function PageTransitionShared({
   });
 
   return (
-    <AnimateView
+    <MotionAnimateView
       name={name}
       transition={SHARE}
       onAnimationStart={(_, type) => {
@@ -497,7 +498,7 @@ function PageTransitionShared({
           ...props.style,
         }}
       />
-    </AnimateView>
+    </MotionAnimateView>
   );
 }
 
