@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ApiError, api, type OpsDetail } from "@/lib/api";
-import { END_LABEL, fmtClock, fmtDuration, fmtKg, fmtMoney, fmtQty, fmtTime, SCREEN_LABEL } from "@/lib/opsFormat";
+import { CODE_KIND, END_LABEL, fmtClock, fmtDuration, fmtKg, fmtMoney, fmtQty, fmtTime, SCREEN_LABEL } from "@/lib/opsFormat";
 import { notFound } from "next/navigation";
 import { Elapsed, LiveDetail } from "./LiveDetail";
 
@@ -216,6 +216,48 @@ export default async function OpsDetailPage({ params, searchParams }: { params: 
               )}
             </section>
           </div>
+
+            <section className="card stack">
+              <h2>Códigos bipados ({fmtQty(d.codes?.length ?? 0)})</h2>
+              {!d.codes?.length ? (
+                <span className="muted small">
+                  Nenhum código registrado nesta carga. Os códigos aparecem a partir do app 0.5.2 e ficam guardados por 1 ano; para achar um
+                  código em qualquer carga, use a <Link href="/operations/codigo">consulta por código de barras</Link>.
+                </span>
+              ) : (
+                <div className="table-wrap" style={{ maxHeight: 360, overflowY: "auto" }}>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Hora</th>
+                        <th>Código</th>
+                        <th>Tipo</th>
+                        <th style={{ textAlign: "right" }}>Lidos</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {d.codes.map((c, i) => {
+                        const [cls, label] = CODE_KIND[c.kind] ?? ["off", c.kind];
+                        return (
+                          <tr key={`${c.at}-${i}`}>
+                            <td className="mono">{fmtClock(c.at)}</td>
+                            <td className="mono">
+                              <Link href={`/operations/codigo?code=${encodeURIComponent(c.code)}`}>{c.code}</Link>
+                            </td>
+                            <td>
+                              <span className={`badge ${cls}`}>{label}</span>
+                            </td>
+                            <td className="mono" style={{ textAlign: "right" }}>
+                              {c.readQty === null ? "—" : fmtQty(c.readQty)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
         </>
       )}
     </div>

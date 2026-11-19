@@ -44,6 +44,8 @@ export interface Config {
   /** Leitura do SSW: dias que os eventos brutos ficam guardados (as cargas ficam para sempre) e os sinais de vida. */
   opsRetentionDays: number;
   opsHeartbeatRetentionDays: number;
+  /** Códigos de barras bipados: dias guardados (padrão 365). */
+  opsScanRetentionDays: number;
   /** Atrás do Caddy: usa X-Forwarded-For para o IP do aparelho. */
   trustProxy: boolean;
   logLevel: string;
@@ -105,6 +107,7 @@ export function loadConfig(): Config {
       .filter(Boolean),
     opsRetentionDays: days("OPS_RETENTION_DAYS", 90),
     opsHeartbeatRetentionDays: days("OPS_HEARTBEAT_RETENTION_DAYS", 7),
+    opsScanRetentionDays: days("OPS_SCAN_RETENTION_DAYS", 365),
     trustProxy: (process.env.TRUST_PROXY ?? "true") === "true",
     logLevel: process.env.LOG_LEVEL ?? "info",
   };

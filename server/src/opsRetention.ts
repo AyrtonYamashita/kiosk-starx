@@ -62,6 +62,8 @@ function compact(points: CurvePoint[]): CurvePoint[] {
 export interface PruneOptions {
   eventDays: number;
   heartbeatDays: number;
+  /** Códigos de barras bipados (ops_scans). Padrão 365. */
+  scanDays?: number;
   /** Eventos apagados por comando (padrão 5.000). */
   batch?: number;
   /** Teto de lotes por rodada; o que sobrar sai na próxima (padrão 200 = 1 milhão de eventos). */
@@ -72,13 +74,14 @@ export interface PruneResult {
   events: number;
   heartbeats: number;
   curves: number;
+  scans: number;
 }
 
 /** Uma rodada de limpeza. */
 export async function pruneOpsEvents(db: Db, o: PruneOptions): Promise<PruneResult> {
   const batch = o.batch ?? 5_000;
   let budget = o.maxBatches ?? 200;
-  const res: PruneResult = { events: 0, heartbeats: 0, curves: 0 };
+  const res: PruneResult = { events: 0, heartbeats: 0, curves: 0, scans: 0 };
 
   // 1. sinais de vida
   while (budget-- > 0) {
@@ -122,6 +125,19 @@ export async function pruneOpsEvents(db: Db, o: PruneOptions): Promise<PruneResu
     res.events += n;
     if (n < batch) break;
   }
+
+  // 4. códigos de barras bipados
+  while (budget-- > 0) {
+    const n =
+      (
+        await db.query(
+          `DELETE FROM ops_scans WHERE id IN (SELECT id FROM ops_scans WHERE at < now() - make_interval(days => $1) LIMIT $2)`,
+          [o.scanDays ?? 365, batch],
+        )
+      ).rowCount ?? 0;
+    res.scans += n;
+    if (n < batch) break;
+  }
   return res;
 }
 
@@ -138,7 +154,7 @@ export function scheduleOpsRetention(
     running = true;
     try {
       const r = await pruneOpsEvents(db, o);
-      if (r.events || r.heartbeats || r.curves) log.info({ ...r, eventDays: o.eventDays, heartbeatDays: o.heartbeatDays }, "limpeza dos eventos do SSW");
+      if (r.events || r.heartbeats || r.curves || r.scans) log.info({ ...r, eventDays: o.eventDays, heartbeatDays: o.heartbeatDays }, "limpeza dos eventos do SSW");
     } catch (err) {
       log.error({ err }, "falha na limpeza dos eventos do SSW");
     } finally {

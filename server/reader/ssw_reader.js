@@ -5,7 +5,7 @@
 (function () {
   "use strict";
   // muda a cada versão do leitor: uma versão nova substitui a antiga já injetada na página
-  var VERSION = "2026-11-19.1";
+  var VERSION = "2026-11-19.2";
   if (window.__starxOps) {
     if (window.__starxOps.version === VERSION) {
       window.__starxOps.scan(true);
@@ -120,10 +120,67 @@
         kg: first(ptNum(input("full_cap_peso")), ptNum(text(byId("cap_peso")))),
         value: first(ptNum(input("full_cap_vlr")), ptNum(text(byId("cap_vlr")))),
       };
+      trackScan(s);
+      if (sc.done) s.extra = { scan: sc.done };
+    } else {
+      sc.key = null;
     }
     var why = problem(s, path);
     if (why) s.diag = diag(s, why);
     return s;
+  }
+
+  // ------------------------------------------------------------ códigos de barras (app 0.5.2)
+  // A tela mostra o último código lido em #last. Cada código novo vira um registro com o tipo:
+  //  "lido" (Lidos aumentou), "outra" (Outras aumentou) ou "nao_contou" (nada aumentou: repetido, erro...).
+  // O número e o código podem mudar em momentos um pouco diferentes: espera até 1,5 s para casar os dois.
+  var SCAN_WAIT_MS = 1500;
+  var sc = { key: null, code: "", read: null, out: null, incAt: 0, incKind: null, pending: null, done: null };
+  function newId() {
+    return Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+  }
+  function finish(p, kind, now, since) {
+    sc.done = { id: p.id, code: p.code, kind: kind, ageMs: Math.max(0, now - Math.min(p.at, since || p.at)) };
+    if (sc.pending === p) sc.pending = null;
+  }
+  function trackScan(s) {
+    var now = Date.now();
+    var code = cut(text(byId("last")), 80);
+    var read = s.read ? s.read.qty : null;
+    var out = intNum(text(byId("out_qtde")));
+    var key = (s.fn || "") + "|" + (s.plate || "");
+    if (sc.key !== key) {
+      // outra carga (ou voltou à tela): o código que já estava na tela não é bipagem nova
+      sc.key = key;
+      sc.code = code;
+      sc.read = read;
+      sc.out = out;
+      sc.incKind = null;
+      sc.pending = null;
+      sc.done = null;
+      return;
+    }
+    var kind = null;
+    if (read !== null && sc.read !== null && read > sc.read) kind = "lido";
+    else if (out !== null && sc.out !== null && out > sc.out) kind = "outra";
+    sc.read = read;
+    sc.out = out;
+    if (kind) {
+      if (sc.pending) finish(sc.pending, kind, now);
+      else {
+        sc.incAt = now;
+        sc.incKind = kind;
+      }
+    }
+    if (code && code !== sc.code) {
+      if (sc.pending) finish(sc.pending, "nao_contou", now);
+      sc.code = code;
+      var p = { id: newId(), code: code, at: now };
+      if (sc.incKind && now - sc.incAt <= SCAN_WAIT_MS) finish(p, sc.incKind, now, sc.incAt);
+      else sc.pending = p;
+      sc.incKind = null;
+    }
+    if (sc.pending && now - sc.pending.at > SCAN_WAIT_MS) finish(sc.pending, "nao_contou", now);
   }
 
   /** O que impede de ler a tela (null = nada): bipagem sem função/placa/total ou tela do SSW desconhecida. */

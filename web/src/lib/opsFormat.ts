@@ -40,6 +40,13 @@ export const SCREEN_LABEL: Record<string, string> = {
   outra: "em outra tela",
 };
 
+/** Tipo de um código de barras bipado: [classe do selo, texto]. */
+export const CODE_KIND: Record<string, [string, string]> = {
+  lido: ["ok", "lido"],
+  outra: ["warn", "outra carga"],
+  nao_contou: ["danger", "não contou"],
+};
+
 export const END_LABEL: Record<string, string> = {
   concluded: "concluída",
   interrupted: "interrompida",

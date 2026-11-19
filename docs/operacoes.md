@@ -39,6 +39,12 @@ A tela não mostra a hora de cada bipagem: cada aumento de "Lidos" é uma bipage
 - **Diagnóstico** (0.5.1): bipagem sem função/placa/total, ou tela do SSW desconhecida, gera um evento `diag` (uma vez
   por tela a cada 10 min) com endereço, título, ids, nomes dos campos (valor só de funcao/placa/dominio/filial) e
   rótulos. Consulta: `SELECT at, data FROM ops_events WHERE type = 'diag' ORDER BY at DESC`.
+- **Códigos de barras** (0.5.2): o leitor lê o último código mostrado na tela (`#last`) e decide o tipo: `lido`
+  ("Lidos" aumentou até 1,5 s antes ou depois), `outra` ("Outras" aumentou: volume de outra carga) ou `nao_contou`
+  (nada aumentou: repetido, erro). Vai no campo `extra.scan` do `progress`/`op_start` (`id`, `code`, `kind`, `ageMs`);
+  o app repassa `extra` sem conhecer (campos novos do leitor saem só com a API). Guardados em `ops_scans` por
+  `OPS_SCAN_RETENTION_DAYS` (padrão 365). Painel: lista na carga e consulta em `/operations/codigo` (código inteiro ou
+  começo). Limite: dois códigos em menos de ~0,1 s podem virar um só (a tela mostra só o último).
 - **Atualização do app** (0.5.1): adiada enquanto há bipagem (tela de bipagem ou carga aberta, com mudança há menos de
   15 min); instala no check-in seguinte, quando o colaborador sai da bipagem.
   Lê os campos da tabela acima, confere a cada mudança da página e a cada 500 ms (campos escondidos mudam sem gerar

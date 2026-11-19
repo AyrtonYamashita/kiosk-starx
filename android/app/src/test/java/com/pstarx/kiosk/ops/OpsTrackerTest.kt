@@ -195,6 +195,24 @@ class OpsTrackerTest {
     }
 
     @Test
+    fun `código de barras - vai junto da bipagem e também sozinho quando não contou`() {
+        fun code(c: String, kind: String) = JSONObject().put("scan", JSONObject().put("id", "s-$c").put("code", c).put("kind", kind).put("ageMs", 0))
+        t.onSnapshot(at(0.0), bip(1))
+        val ev1 = t.onSnapshot(at(3.0), bip(2).copy(extra = code("111", "lido"))).filter { it.getString("type") == "progress" }
+        assertEquals("111", ev1.single().getJSONObject("extra").getJSONObject("scan").getString("code"))
+        // código que não contou: "Lidos" igual, mas sai um progresso com o código
+        val ev2 = t.onSnapshot(at(6.0), bip(2).copy(extra = code("999", "nao_contou"))).filter { it.getString("type") == "progress" }
+        assertEquals("nao_contou", ev2.single().getJSONObject("extra").getJSONObject("scan").getString("kind"))
+        assertEquals(2.0, ev2.single().getJSONObject("read").getDouble("qty"), 0.0)
+        // o mesmo retrato de novo não repete; bipagem sem código novo não leva o extra
+        assertTrue(t.onSnapshot(at(7.0), bip(2).copy(extra = code("999", "nao_contou"))).none { it.getString("type") == "progress" })
+        val ev3 = t.onSnapshot(at(9.0), bip(3).copy(extra = code("999", "nao_contou"))).single { it.getString("type") == "progress" }
+        assertFalse(ev3.has("extra"))
+        // extra grande demais é ignorado
+        assertNull(Snapshot.parse("""{"screen":"bipagem","extra":{"x":"${"y".repeat(5000)}"}}""")!!.extra)
+    }
+
+    @Test
     fun `ocupado - na bipagem ou com carga aberta, até 15 min sem mudar a tela`() {
         assertFalse(t.busy(at(0.0)))
         t.onSnapshot(at(0.0), Snapshot("menu", user = "maria"))

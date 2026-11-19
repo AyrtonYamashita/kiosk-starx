@@ -51,6 +51,7 @@ export async function setupApi(opts: { config?: Partial<Config> } = {}) {
     panelSecret: "segredo-do-painel-de-teste",
     opsRetentionDays: 90,
     opsHeartbeatRetentionDays: 7,
+    opsScanRetentionDays: 365,
     trustProxy: false,
     logLevel: "silent",
   };

@@ -399,6 +399,31 @@ export interface OpsCard {
     etaAt: string | null;
   };
 }
+export type OpsCodeKind = "lido" | "outra" | "nao_contou";
+
+export interface OpsCode {
+  at: string;
+  code: string;
+  kind: OpsCodeKind;
+  readQty: number | null;
+}
+
+/** Resultado da consulta por código de barras. */
+export interface OpsCodeHit extends OpsCode {
+  device: { id: string; name: string };
+  operation: null | {
+    id: string;
+    fn: string;
+    fnLabel: string;
+    plate: string;
+    user: string | null;
+    branch: string | null;
+    startedAt: string;
+    endedAt: string | null;
+    endReason: string | null;
+  };
+}
+
 export interface OpsDetail {
   device: { id: string; name: string };
   card: OpsCard | null;
@@ -425,6 +450,8 @@ export interface OpsDetail {
     etaAt: string | null;
   };
   scans: { at: string; qty: number; delta: number; intervalSec: number | null }[];
+  /** Códigos de barras lidos na tela (app 0.5.2), do mais novo para o mais antigo. */
+  codes?: OpsCode[];
   today: {
     id: string;
     fn: string;

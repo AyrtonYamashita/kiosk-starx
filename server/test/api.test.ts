@@ -36,6 +36,7 @@ const config: Config = {
   sessionIdleHours: 8,
   opsRetentionDays: 90,
   opsHeartbeatRetentionDays: 7,
+    opsScanRetentionDays: 365,
   trustProxy: false,
   logLevel: "silent",
 };

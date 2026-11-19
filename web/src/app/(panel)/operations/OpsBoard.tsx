@@ -58,6 +58,9 @@ export function OpsBoard({ initial, initialServerTime }: { initial: OpsCard[]; i
           <input type="checkbox" checked={onlyLogged} onChange={(e) => setOnlyLogged(e.target.checked)} />
           só com colaborador
         </label>
+        <Link href="/operations/codigo" className="link-button small">
+          Consultar código de barras
+        </Link>
       </div>
 
       {list.length === 0 ? (

@@ -147,6 +147,48 @@ describe("carga de manifesto, diagnóstico da tela e leitor entregue pela API (0
     expect((await send([{ id: id(), at: at(9), type: "op_start", fn: "carga_outra", plate: "X", total: tot(1) }])).status).toBe(400);
   });
 
+  it("códigos de barras: guardados com o tipo, sem repetir, na carga e na consulta", async () => {
+    const sc = (code: string, kind: string, sid = code, ageMs = 0) => ({ scan: { id: `s-${sid}`, code, kind, ageMs } });
+    const base = { fn: "carga_manifesto", plate: "PVA" };
+    expect(
+      (
+        await send([
+          { id: id(), at: at(0), type: "session", user: "felipef", domain: "ALT", branch: "CGB" },
+          { id: id(), at: at(1), type: "op_start", ...base, total: tot(319), read: tot(310) },
+          { id: id(), at: at(4), type: "progress", ...base, read: tot(311), extra: sc("24788807547686", "lido", "a", 300) },
+          { id: id(), at: at(7), type: "progress", ...base, read: tot(311), extra: sc("24788807547686", "nao_contou", "b") },
+          { id: id(), at: at(9), type: "progress", ...base, read: tot(311), extra: sc("99900011122233", "outra", "c") },
+          // o mesmo registro chega de novo num retrato seguinte: não repete
+          { id: id(), at: at(10), type: "progress", ...base, read: tot(312), extra: sc("99900011122233", "outra", "c") },
+        ])
+      ).status,
+    ).toBe(200);
+    const rows = (await t.db.query("SELECT code, kind, read_qty, at FROM ops_scans WHERE device_id = $1 ORDER BY at", [deviceId])).rows;
+    expect(rows.map((r) => [r.code, r.kind, Number(r.read_qty)])).toEqual([
+      ["24788807547686", "lido", 311],
+      ["24788807547686", "nao_contou", 311],
+      ["99900011122233", "outra", 311],
+    ]);
+    expect(rows[0].at.getTime()).toBe(at(4) - 300); // hora em que o código apareceu
+    expect((await op()).read_qty).toBe("312");
+
+    const detail = (await t.api("GET", `/v1/admin/ops/devices/${deviceId}`)).json;
+    expect(detail.codes.map((c: { code: string; kind: string }) => c.kind)).toEqual(["outra", "nao_contou", "lido"]);
+
+    const found = (await t.api("GET", "/v1/admin/ops/scans?code=24788807547686")).json.results;
+    expect(found).toHaveLength(2);
+    expect(found[0]).toMatchObject({ code: "24788807547686", device: { id: deviceId }, operation: { fnLabel: "Carga de Manifesto", plate: "PVA", user: "felipef" } });
+    expect((await t.api("GET", "/v1/admin/ops/scans?code=2478880")).json.results).toHaveLength(2); // começo do código
+    expect((await t.api("GET", "/v1/admin/ops/scans?code=2%25")).status).toBe(400); // curto demais
+    expect((await t.api("GET", "/v1/admin/ops/scans?code=%25%25%25")).json.results).toHaveLength(0); // % não é curinga
+
+    // guardados 1 ano
+    await t.db.query("UPDATE ops_scans SET at = now() - interval '366 days' WHERE code = '99900011122233'");
+    const { pruneOpsEvents } = await import("../src/opsRetention.js");
+    expect((await pruneOpsEvents(t.db, { eventDays: 90, heartbeatDays: 7, scanDays: 365 })).scans).toBe(1);
+    expect((await t.api("GET", "/v1/admin/ops/scans?code=99900011122233")).json.results).toHaveLength(0);
+  });
+
   it("diagnóstico de tela não entendida é guardado e não mexe na operação", async () => {
     const d = {
       id: id(),

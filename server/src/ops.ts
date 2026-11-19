@@ -23,6 +23,22 @@ const Totals = z.object({ qty: Num, kg: Num, value: Num });
 const Str = (max: number) => z.string().trim().max(max);
 const Plate = Str(20).min(1);
 const Base = { id: z.uuid(), at: z.number().int().positive() };
+/**
+ * Campos extras do leitor (vêm da página, repassados pelo app sem conhecer). `scan`: código de barras que apareceu na
+ * tela, com o tipo decidido pelo leitor e há quanto tempo (o leitor espera um pouco para saber se "Lidos" aumentou).
+ */
+const Extra = z
+  .object({
+    scan: z
+      .object({
+        id: Str(40).min(1),
+        code: Str(80).min(1),
+        kind: z.enum(["lido", "outra", "nao_contou"]),
+        ageMs: z.number().int().min(0).max(600_000),
+      })
+      .optional(),
+  })
+  .optional();
 
 export const OpsEvent = z.discriminatedUnion("type", [
   z.object({ ...Base, type: z.literal("session"), user: Str(64).nullable(), domain: Str(20).nullable().optional(), branch: Str(20).nullable().optional() }),
@@ -35,8 +51,9 @@ export const OpsEvent = z.discriminatedUnion("type", [
     units: z.array(Str(10)).max(20).optional(),
     total: Totals,
     read: Totals.optional(),
+    extra: Extra,
   }),
-  z.object({ ...Base, type: z.literal("progress"), fn: Fn, plate: Plate, total: Totals.optional(), read: Totals }),
+  z.object({ ...Base, type: z.literal("progress"), fn: Fn, plate: Plate, total: Totals.optional(), read: Totals, extra: Extra }),
   z.object({ ...Base, type: z.literal("op_end"), fn: Fn, plate: Plate, reason: z.enum(["concluded", "interrupted", "left"]) }),
   z.object({
     ...Base,
@@ -243,6 +260,15 @@ export async function applyBatch(c: Client, deviceId: string, events: OpsEvent[]
 
   for (const e of fresh) {
     const opId = await applyEvent(c, deviceId, st, e);
+    const scan = (e.type === "op_start" || e.type === "progress") && e.extra?.scan;
+    if (scan) {
+      // o mesmo código chega de novo em retratos seguintes: o id do leitor evita repetir
+      await c.query(
+        `INSERT INTO ops_scans (device_id, operation_id, scan_id, at, code, kind, read_qty) VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (device_id, scan_id) DO NOTHING`,
+        [deviceId, opId, scan.id, ts(e.at - scan.ageMs), scan.code, scan.kind, e.read?.qty ?? null],
+      );
+    }
     const { id, type, at, ...data } = e;
     await c.query("INSERT INTO ops_events (id, device_id, operation_id, type, at, data) VALUES ($1, $2, $3, $4, $5, $6)", [id, deviceId, opId, type, ts(at), data]);
   }

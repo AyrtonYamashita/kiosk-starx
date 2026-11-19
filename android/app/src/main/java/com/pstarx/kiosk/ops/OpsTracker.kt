@@ -33,9 +33,15 @@ data class Snapshot(
     val read: Totals? = null,
     /** Estrutura da página quando o leitor não a entendeu (repassada como veio; ver ssw_reader.js). */
     val diag: JSONObject? = null,
+    /**
+     * Campos extras do leitor (ex.: código de barras), repassados como vieram nos eventos da carga. Quem os entende é o
+     * servidor: campos novos saem com a API, sem app novo.
+     */
+    val extra: JSONObject? = null,
 ) {
     companion object {
         val SCREENS = setOf("bipagem", "placa", "menu", "login", "outra")
+        const val MAX_EXTRA = 4_000
         /** Nome da função (manifesto, carga_manifesto...): quem confere a lista é o servidor (o leitor vem dele). */
         private val FUNCTION = Regex("^[a-z_]{1,30}$")
 
@@ -56,6 +62,7 @@ data class Snapshot(
                 total = Totals.parse(o.optJSONObject("total")),
                 read = Totals.parse(o.optJSONObject("read")),
                 diag = o.optJSONObject("diag")?.takeIf { it.optString("reason").isNotBlank() && it.optString("path").isNotBlank() },
+                extra = o.optJSONObject("extra")?.takeIf { it.length() > 0 && it.toString().length <= MAX_EXTRA },
             )
         }
     }
@@ -73,7 +80,7 @@ data class Snapshot(
  *  - sinal de vida a cada 15 s e logo que a tela muda.
  */
 class OpsTracker(private val newId: () -> String = { UUID.randomUUID().toString() }) {
-    private class Op(val fn: String, val plate: String, var total: Totals, var read: Totals?)
+    private class Op(val fn: String, val plate: String, var total: Totals, var read: Totals?, var extra: String?)
     private class PendingEnd(val reason: String, val deadline: Long)
 
     private var user: String? = null
@@ -147,12 +154,16 @@ class OpsTracker(private val newId: () -> String = { UUID.randomUUID().toString(
                 if (cur != null && cur.fn == fn && cur.plate == plate) {
                     awaySince = null
                     val read = s.read
-                    if (read != null && read != cur.read) {
+                    val extra = s.extra?.toString()
+                    // bipagem: "Lidos" mudou ou o leitor tem algo novo (ex.: código de barras que não contou)
+                    if (read != null && (read != cur.read || extra != cur.extra)) {
                         val e = event(now, "progress").put("fn", fn).put("plate", plate).put("read", read.toJson())
                         if (s.total != cur.total) e.put("total", s.total.toJson())
+                        if (extra != null && extra != cur.extra) e.put("extra", s.extra)
                         out += e
                         cur.read = read
                         cur.total = s.total
+                        cur.extra = extra
                     }
                 } else {
                     // outra carga: a anterior termina (Concluir/Interromper confirmado) ou o servidor a encerra como "trocada"
@@ -162,8 +173,9 @@ class OpsTracker(private val newId: () -> String = { UUID.randomUUID().toString(
                     s.realPlate?.let { e.put("realPlate", it) }
                     if (s.units.isNotEmpty()) e.put("units", JSONArray(s.units))
                     s.read?.let { e.put("read", it.toJson()) }
+                    s.extra?.let { e.put("extra", it) }
                     out += e
-                    op = Op(fn, plate, s.total, s.read)
+                    op = Op(fn, plate, s.total, s.read, s.extra?.toString())
                     pendingEnd = null
                     awaySince = null
                 }

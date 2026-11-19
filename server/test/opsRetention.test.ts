@@ -74,7 +74,7 @@ describe("limpeza dos eventos do SSW (2.5)", () => {
 
     const total = await count();
     const r = await pruneOpsEvents(t.db, { eventDays: 90, heartbeatDays: 7, batch: 2 });
-    expect(r).toEqual({ heartbeats: 1, curves: 1, events: old.length });
+    expect(r).toEqual({ heartbeats: 1, curves: 1, events: old.length, scans: 0 });
     expect(await count()).toBe(total - old.length - 1);
     expect(await count("heartbeat")).toBe(1);
 
@@ -92,7 +92,7 @@ describe("limpeza dos eventos do SSW (2.5)", () => {
 
     // a carga nova não foi tocada; rodar de novo não faz nada
     expect((await detail()).scans.map((s: { qty: number }) => s.qty)).toEqual([1]);
-    expect(await pruneOpsEvents(t.db, { eventDays: 90, heartbeatDays: 7 })).toEqual({ heartbeats: 0, curves: 0, events: 0 });
+    expect(await pruneOpsEvents(t.db, { eventDays: 90, heartbeatDays: 7 })).toEqual({ heartbeats: 0, curves: 0, events: 0, scans: 0 });
   });
 
   it("carga que continuou depois da limpeza: gráfico guardado + bipagens novas", async () => {

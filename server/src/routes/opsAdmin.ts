@@ -12,6 +12,43 @@ import type { Waker } from "../wake.js";
 export async function opsAdminRoutes(app: FastifyInstance, opts: { db: Db; config: Config; live: OpsLive; waker: Waker }) {
   const { db, config, live, waker } = opts;
 
+  /** Consulta por código de barras: em que carga, coletor, colaborador e hora foi bipado (código inteiro ou começo). */
+  app.get("/v1/admin/ops/scans", async (req, reply) => {
+    const code = String((req.query as { code?: string }).code ?? "").trim();
+    if (code.length < 3 || code.length > 80) return reply.code(400).send({ error: "invalid_code", message: "Digite pelo menos 3 caracteres do código." });
+    const prefix = code.replace(/[\\%_]/g, (c) => "\\" + c) + "%";
+    const r = await db.query(
+      `SELECT s.at, s.code, s.kind, s.read_qty, d.id AS device_id, d.name AS device_name,
+              o.id AS op_id, o.fn, o.plate, o.ssw_user, o.branch, o.started_at, o.ended_at, o.end_reason
+       FROM ops_scans s JOIN devices d ON d.id = s.device_id LEFT JOIN ops_operations o ON o.id = s.operation_id
+       WHERE s.code = $1 OR s.code LIKE $2
+       ORDER BY (s.code = $1) DESC, s.at DESC LIMIT 100`,
+      [code, prefix],
+    );
+    return {
+      results: r.rows.map((x) => ({
+        at: x.at,
+        code: x.code,
+        kind: x.kind,
+        readQty: x.read_qty === null ? null : Number(x.read_qty),
+        device: { id: x.device_id, name: x.device_name },
+        operation: x.op_id
+          ? {
+              id: x.op_id,
+              fn: x.fn,
+              fnLabel: FN_LABEL[x.fn] ?? x.fn,
+              plate: x.plate,
+              user: x.ssw_user,
+              branch: x.branch,
+              startedAt: x.started_at,
+              endedAt: x.ended_at,
+              endReason: x.end_reason,
+            }
+          : null,
+      })),
+    };
+  });
+
   /** Chave geral da leitura do SSW e quantos coletores leem agora. */
   app.get("/v1/admin/ops/settings", async () => {
     const r = (
@@ -70,6 +107,15 @@ export async function opsAdminRoutes(app: FastifyInstance, opts: { db: Db; confi
 
     // bipagens: cada aumento de "lidos", com o intervalo desde o aumento anterior (eventos ou gráfico guardado na carga)
     const scans = op ? scansFromCurve(await loadCurve(db, op)) : [];
+    // códigos de barras lidos na tela (0.5.2), do mais novo para o mais antigo
+    const codes = op
+      ? (
+          await db.query(
+            "SELECT at, code, kind, read_qty FROM ops_scans WHERE operation_id = $1 ORDER BY at DESC, id DESC LIMIT 1000",
+            [op.id],
+          )
+        ).rows.map((r) => ({ at: r.at, code: r.code, kind: r.kind, readQty: r.read_qty === null ? null : Number(r.read_qty) }))
+      : [];
 
     const today = (
       await db.query(
@@ -134,6 +180,7 @@ export async function opsAdminRoutes(app: FastifyInstance, opts: { db: Db; confi
           }
         : null,
       scans: scans.reverse().slice(0, 300),
+      codes,
       today,
       functionTimeTodaySec,
       serverTime: Date.now(),
