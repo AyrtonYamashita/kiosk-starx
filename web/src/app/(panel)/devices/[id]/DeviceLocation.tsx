@@ -51,3 +51,34 @@ export function DeviceLocation({ location, enabled }: { location: Loc | null; en
     </div>
   );
 }
+
+/**
+ * Cartão da posição sobre o mapa (página do dispositivo): coordenadas, precisão, fonte, idade e o atalho para o
+ * Google Maps. Sem posição (ou desligada no perfil), vira uma mensagem curta.
+ */
+export function LocationCard({ location, enabled }: { location: Loc | null; enabled: boolean }) {
+  if (!enabled) return <p className="device-loc-empty">Localização desligada no perfil (Segurança → Enviar a localização ao painel).</p>;
+  if (!location || typeof location.lat !== "number") {
+    return <p className="device-loc-empty">Ainda sem posição: o aparelho precisa do app 0.4.4 ou mais novo e da localização ligada.</p>;
+  }
+  const provider = location.provider === "gps" ? "GPS" : location.provider === "network" ? "rede" : (location.provider ?? "—");
+  return (
+    <>
+      <dl className="kv device-loc-kv">
+        <dt>Coordenadas</dt>
+        <dd className="mono">
+          {location.lat.toFixed(6)}, {location.lon.toFixed(6)}
+        </dd>
+        <dt>Precisão</dt>
+        <dd className="mono">{location.accuracyM !== null ? `± ${Math.round(location.accuracyM)} m` : "—"}</dd>
+        <dt>Fonte</dt>
+        <dd>{provider}</dd>
+        <dt>Idade</dt>
+        <dd title={dateTime(location.at)}>{ago(location.at)}</dd>
+      </dl>
+      <a href={`https://www.google.com/maps?q=${location.lat},${location.lon}`} target="_blank" rel="noreferrer" className="small">
+        Abrir no Google Maps
+      </a>
+    </>
+  );
+}

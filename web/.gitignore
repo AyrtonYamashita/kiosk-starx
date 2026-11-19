@@ -5,3 +5,5 @@ node_modules/
 next-env.d.ts
 *.tsbuildinfo
 .vercel
+# gerado por scripts/copy-maplibre-worker.mjs (predev/prebuild)
+public/vendor/

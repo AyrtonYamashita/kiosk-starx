@@ -15,10 +15,13 @@ export function DeviceConfig({
   device,
   profiles,
   catalog,
+  children,
 }: {
   device: DeviceDetail;
   profiles: Pick<Profile, "id" | "name" | "config">[];
   catalog: CatalogApp[];
+  /** Mostrado entre o editor e o botão de salvar (na página do dispositivo: os apps gerenciados pelo perfil). */
+  children?: React.ReactNode;
 }) {
   const [state, action, pending] = useActionState(setDeviceConfig, undefined);
   const [profileId, setProfileId] = useState(device.profileId ?? "");
@@ -69,6 +72,7 @@ export function DeviceConfig({
           hasExistingPin={profile?.config?.security?.pinHash === "<definido>" || (device.overrides as Record<string, any> | null)?.security?.pinHash === "<definido>"}
         />
 
+        {children}
         {state?.error && <div className="alert error">{state.error}</div>}
         {state?.ok && <div className="alert ok">{state.ok}</div>}
         <div className="row">

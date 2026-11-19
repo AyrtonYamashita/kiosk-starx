@@ -1,6 +1,11 @@
 "use client";
 
 import { useActionState } from "react";
+import { AnimateIcon } from "@animate-ui/react/icons";
+import { Camera } from "@/components/animate-ui/icons/camera";
+import { Lock } from "@/components/animate-ui/icons/lock";
+import { Power } from "@/components/animate-ui/icons/power";
+import { RotateCcw } from "@/components/animate-ui/icons/rotate-ccw";
 import { cancelCommand, sendCommand } from "@/lib/actions";
 import type { Command, DeviceDetail, RepoApp, Screenshot } from "@/lib/api";
 import { ago, commandLabel, commandStatusLabel, dateTime } from "@/lib/format";
@@ -55,7 +60,7 @@ function MessageForm({ deviceId }: { deviceId: string }) {
   );
 }
 
-function AppForms({ device, repo }: { device: DeviceDetail; repo: RepoApp[] }) {
+export function AppForms({ device, repo }: { device: DeviceDetail; repo: RepoApp[] }) {
   const [installState, install, installing] = useActionState(sendCommand, undefined);
   const [removeState, remove, removing] = useActionState(sendCommand, undefined);
   const removable = device.apps
@@ -251,6 +256,60 @@ export function DeviceCommands({ device, commands, screenshots, repo }: { device
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+const BUTTONS = [
+  { type: "lock", label: "Bloquear", title: "Bloquear a tela", Icon: Lock },
+  { type: "reload", label: "Recarregar", title: "Recarregar o kiosk (o site volta à página inicial; o app único é reaberto)", Icon: RotateCcw },
+  { type: "screenshot", label: "Capturar", title: "Capturar a tela do kiosk", Icon: Camera },
+  { type: "reboot", label: "Reiniciar", title: "Reiniciar o aparelho", Icon: Power },
+] as const;
+
+/**
+ * Aba Comandos da página do dispositivo: só os 4 comandos rápidos (ícone em cima, rótulo embaixo; Reiniciar em
+ * vermelho). Um formulário só: o botão tocado vai como "type". A mensagem na tela, instalar/remover e a lista de
+ * comandos continuam em DeviceCommands (não exibidos nesta tela, por decisão do design).
+ */
+export function CommandButtons({ device, screenshots }: { device: DeviceDetail; screenshots: Screenshot[] }) {
+  const [state, action, pending] = useActionState(sendCommand, undefined);
+  const latest = screenshots[0];
+  const oldAppVersion = (device.appVersionCode ?? 0) < 5;
+  return (
+    <div className="stack" style={{ gap: 10 }}>
+      {oldAppVersion && (
+        <div className="alert warn small">
+          O app do aparelho ({device.appVersion ?? "versão desconhecida"}) ainda não entende comandos. Atualize para a 0.4.0 ou mais nova.
+        </div>
+      )}
+      <form
+        action={action}
+        onSubmit={(e) => {
+          const type = ((e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null)?.value;
+          if (type === "reboot" && !confirm(`Reiniciar "${device.name}"?`)) e.preventDefault();
+        }}
+        className="cmd-buttons"
+      >
+        <input type="hidden" name="deviceId" value={device.id} />
+        {BUTTONS.map(({ type, label, title, Icon }) => (
+          <AnimateIcon key={type} animateOnHover animateOnTap asChild>
+            <button name="type" value={type} title={title} disabled={pending} className={`cmd-button${type === "reboot" ? " bad" : ""}`}>
+              <Icon size={20} strokeWidth={1.75} aria-hidden />
+              <span>{label}</span>
+            </button>
+          </AnimateIcon>
+        ))}
+      </form>
+      <div className="row small" style={{ gap: 8 }}>
+        <span className="muted">Chegam em até 30 s.</span>
+        {latest && (
+          <a href={`/screenshots/${latest.id}`} target="_blank" rel="noreferrer">
+            Última captura {ago(latest.createdAt)}
+          </a>
+        )}
+      </div>
+      <Feedback state={state} />
     </div>
   );
 }

@@ -1,16 +1,25 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AutoRefresh } from "@/components/AutoRefresh";
+import { LiquidGlassDefs } from "@/components/brand/LiquidGlass";
 import { api, ApiError, type CatalogApp, type Command, type DeviceDetail, type Profile, type RepoApp, type Screenshot } from "@/lib/api";
 import { ago, bytes, dateTime, kioskModeLabel, networkLabel, uptime } from "@/lib/format";
 import { DeleteDevice, OpsReaderToggle, RenameDevice } from "./DeviceForms";
 import { AppsTable } from "./AppsTable";
-import { DeviceCommands, ManagedAppsStatus } from "./DeviceCommands";
+import { AppForms, CommandButtons, ManagedAppsStatus } from "./DeviceCommands";
 import { DeviceConfig } from "./DeviceConfig";
-import { DeviceLocation } from "./DeviceLocation";
+import { LocationCard } from "./DeviceLocation";
+import { DeviceMap } from "./DeviceMap";
+import { DeviceTabs } from "./DeviceTabs";
 
 export const dynamic = "force-dynamic";
 
+/*
+  Página do dispositivo (identidade visual Starx, ver starx-kiosk-brand/BRAND.md § Página do dispositivo):
+  mapa da última posição como fundo da tela toda, cards de vidro líquido por cima (raio 28, padding 16, controles 12).
+  Esquerda: resumo + abas (Comandos · Leitura SSW · Apps · JSON). Direita: Aparelho + Configuração pelo painel.
+  Centro livre: o marcador e o cartão da posição. Sem localização, sem mapa (fica o fundo Bubble).
+*/
 export default async function DevicePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   // tudo em paralelo: cada ida à API custa uma viagem até a VPS
@@ -40,132 +49,173 @@ export default async function DevicePage({ params }: { params: Promise<{ id: str
   const mem = d.info?.memory ?? {};
   const app = d.info?.app ?? {};
   const k = d.config?.kiosk;
+  const loc = d.info?.location ?? null;
+  const locEnabled = d.config?.security?.reportLocation !== false;
+  const hasMap = locEnabled && !!loc && typeof loc.lat === "number";
+  const siteMode = k?.enabled && k.mode === "web";
+
+  const netValue =
+    net.type === "wifi" && net.wifi ? `Wi-Fi · ${net.wifi.rssi} dBm` : (networkLabel[net.type] ?? net.type ?? "—");
+
+  const tabs = [
+    {
+      value: "comandos",
+      label: "Comandos",
+      content: <CommandButtons device={d} screenshots={screenshots} />,
+    },
+    {
+      value: "ssw",
+      label: "Leitura SSW",
+      content: (
+        <div className="stack" style={{ gap: 10 }}>
+          <span className="muted small">
+            Ligada, o app lê a tela do SSW neste coletor (quem está logado, a descarga e as bipagens) e manda para o{" "}
+            <Link href={d.opsReader ? `/operations/${d.id}` : "/operations"}>Acompanhamento</Link>. Só observa: não clica nem digita nada. Sem escolha
+            aqui, vale a chave geral do Acompanhamento.
+          </span>
+          <OpsReaderToggle id={d.id} on={d.opsReader} choice={d.opsReaderChoice} all={d.opsReaderAll} appVersionCode={d.appVersionCode} />
+        </div>
+      ),
+    },
+    // kiosk em modo site: sem a aba de apps instalados
+    ...(siteMode
+      ? []
+      : [
+          {
+            value: "apps",
+            label: "Apps",
+            content: (
+              <div className="stack" style={{ gap: 10 }}>
+                <AppsTable apps={d.apps} />
+                <span className="muted small">Lista enviada {ago(d.appsUpdatedAt)}.</span>
+                <details>
+                  <summary className="small">Instalar ou remover app</summary>
+                  <div style={{ marginTop: 8 }}>
+                    <AppForms device={d} repo={repo} />
+                  </div>
+                </details>
+              </div>
+            ),
+          },
+        ]),
+    ...(d.config
+      ? [
+          {
+            value: "json",
+            label: "JSON",
+            content: (
+              <div className="stack" style={{ gap: 8 }}>
+                <span className="muted small">Configuração atual no aparelho, como ele informou no último contato.</span>
+                <pre className="json mono">{JSON.stringify(d.config, null, 2)}</pre>
+              </div>
+            ),
+          },
+        ]
+      : []),
+  ];
 
   return (
-    <div className="stack">
+    <div className={`device-page wide${hasMap ? " has-map" : ""}`}>
       {/* comando em andamento: acompanha de perto (o aparelho responde em ~1 s) */}
       <AutoRefresh seconds={commands.some((c) => c.status === "pending" || c.status === "sent") ? 2 : 10} />
-      <div className="row">
-        <Link href="/" className="muted">
-          ← Aparelhos
-        </Link>
-      </div>
-      <div className="row">
-        <h1 style={{ margin: 0 }}>{d.name}</h1>
-        {d.online ? (
-          <span className="badge ok">
-            <span className="dot" /> online
+      <LiquidGlassDefs />
+      {hasMap && <DeviceMap lat={loc.lat} lon={loc.lon} accuracyM={loc.accuracyM} />}
+
+      <div className="device-col device-left">
+        <section className="liquid-glass device-card device-head">
+          <div className="row" style={{ gap: 8 }}>
+            <Link href="/" className="device-back small">
+              ← Aparelhos
+            </Link>
+          </div>
+          <div className="row" style={{ gap: 8 }}>
+            <h1 className="device-name">{d.name}</h1>
+            {d.online ? (
+              <span className="badge ok">
+                <span className="dot" /> online
+              </span>
+            ) : (
+              <span className="badge off">
+                <span className="dot" /> offline
+              </span>
+            )}
+          </div>
+          <span className="muted small" title={dateTime(d.lastSeenAt)}>
+            último contato {ago(d.lastSeenAt)}
           </span>
-        ) : (
-          <span className="badge off">
-            <span className="dot" /> offline
-          </span>
-        )}
-        <span className="muted small">último contato {ago(d.lastSeenAt)} ({dateTime(d.lastSeenAt)})</span>
+          <dl className="device-stats">
+            <div>
+              <dt>Bateria</dt>
+              <dd className={bat.level !== undefined && bat.level <= 15 && !bat.charging ? "bad" : undefined}>
+                {bat.level ?? "—"}%{bat.charging ? " · carregando" : ""}
+              </dd>
+            </div>
+            <div>
+              <dt>Rede</dt>
+              <dd>{netValue}</dd>
+            </div>
+            <div>
+              <dt>Armazenamento</dt>
+              <dd>{bytes(st.freeBytes)} livres</dd>
+            </div>
+            <div>
+              <dt>Memória</dt>
+              <dd>{bytes(mem.availBytes)} livres</dd>
+            </div>
+          </dl>
+        </section>
+
+        <section className="liquid-glass device-card">
+          <DeviceTabs tabs={tabs} />
+        </section>
       </div>
 
-      <div className="grid">
-        <section className="card">
+      <div className="device-loc">
+        <section className="liquid-glass device-card device-loc-card" aria-label="Última posição">
+          <LocationCard location={loc} enabled={locEnabled} />
+        </section>
+      </div>
+
+      <div className="device-col device-right">
+        <section className="liquid-glass device-card">
           <h2>Aparelho</h2>
           <dl className="kv">
             <dt>Modelo</dt>
             <dd>{[d.manufacturer, d.model].filter(Boolean).join(" ") || "—"}</dd>
             <dt>Serial</dt>
             <dd className="mono">{d.serial ?? "—"}</dd>
-            <dt>IMEI</dt>
-            <dd className="mono">{(hw.imeis ?? []).join(", ") || "—"}</dd>
             <dt>Android</dt>
             <dd>
               {hw.androidVersion ?? "?"} (SDK {hw.sdkInt ?? "?"})
             </dd>
-            <dt>Patch de segurança</dt>
+            <dt>Patch</dt>
             <dd>{hw.securityPatch ?? "—"}</dd>
             <dt>Ligado há</dt>
             <dd>{uptime(d.info?.uptimeMs)}</dd>
-          </dl>
-        </section>
-
-        <section className="card">
-          <h2>Estado</h2>
-          <dl className="kv">
-            <dt>Bateria</dt>
-            <dd>
-              {bat.level ?? "—"}%{bat.charging ? " (carregando)" : ""}
-              {bat.temperatureC ? ` · ${String(bat.temperatureC).replace(".", ",")} °C` : ""}
-            </dd>
-            <dt>Armazenamento</dt>
-            <dd>
-              {bytes(st.freeBytes)} livres de {bytes(st.totalBytes)}
-            </dd>
-            <dt>Memória</dt>
-            <dd>
-              {bytes(mem.availBytes)} livres de {bytes(mem.totalBytes)}
-            </dd>
-            <dt>Tela</dt>
-            <dd>{d.info?.screenOn === undefined ? "—" : d.info.screenOn ? "ligada" : "desligada"}</dd>
-          </dl>
-        </section>
-
-        <section className="card">
-          <h2>Rede</h2>
-          <dl className="kv">
-            <dt>Tipo</dt>
-            <dd>{networkLabel[net.type] ?? net.type ?? "—"}</dd>
-            {net.wifi && (
-              <>
-                <dt>Wi-Fi</dt>
-                <dd>
-                  {net.wifi.ssid ?? "(SSID oculto)"} · {net.wifi.rssi} dBm · {net.wifi.frequencyMhz} MHz
-                </dd>
-              </>
-            )}
-            <dt>IP do aparelho</dt>
-            <dd className="mono">{(net.ipAddresses ?? []).join(", ") || "—"}</dd>
-            <dt>MAC Wi-Fi</dt>
-            <dd className="mono">{net.wifiMac ?? "—"}</dd>
-            <dt>IP público</dt>
-            <dd className="mono">{d.lastIp ?? "—"}</dd>
-          </dl>
-        </section>
-
-        <section className="card">
-          <h2>Kiosk</h2>
-          <dl className="kv">
-            <dt>Usuário logado</dt>
-            <dd>
-              {d.sswUser ? <span className="mono">{d.sswUser}</span> : <span className="muted">{d.opsReader ? "ninguém no SSW" : "— (leitura do SSW desligada)"}</span>}
-            </dd>
             <dt>App StarX</dt>
             <dd>
-              {d.appVersion ?? "—"} {app.isDeviceOwner === false && <span className="badge danger">não é Device Owner</span>}
+              <span className="mono">{d.appVersion ?? "—"}</span>{" "}
+              {app.isDeviceOwner === false && (
+                <span className="badge danger">
+                  <span className="dot" /> não é Device Owner
+                </span>
+              )}
             </dd>
             <dt>Kiosk</dt>
             <dd>
               {!k ? "—" : k.enabled ? kioskModeLabel[k.mode] ?? k.mode : "desligado"}
-              {k?.enabled && app.kioskActive === false && <span className="badge warn"> não aplicado</span>}
+              {k?.enabled && k.mode === "app" && <span className="mono"> · {k.app ?? "—"}</span>}
+              {k?.enabled && k.mode === "web" && <div className="mono small">{k.web?.url || "—"}</div>}
+              {k?.enabled && k.mode === "apps" && <div className="mono small">{(k.apps ?? []).join(", ") || "—"}</div>}
+              {k?.enabled && app.kioskActive === false && (
+                <span className="badge warn">
+                  <span className="dot" /> não aplicado
+                </span>
+              )}
             </dd>
-            {k?.enabled && k.mode === "app" && (
-              <>
-                <dt>App</dt>
-                <dd className="mono">{k.app ?? "—"}</dd>
-              </>
-            )}
-            {k?.enabled && k.mode === "apps" && (
-              <>
-                <dt>Grade</dt>
-                <dd className="mono small">{(k.apps ?? []).join(", ") || "—"}</dd>
-              </>
-            )}
-            {k?.enabled && k.mode === "web" && (
-              <>
-                <dt>Site</dt>
-                <dd className="mono small">{k.web?.url || "—"}</dd>
-              </>
-            )}
-            <dt>Configuração</dt>
+            <dt>Usuário no SSW</dt>
             <dd>
-              {d.configRevision !== null ? `rev ${d.configRevision}` : "—"}
-              {d.configSource ? ` · alterada por ${d.configSource}` : ""}
+              {d.sswUser ? <span className="mono">{d.sswUser}</span> : <span className="muted">{d.opsReader ? "ninguém no SSW" : "leitura desligada"}</span>}
             </dd>
             <dt>Cadastro</dt>
             <dd>
@@ -173,63 +223,53 @@ export default async function DevicePage({ params }: { params: Promise<{ id: str
               {d.enrollmentName ? ` · ${d.enrollmentName}` : ""}
             </dd>
           </dl>
-        </section>
-      </div>
-
-      <section className="card stack">
-        <h2>Leitura do SSW</h2>
-        <span className="muted small">
-          Ligada, o app lê a tela do SSW neste coletor (quem está logado, a descarga e as bipagens) e manda para o{" "}
-          <Link href={d.opsReader ? `/operations/${d.id}` : "/operations"}>Acompanhamento</Link>. Ele só observa: não clica nem digita nada. Sem
-          escolha aqui, vale a chave geral, no fim da página do Acompanhamento.
-        </span>
-        <OpsReaderToggle id={d.id} on={d.opsReader} choice={d.opsReaderChoice} all={d.opsReaderAll} appVersionCode={d.appVersionCode} />
-      </section>
-
-      <section className="card stack">
-        <h2>Localização</h2>
-        <DeviceLocation location={d.info?.location ?? null} enabled={d.config?.security?.reportLocation !== false} />
-      </section>
-
-      <section className="card stack">
-        <h2>Comandos</h2>
-        <DeviceCommands device={d} commands={commands} screenshots={screenshots} repo={repo} />
-      </section>
-
-      <section className="card stack">
-        <h2>Configuração pelo painel</h2>
-        <DeviceConfig device={d} profiles={profiles.map((p) => ({ id: p.id, name: p.name, config: p.config }))} catalog={catalog} />
-      </section>
-
-      <section className="card stack">
-        <h2>Apps gerenciados pelo perfil</h2>
-        <ManagedAppsStatus device={d} repo={repo} />
-      </section>
-
-      <section className="card stack">
-        <h2>Apps instalados ({d.apps.length})</h2>
-        <AppsTable apps={d.apps} />
-        <span className="muted small">Lista enviada {ago(d.appsUpdatedAt)}.</span>
-      </section>
-
-      {d.config && (
-        <section className="card stack">
-          <details>
-            <summary>
-              <strong>Configuração atual no aparelho (JSON)</strong> <span className="muted small">— como o aparelho informou no último contato</span>
-            </summary>
-            <pre className="json mono" style={{ marginTop: 12 }}>
-              {JSON.stringify(d.config, null, 2)}
-            </pre>
+          <details className="device-more">
+            <summary className="small">Rede, IMEI e administração</summary>
+            <dl className="kv" style={{ marginTop: 8 }}>
+              <dt>IMEI</dt>
+              <dd className="mono">{(hw.imeis ?? []).join(", ") || "—"}</dd>
+              {net.wifi && (
+                <>
+                  <dt>Wi-Fi</dt>
+                  <dd>
+                    {net.wifi.ssid ?? "(SSID oculto)"} · {net.wifi.rssi} dBm · {net.wifi.frequencyMhz} MHz
+                  </dd>
+                </>
+              )}
+              <dt>IP do aparelho</dt>
+              <dd className="mono">{(net.ipAddresses ?? []).join(", ") || "—"}</dd>
+              <dt>MAC Wi-Fi</dt>
+              <dd className="mono">{net.wifiMac ?? "—"}</dd>
+              <dt>IP público</dt>
+              <dd className="mono">{d.lastIp ?? "—"}</dd>
+              <dt>Bateria</dt>
+              <dd>{bat.temperatureC ? `${String(bat.temperatureC).replace(".", ",")} °C` : "—"}</dd>
+              <dt>Configuração</dt>
+              <dd>
+                {d.configRevision !== null ? `rev ${d.configRevision}` : "—"}
+                {d.configSource ? ` · alterada por ${d.configSource}` : ""}
+              </dd>
+            </dl>
+            <div className="stack" style={{ gap: 10, marginTop: 12 }}>
+              <RenameDevice id={d.id} name={d.name} />
+              <DeleteDevice id={d.id} name={d.name} />
+            </div>
           </details>
         </section>
-      )}
 
-      <section className="card stack">
-        <h2>Administração</h2>
-        <RenameDevice id={d.id} name={d.name} />
-        <DeleteDevice id={d.id} name={d.name} />
-      </section>
+        <section className="liquid-glass device-card device-config">
+          <h2>Configuração pelo painel</h2>
+          <DeviceConfig device={d} profiles={profiles.map((p) => ({ id: p.id, name: p.name, config: p.config }))} catalog={catalog}>
+            {/* perfil sem apps gerenciados: a seção nem aparece */}
+            {d.managedApps.length > 0 && (
+              <div className="stack" style={{ gap: 8 }}>
+                <strong className="small">Apps gerenciados pelo perfil</strong>
+                <ManagedAppsStatus device={d} repo={repo} />
+              </div>
+            )}
+          </DeviceConfig>
+        </section>
+      </div>
     </div>
   );
 }

@@ -8,6 +8,8 @@
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/utilities.css" layer(utilities);
 @import "./tokens.css";
+/* classes do Tailwind usadas dentro dos componentes do Animate UI (Tabs, Highlight...) */
+@source "../../node_modules/@animate-ui/react/dist";
 
 @layer components {
 /* ---------------------------------------------------------------- base */
@@ -276,4 +278,118 @@ tr.selected td { background: var(--blue-tint); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+/* ---------------------------------------------------------------- página do dispositivo
+   Mapa em tela cheia atrás de tudo; cards de vidro líquido (raio 28, padding 16, controles 12 = 28 − 16).
+   Colunas de 440 px com 16 px entre elas e 24 px da borda; o centro fica livre para o marcador. */
+
+.main > .device-page { max-width: none; }
+.device-page {
+  display: grid; gap: 16px; font-size: 12px; line-height: 17px;
+  grid-template-columns: 440px minmax(0, 1fr) 440px;
+  grid-template-areas: "left loc right";
+  height: calc(100dvh - 48px);
+}
+.device-col { display: flex; flex-direction: column; gap: 16px; min-height: 0; min-width: 0; }
+.device-left { grid-area: left; }
+.device-right { grid-area: right; overflow-y: auto; }
+.device-loc { grid-area: loc; display: flex; align-items: flex-end; justify-content: center; min-width: 0; padding-bottom: 28px; }
+.device-card { flex: none; min-width: 0; }
+.device-card > h2 { font-family: var(--font-display); font-size: 14px; line-height: 20px; margin: 0 0 10px; letter-spacing: -0.01em; }
+.device-card dl.kv { gap: 6px 12px; }
+.device-card dl.kv dt { font-size: 11px; }
+.device-card dl.kv dd { font-size: 12px; }
+.device-card button, .device-card input, .device-card select, .device-card textarea, .device-card pre.json { border-radius: var(--radius-field); }
+.device-config { flex: 1 1 0; min-height: 280px; overflow-y: auto; }
+
+.device-head { display: flex; flex-direction: column; gap: 6px; }
+.device-back { color: var(--soft); }
+.device-back:hover { color: var(--ink); }
+.device-name { font-family: var(--font-display); font-size: 17px; line-height: 22px; margin: 0; letter-spacing: -0.02em; }
+.device-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 6px 0 0; padding-top: 10px; border-top: 1px solid var(--lg-border); }
+.device-stats dt { font-size: 10.5px; line-height: 14px; color: var(--soft); }
+.device-stats dd { margin: 2px 0 0; font-size: 12.5px; line-height: 17px; font-weight: 600; overflow-wrap: anywhere; }
+.device-more { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--lg-border); }
+
+/* abas de texto sublinhadas: ativa = ink 600 com sublinhado azul de 2 px; inativa = soft, sem borda */
+.device-tabs-list { display: flex; gap: 18px; border-bottom: 1px solid var(--lg-border); margin-bottom: 12px; }
+button.device-tab {
+  height: var(--control); padding: 0 1px; border: none; border-radius: 0; background: none;
+  font-size: 12.5px; font-weight: 500; color: var(--soft); position: relative; z-index: 1;
+  transition: color .2s ease;
+}
+button.device-tab:hover { background: none; color: var(--ink); }
+button.device-tab[data-state='active'] { color: var(--ink); font-weight: 600; }
+button.device-tab:active:not(:disabled) { transform: none; }
+.device-tabs-underline { border-bottom: 2px solid var(--blue); background: transparent; border-radius: 0; }
+.device-tab-panel { max-height: 340px; overflow-y: auto; padding-right: 2px; }
+.device-tab-panel pre.json { max-height: none; }
+
+/* aba Comandos: 4 botões, ícone em cima e rótulo embaixo */
+.cmd-buttons { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+button.cmd-button {
+  flex-direction: column; gap: 6px; height: auto; min-height: 64px; padding: 10px 4px;
+  font-size: 11.5px; color: var(--ink); background: var(--lg-bg); border-color: var(--lg-border);
+}
+button.cmd-button:hover { background: var(--subtle); color: var(--ink); }
+button.cmd-button.bad, button.cmd-button.bad:hover { color: var(--bad-deep); }
+
+/* cartão da posição, no centro livre */
+.device-loc-card { width: min(100%, 320px); display: flex; flex-direction: column; gap: 8px; }
+dl.kv.device-loc-kv { grid-template-columns: 1fr; gap: 0; }
+dl.kv.device-loc-kv dd { margin-bottom: 6px; }
+.device-loc-empty { margin: 0; font-size: 12px; color: var(--mid); }
+
+/* mapa: fundo fixo da tela toda; o resto da página deixa os toques passarem para ele onde não há card */
+.device-map { position: fixed; inset: 0; z-index: -1; pointer-events: auto; }
+.shell:has(.device-page.has-map) { pointer-events: none; }
+.shell:has(.device-page.has-map) :is(.sidebar, .tabbar, .topbar, .device-card) { pointer-events: auto; }
+.device-map-canvas { width: 100%; height: 100%; }
+.device-pin {
+  width: 18px; height: 18px; border-radius: 50%; background: var(--blue); border: 3px solid var(--surface);
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--blue) 25%, transparent);
+  animation: pino 2s ease-out infinite;
+}
+@keyframes pino { 50% { box-shadow: 0 0 0 12px color-mix(in srgb, var(--blue) 0%, transparent); } }
+
+/* menu lateral nesta página: o mesmo vidro líquido e os mesmos raios concêntricos dos cards */
+.shell:has(.device-page) .sidebar {
+  margin: 24px 0 24px 24px; height: calc(100dvh - 48px); top: 24px;
+  border-radius: var(--radius-glass); padding: var(--glass-pad);
+  background: var(--lg-bg); border-color: var(--lg-border);
+  box-shadow: inset 0 1px 0 var(--lg-hi), inset 0 -18px 30px -20px var(--lg-hi2);
+  -webkit-backdrop-filter: blur(16px) saturate(1.5); backdrop-filter: blur(16px) saturate(1.5);
+}
+.shell:has(.device-page) .sidebar .brand { padding: 0 0 12px 4px; }
+.shell:has(.device-page) .sidebar .section-label { padding: 4px 4px 8px; }
+.shell:has(.device-page) .sidebar nav { padding: 0; }
+.shell:has(.device-page) .sidebar .user { padding: 12px 0 0; }
+.shell:has(.device-page) :is(.nav-item, .logout) { border-radius: var(--radius-field); }
+
+@media (max-width: 1279.98px) {
+  .device-page {
+    height: auto; align-items: start;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+    grid-template-areas: "left right" "loc right";
+  }
+  .device-right { overflow: visible; }
+  .device-config { flex: none; overflow: visible; }
+  .device-loc { justify-content: stretch; align-items: flex-start; padding-bottom: 0; }
+  .device-loc-card { width: 100%; }
+}
+@media (max-width: 1023.98px) {
+  .device-page { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-template-areas: "left" "loc" "right"; }
+  .device-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 } /* fim da camada components */
+
+/* Ajustes do maplibre: o CSS dele fica fora das camadas, então estes também (e com seletor mais específico). */
+.device-map .maplibregl-ctrl-bottom-left { left: calc(50vw + 128px); transform: translateX(-50%); }
+.device-map .maplibregl-ctrl-attrib { font-family: var(--font-sans); font-size: 10px; }
+@media (max-width: 1279.98px) {
+  .device-map .maplibregl-ctrl-bottom-left { left: 0; transform: none; }
+}
+@media (max-width: 1023.98px) {
+  .device-map .maplibregl-ctrl-bottom-left { bottom: calc(56px + env(safe-area-inset-bottom)); }
+}
