@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { AnimateIcon } from "@animate-ui/react/icons";
 import { ScanBarcode } from "@/components/animate-ui/icons/scan-barcode";
 import type { OpsCard } from "@/lib/api";
@@ -22,7 +22,7 @@ export function OpsBoard({ initial, initialServerTime }: { initial: OpsCard[]; i
         return next;
       }),
   });
-  const now = useNow(initialServerTime, offsetMs);
+  const now = useNow(initialServerTime, offsetMs, 10_000);
 
   const list = useMemo(() => {
     const rank = (c: OpsCard) => (isOffline(c.lastSeenAt, now) ? 3 : c.operation ? 0 : c.user ? 1 : 2);
@@ -85,7 +85,7 @@ export function OpsBoard({ initial, initialServerTime }: { initial: OpsCard[]; i
   );
 }
 
-function OpsCardView({ c, now }: { c: OpsCard; now: number }) {
+const OpsCardView = memo(function OpsCardView({ c, now }: { c: OpsCard; now: number }) {
   const offline = isOffline(c.lastSeenAt, now);
   const op = c.operation;
   const pct = op && op.total.qty > 0 ? Math.min(100, (op.read.qty / op.total.qty) * 100) : 0;
@@ -178,4 +178,4 @@ function OpsCardView({ c, now }: { c: OpsCard; now: number }) {
       </div>
     </Link>
   );
-}
+});

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { opsStreamTicket } from "./actions";
 import type { OpsCard } from "./api";
 
@@ -14,7 +14,9 @@ export function useOpsStream(handlers: { snapshot?: (cards: OpsCard[]) => void; 
   const [status, setStatus] = useState<StreamStatus>("connecting");
   const [offsetMs, setOffsetMs] = useState<number | null>(null);
   const h = useRef(handlers);
-  h.current = handlers;
+  useLayoutEffect(() => {
+    h.current = handlers;
+  });
 
   useEffect(() => {
     let es: EventSource | null = null;
@@ -78,14 +80,18 @@ export function useOpsStream(handlers: { snapshot?: (cards: OpsCard[]) => void; 
  * Relógio (hora do servidor) que atualiza a cada segundo (tempos "há X s", offline). Começa em `initial` — a hora que
  * o servidor usou para montar a página — para o HTML do servidor e o do navegador baterem.
  */
-export function useNow(initial: number, offsetMs: number | null) {
+export function useNow(initial: number, offsetMs: number | null, everyMs = 1000) {
   const [now, setNow] = useState(initial);
   const [initOffset] = useState(() => initial - Date.now());
   const off = offsetMs ?? initOffset;
   useEffect(() => {
-    setNow(Date.now() + off);
-    const t = setInterval(() => setNow(Date.now() + off), 1000);
-    return () => clearInterval(t);
-  }, [off]);
+    const tick = () => setNow(Date.now() + off);
+    const first = setTimeout(tick, 0);
+    const t = setInterval(tick, everyMs);
+    return () => {
+      clearTimeout(first);
+      clearInterval(t);
+    };
+  }, [off, everyMs]);
   return now;
 }

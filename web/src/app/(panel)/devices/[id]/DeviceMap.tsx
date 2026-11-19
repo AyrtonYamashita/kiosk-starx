@@ -1,9 +1,10 @@
 "use client";
 
 import "maplibre-gl/dist/maplibre-gl.css";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import * as maplibregl from "maplibre-gl";
 import { useTheme } from "next-themes";
+import { useHydrated } from "@/lib/client";
 
 /*
   Mapa de fundo da página do dispositivo (a tela toda, atrás do menu e dos cards).
@@ -42,11 +43,11 @@ export function DeviceMap({ lat, lon, accuracyM }: { lat: number; lon: number; a
   const map = useRef<maplibregl.Map | null>(null);
   const marker = useRef<maplibregl.Marker | null>(null);
   const { resolvedTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-  const style = mounted ? (resolvedTheme === "dark" ? STYLE.dark : STYLE.light) : null;
+  const style = useHydrated() ? (resolvedTheme === "dark" ? STYLE.dark : STYLE.light) : null;
   const pos = useRef({ lat, lon, accuracyM });
-  pos.current = { lat, lon, accuracyM };
+  useLayoutEffect(() => {
+    pos.current = { lat, lon, accuracyM };
+  }, [lat, lon, accuracyM]);
 
   // cria o mapa (de novo ao trocar de tema: simples e sem estado extra)
   useEffect(() => {

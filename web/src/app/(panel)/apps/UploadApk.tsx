@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { refreshApps, uploadToken } from "@/lib/actions";
+import type { Json } from "@/lib/api";
 
 type Status = { kind: "idle" } | { kind: "sending"; pct: number } | { kind: "ok"; text: string } | { kind: "error"; text: string };
 
@@ -32,7 +33,7 @@ export function UploadApk({ maxApkMb, target = "repo" }: { maxApkMb: number; tar
     xhr.upload.onprogress = (ev) => ev.lengthComputable && setStatus({ kind: "sending", pct: Math.round((ev.loaded / ev.total) * 100) });
     xhr.onerror = () => setStatus({ kind: "error", text: "Falha de rede no envio (a API recusou a origem ou está fora do ar)." });
     xhr.onload = async () => {
-      let body: any = null;
+      let body: Json = null;
       try {
         body = JSON.parse(xhr.responseText);
       } catch {

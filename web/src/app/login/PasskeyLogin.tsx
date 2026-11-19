@@ -4,18 +4,18 @@ import { browserSupportsWebAuthn } from "@simplewebauthn/browser";
 import { AnimateIcon } from "@animate-ui/react/icons";
 import { KeyRound } from "@/components/animate-ui/icons/key-round";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { passkeyLoginFinish, passkeyLoginOptions } from "@/lib/actions";
 import { getAssertion, passkeyError } from "@/lib/passkey-client";
+import { useClientValue } from "@/lib/client";
 
 /** "Entrar com passkey": sem usuário, senha nem código (a passkey já é o aparelho + biometria/PIN). */
 export function PasskeyLogin() {
   const router = useRouter();
-  const [supported, setSupported] = useState(false);
+  const supported = useClientValue(browserSupportsWebAuthn, false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => setSupported(browserSupportsWebAuthn()), []);
   if (!supported) return null;
 
   async function go() {

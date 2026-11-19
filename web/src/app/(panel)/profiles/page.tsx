@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { api, type Profile } from "@/lib/api";
 import { dateTime, kioskModeLabel } from "@/lib/format";
+import type { Json } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
-function summary(c: Record<string, any>): string {
+function summary(c: Record<string, Json>): string {
   const k = c.kiosk ?? {};
   if (k.enabled === false) return "kiosk desligado";
   const mode = kioskModeLabel[k.mode ?? "apps"] ?? k.mode;

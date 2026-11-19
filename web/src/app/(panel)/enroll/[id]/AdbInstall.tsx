@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { Enrollment, Release } from "@/lib/api";
+import { useClientValue } from "@/lib/client";
 
 const PKG = "com.pstarx.kiosk";
 const ADMIN = `${PKG}/.admin.AdminReceiver`;
@@ -58,8 +59,7 @@ export function AdbInstall({ enrollment, release }: { enrollment: Enrollment; re
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
   // só no navegador (no servidor não há navigator): evita divergência na hidratação
-  const [supported, setSupported] = useState<boolean | null>(null);
-  useEffect(() => setSupported("usb" in navigator), []);
+  const supported = useClientValue<boolean | null>(() => "usb" in navigator, null);
 
   const set = (key: string, state: StepState, detail?: string) =>
     setSteps((list) => list.map((s) => (s.key === key ? { ...s, state, detail } : s)));

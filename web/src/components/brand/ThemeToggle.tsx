@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
+import { useHydrated } from "@/lib/client";
 import { AnimateIcon } from "@animate-ui/react/icons";
 import { Sun } from "@/components/animate-ui/icons/sun";
 import { Moon } from "@/components/animate-ui/icons/moon";
@@ -9,9 +9,7 @@ import { Moon } from "@/components/animate-ui/icons/moon";
 /* Alterna claro/escuro (o padrão segue o sistema). Alvo de 44 px. */
 export function ThemeToggle({ className }: { className?: string }) {
   const { resolvedTheme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-  const dark = mounted && resolvedTheme === "dark";
+  const dark = useHydrated() && resolvedTheme === "dark";
   return (
     <AnimateIcon animateOnHover animateOnTap asChild>
       <button

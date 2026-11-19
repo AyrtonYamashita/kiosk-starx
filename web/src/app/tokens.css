@@ -38,6 +38,7 @@
 
   /* vidro sobre o Bubble */
   --glass: rgb(255 255 255 / 0.74);
+  --glass-card: rgb(255 255 255 / 0.9);
   --glass-border: rgb(10 26 47 / 0.08);
   --glass-head: rgb(241 245 249 / 0.85);
   --glass-blur: 18px;
@@ -98,6 +99,7 @@
   --bad:  #F87171; --bad-deep:  #F87171; --bad-tint:  #2D1313; --bad-edge:  #6B2424;
 
   --glass: rgb(14 26 43 / 0.72);
+  --glass-card: rgb(14 26 43 / 0.9);
   --glass-border: rgb(147 164 186 / 0.16);
   --glass-head: rgb(20 36 58 / 0.85);
 

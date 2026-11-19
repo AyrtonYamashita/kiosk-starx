@@ -61,6 +61,11 @@ function BulkCommand({ ids, repo }: { ids: string[]; repo: { packageName: string
   );
 }
 
+/** Milissegundos desde `iso` (0 sem data). */
+function msSince(iso: string | null) {
+  return iso ? Math.max(0, Date.now() - new Date(iso).getTime()) : 0;
+}
+
 export function DevicesTable({
   devices,
   profiles,
@@ -196,7 +201,7 @@ export function DevicesTable({
                       <>
                         {/* online: soma o tempo desde o último contato; offline: o que era no último contato */}
                         <span className="mono" suppressHydrationWarning>
-                          {uptime(d.uptimeMs + (d.online && d.infoUpdatedAt ? Math.max(0, Date.now() - new Date(d.infoUpdatedAt).getTime()) : 0))}
+                          {uptime(d.uptimeMs + (d.online ? msSince(d.infoUpdatedAt) : 0))}
                         </span>
                         {!d.online && <div className="muted small">no último contato</div>}
                       </>

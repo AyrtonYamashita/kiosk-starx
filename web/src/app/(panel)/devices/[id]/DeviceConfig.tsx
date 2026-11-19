@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useActionState, useState } from "react";
 import { ConfigEditor } from "@/components/ConfigEditor";
 import { reapplyConfig, setDeviceConfig } from "@/lib/actions";
-import type { CatalogApp, DeviceDetail, Profile } from "@/lib/api";
+import type { CatalogApp, DeviceDetail, Json, Profile } from "@/lib/api";
 import { ago, configStatusLabel } from "@/lib/format";
 
 /**
@@ -69,7 +69,7 @@ export function DeviceConfig({
           base={profile?.config ?? null}
           initial={device.overrides}
           catalog={catalog}
-          hasExistingPin={profile?.config?.security?.pinHash === "<definido>" || (device.overrides as Record<string, any> | null)?.security?.pinHash === "<definido>"}
+          hasExistingPin={profile?.config?.security?.pinHash === "<definido>" || (device.overrides as Record<string, Json> | null)?.security?.pinHash === "<definido>"}
         />
 
         {children}

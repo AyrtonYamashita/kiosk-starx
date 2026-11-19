@@ -2,13 +2,14 @@
 
 import { useMemo, useState } from "react";
 import type { CatalogApp } from "@/lib/api";
+import type { Json } from "@/lib/api";
 
 /**
  * Editor da configuração do kiosk (mesmo formato do app). Gera um JSON completo no campo oculto `name`.
  * O PIN nunca chega aqui: o servidor manda "<definido>" no lugar do hash.
  */
 
-type Cfg = Record<string, any>;
+type Cfg = Record<string, Json>;
 type PinMode = "device" | "keep" | "set" | "none";
 
 const DEFAULTS: Cfg = {
@@ -227,7 +228,7 @@ export function ConfigEditor({
   }
 
   const check = (path: string, label: string, hint?: string) => {
-    const value = path.split(".").reduce((o: any, key) => o?.[key], cfg);
+    const value = path.split(".").reduce((o: Json, key) => o?.[key], cfg);
     return (
       <label className="inline">
         <input type="checkbox" checked={!!value} onChange={(e) => set(path, e.target.checked)} />

@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useState } from "react";
 import { cancelMfa, mfaPasskeyFinish, mfaPasskeyOptions, resendMfaCode, verifyMfa } from "@/lib/actions";
 import { getAssertion, passkeyError } from "@/lib/passkey-client";
+import { useClientValue } from "@/lib/client";
 
 type Method = "passkey" | "totp" | "email" | "recovery";
 type CodeMethod = Exclude<Method, "passkey">;
@@ -38,30 +39,26 @@ export function VerifyForm({
   initialWaitSec: number;
 }) {
   const router = useRouter();
-  const [method, setMethod] = useState<Method>(methods[0] ?? "recovery");
+  const [chosen, setMethod] = useState<Method | null>(null);
   const [code, setCode] = useState("");
   const [trust, setTrust] = useState(false);
   const [state, action, pending] = useActionState(verifyMfa, undefined);
-  const [resendState, resend, resending] = useActionState(resendMfaCode, undefined);
   const [wait, setWait] = useState(initialWaitSec);
-  const [passkeyBusy, setPasskeyBusy] = useState(false);
-  const [passkeyErr, setPasskeyErr] = useState<string | null>(null);
-  const [canPasskey, setCanPasskey] = useState(true);
-
-  // navegador sem passkey: começa pelo próximo método
-  useEffect(() => {
-    const ok = browserSupportsWebAuthn();
-    setCanPasskey(ok);
-    if (!ok && methods[0] === "passkey") setMethod(methods[1] ?? "recovery");
-  }, [methods]);
   // pediu o código por e-mail: passa a digitar o do e-mail
-  useEffect(() => {
-    if (resendState?.retryAfterSec) setWait(resendState.retryAfterSec);
-    if (resendState?.ok) {
+  const [resendState, resend, resending] = useActionState(async (prev: Awaited<ReturnType<typeof resendMfaCode>>) => {
+    const r = await resendMfaCode(prev);
+    if (r?.retryAfterSec) setWait(r.retryAfterSec);
+    if (r?.ok) {
       setMethod("email");
       setCode("");
     }
-  }, [resendState]);
+    return r;
+  }, undefined);
+  const [passkeyBusy, setPasskeyBusy] = useState(false);
+  const [passkeyErr, setPasskeyErr] = useState<string | null>(null);
+  const canPasskey = useClientValue(browserSupportsWebAuthn, true);
+  // navegador sem passkey: começa pelo próximo método
+  const method: Method = chosen ?? (methods[0] === "passkey" && !canPasskey ? (methods[1] ?? "recovery") : (methods[0] ?? "recovery"));
   useEffect(() => {
     if (wait <= 0) return;
     const t = setTimeout(() => setWait((w) => w - 1), 1000);

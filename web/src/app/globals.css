@@ -115,8 +115,10 @@ button.theme-toggle:hover { background: var(--subtle); color: var(--ink); }
 /* fundo Bubble: intensidade das bolhas pelo token (o gradiente de base fica inteiro) */
 .starx-bg > div[aria-hidden] { opacity: var(--bubble-opacity); }
 
-/* vidro: cartões, menu e barras sobre o fundo Bubble */
-.card, .sidebar, .tabbar {
+/* vidro: só o menu e a barra de abas desfocam o fundo; os cartões são quase opacos (sem backdrop-filter, que
+   refaz o desfoque a cada quadro com o fundo animado atrás) */
+.card { background: var(--glass-card); border-color: var(--glass-border); }
+.sidebar, .tabbar {
   background: var(--glass); border-color: var(--glass-border);
   -webkit-backdrop-filter: blur(var(--glass-blur)); backdrop-filter: blur(var(--glass-blur));
 }
@@ -348,9 +350,13 @@ dl.kv.device-loc-kv dd { margin-bottom: 6px; }
 .device-pin {
   width: 18px; height: 18px; border-radius: 50%; background: var(--blue); border: 3px solid var(--surface);
   box-shadow: 0 0 0 6px color-mix(in srgb, var(--blue) 25%, transparent);
-  animation: pino 2s ease-out infinite;
 }
-@keyframes pino { 50% { box-shadow: 0 0 0 12px color-mix(in srgb, var(--blue) 0%, transparent); } }
+/* pulso só com transform e opacidade (não repinta o mapa embaixo do vidro) */
+.device-pin::after {
+  content: ""; position: absolute; inset: -9px; border-radius: 50%; background: var(--blue);
+  opacity: 0; animation: pino 2.4s ease-out infinite; will-change: transform, opacity;
+}
+@keyframes pino { 0% { transform: scale(0.5); opacity: 0.35; } 100% { transform: scale(1.6); opacity: 0; } }
 
 /* menu lateral nesta página: o mesmo vidro líquido e os mesmos raios concêntricos dos cards */
 .shell:has(.device-page) .sidebar {

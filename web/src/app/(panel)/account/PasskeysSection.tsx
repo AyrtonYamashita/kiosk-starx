@@ -2,17 +2,18 @@
 
 import { browserSupportsWebAuthn } from "@simplewebauthn/browser";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { registerPasskeyFinish, registerPasskeyOptions, removePasskey } from "@/lib/actions";
 import type { MfaInfo } from "@/lib/api";
 import { createCredential, passkeyError, suggestedName } from "@/lib/passkey-client";
+import { useClientValue } from "@/lib/client";
 
 const fmt = (iso: string) => new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
 
 /** Passkeys na Conta: lista, adicionar (senha atual + biometria) e remover. */
 export function PasskeysSection({ passkeys }: { passkeys: MfaInfo["passkeys"] }) {
   const router = useRouter();
-  const [supported, setSupported] = useState(true);
+  const supported = useClientValue(browserSupportsWebAuthn, true);
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
@@ -20,10 +21,6 @@ export function PasskeysSection({ passkeys }: { passkeys: MfaInfo["passkeys"] })
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
 
-  useEffect(() => {
-    setSupported(browserSupportsWebAuthn());
-    setName(suggestedName());
-  }, []);
 
   async function add(e: React.FormEvent) {
     e.preventDefault();
@@ -105,7 +102,10 @@ export function PasskeysSection({ passkeys }: { passkeys: MfaInfo["passkeys"] })
         </form>
       ) : (
         <div>
-          <button type="button" onClick={() => setOpen(true)}>
+          <button type="button" onClick={() => {
+            setName((n) => n || suggestedName());
+            setOpen(true);
+          }}>
             Adicionar passkey
           </button>
         </div>

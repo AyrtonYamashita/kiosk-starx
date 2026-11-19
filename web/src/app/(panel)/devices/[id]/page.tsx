@@ -9,7 +9,7 @@ import { AppsTable } from "./AppsTable";
 import { AppForms, CommandButtons, ManagedAppsStatus } from "./DeviceCommands";
 import { DeviceConfig } from "./DeviceConfig";
 import { LocationCard } from "./DeviceLocation";
-import { DeviceMap } from "./DeviceMap";
+import { DeviceMapLazy } from "./DeviceMapLazy";
 import { DeviceTabs } from "./DeviceTabs";
 
 export const dynamic = "force-dynamic";
@@ -117,9 +117,9 @@ export default async function DevicePage({ params }: { params: Promise<{ id: str
   return (
     <div className={`device-page wide${hasMap ? " has-map" : ""}`}>
       {/* comando em andamento: acompanha de perto (o aparelho responde em ~1 s) */}
-      <AutoRefresh seconds={commands.some((c) => c.status === "pending" || c.status === "sent") ? 2 : 10} />
+      <AutoRefresh seconds={commands.some((c) => c.status === "pending" || c.status === "sent") ? 2 : 15} />
       <LiquidGlassDefs />
-      {hasMap && <DeviceMap lat={loc.lat} lon={loc.lon} accuracyM={loc.accuracyM} />}
+      {hasMap && <DeviceMapLazy lat={loc.lat} lon={loc.lon} accuracyM={loc.accuracyM} />}
 
       <div className="device-col device-left">
         <section className="liquid-glass device-card device-head">

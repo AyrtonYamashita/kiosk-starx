@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
+import { useHydrated } from "@/lib/client";
 import { BubbleBackground } from "@/components/animate-ui/backgrounds/bubble";
 
 /*
@@ -17,9 +17,7 @@ const DARK = { first: "10,50,120", second: "8,38,92", third: "15,70,160", fourth
 export function StarxBackground() {
   const { resolvedTheme } = useTheme();
   const path = usePathname();
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-  const dark = mounted && resolvedTheme === "dark";
+  const dark = useHydrated() && resolvedTheme === "dark";
 
   return (
     <BubbleBackground

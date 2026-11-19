@@ -2,6 +2,10 @@ import "server-only";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 
+/** JSON livre (configuração e informações do aparelho): o formato é validado pelo app e pela API, não aqui. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type Json = any;
+
 export const SESSION_COOKIE = "kiosk_session";
 /** Etapa 2 do login (sessão provisória do 2FA, 10 min) e os dados para a tela do código. */
 export const MFA_COOKIE = "kiosk_mfa";
@@ -150,11 +154,11 @@ export interface DeviceDetail {
   lastSeenAt: string | null;
   lastIp: string | null;
   online: boolean;
-  info: any;
+  info: Json;
   infoUpdatedAt: string | null;
   apps: { packageName: string; label?: string; versionName?: string | null; versionCode?: number; system?: boolean }[];
   appsUpdatedAt: string | null;
-  config: any;
+  config: Json;
   configRevision: number | null;
   configSource: string | null;
   configUpdatedAt: string | null;
@@ -184,10 +188,10 @@ export type CommandType = "reboot" | "lock" | "message" | "screenshot" | "reload
 export interface Command {
   id: string;
   type: CommandType;
-  payload: any;
+  payload: Json;
   status: "pending" | "sent" | "ok" | "failed" | "expired" | "canceled";
   message: string | null;
-  output: any;
+  output: Json;
   createdBy: string | null;
   createdAt: string;
   sentAt: string | null;
@@ -227,7 +231,7 @@ export interface Profile {
   id: string;
   name: string;
   description: string;
-  config: Record<string, any>;
+  config: Record<string, Json>;
   managedApps: string[];
   devices: number;
   createdAt: string;
