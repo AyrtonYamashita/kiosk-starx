@@ -1,5 +1,6 @@
 "use client";
 
+import { useConfirm } from "@/components/ConfirmDialog";
 import { useActionState } from "react";
 import { discardKiosk, publishKiosk } from "@/lib/actions";
 import type { KioskRelease as KR } from "@/lib/api";
@@ -18,6 +19,7 @@ function size(n: number) {
  * e quantos aparelhos estão em cada versão.
  */
 export function KioskRelease({ data }: { data: KR }) {
+  const ask = useConfirm();
   const [pubState, publish, publishing] = useActionState(publishKiosk, undefined);
   const [disState, discard, discarding] = useActionState(discardKiosk, undefined);
   const { release, pending } = data;
@@ -92,7 +94,7 @@ export function KioskRelease({ data }: { data: KR }) {
             <form
               action={publish}
               onSubmit={(e) => {
-                if (!confirm(`Publicar a ${pending.versionName} (${pending.versionCode}) para todos os aparelhos?`)) e.preventDefault();
+                ask.submit(e, { title: `Publicar a ${pending.versionName} (${pending.versionCode})?`, message: "Todos os aparelhos recebem esta versão do app no próximo contato.", confirmLabel: "Publicar" });
               }}
             >
               <button className="primary" disabled={publishing}>

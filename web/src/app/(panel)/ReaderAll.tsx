@@ -1,11 +1,13 @@
 "use client";
 
+import { useConfirm } from "@/components/ConfirmDialog";
 import { useActionState } from "react";
 import { setOpsReaderAll } from "@/lib/actions";
 import type { OpsSettings } from "@/lib/api";
 
 /** Chave geral da leitura do SSW: todos os coletores ou só os pilotos (ligados um a um). */
 export function ReaderAll({ settings, canEdit }: { settings: OpsSettings; canEdit: boolean }) {
+  const ask = useConfirm();
   const [state, action, pending] = useActionState(setOpsReaderAll, undefined);
   const { readerAll, devices } = settings;
   return (
@@ -15,7 +17,12 @@ export function ReaderAll({ settings, canEdit }: { settings: OpsSettings; canEdi
       title={`Leitura do SSW: lendo em ${devices.reading} de ${devices.total} coletores`}
       onSubmit={(e) => {
         const to = ((e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null)?.value;
-        if (to === "1" && !confirm(`Ligar a leitura do SSW em todos os coletores (${devices.total - devices.custom} seguem a chave geral)?`)) e.preventDefault();
+        if (to === "1")
+          ask.submit(e, {
+            title: "Ligar a leitura do SSW em todos os coletores?",
+            message: `${devices.total - devices.custom} coletores seguem a chave geral e passam a ler o SSW.`,
+            confirmLabel: "Ligar em todos",
+          });
       }}
     >
       <span className="small muted">Leitura do SSW</span>

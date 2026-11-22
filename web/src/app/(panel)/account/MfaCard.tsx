@@ -1,5 +1,6 @@
 "use client";
 
+import { useConfirm } from "@/components/ConfirmDialog";
 import { useActionState } from "react";
 import { generateRecoveryCodes, revokeTrustedDevice } from "@/lib/actions";
 import type { MfaInfo } from "@/lib/api";
@@ -15,6 +16,7 @@ const fmt = (iso: string) => new Date(iso).toLocaleDateString("pt-BR", { timeZon
 
 /** Códigos de recuperação: quantos restam e o botão para gerar novos (mostrados uma vez só). */
 export function RecoveryCodes({ left }: { left: number }) {
+  const ask = useConfirm();
   const [state, generate, pending] = useActionState(generateRecoveryCodes, undefined);
   return (
     <div className="stack" style={{ gap: 10 }}>
@@ -37,7 +39,7 @@ export function RecoveryCodes({ left }: { left: number }) {
         <form
           action={generate}
           onSubmit={(e) => {
-            if (left > 0 && !confirm("Gerar códigos novos? Os anteriores deixam de valer.")) e.preventDefault();
+            if (left > 0) ask.submit(e, { title: "Gerar códigos novos?", message: "Os códigos de recuperação anteriores deixam de valer.", confirmLabel: "Gerar códigos", danger: true });
           }}
         >
           <button disabled={pending}>{left > 0 ? "Gerar códigos novos" : "Gerar códigos de recuperação"}</button>

@@ -3,6 +3,7 @@
 import { useActionState, useRef, useState } from "react";
 import { PencilLine } from "lucide-react";
 import { deleteDevice, renameDevice, setOpsReader } from "@/lib/actions";
+import { useConfirm } from "@/components/ConfirmDialog";
 
 /**
  * Nome do coletor no topo da página: clique para editar. Enter ou clicar fora salva, Esc desiste. Em branco, volta ao
@@ -130,12 +131,18 @@ export function OpsReaderToggle({
 const OPS_MIN_VERSION_CODE = 10;
 
 export function DeleteDevice({ id, name }: { id: string; name: string }) {
+  const ask = useConfirm();
   return (
     <form
       action={deleteDevice}
-      onSubmit={(e) => {
-        if (!confirm(`Remover "${name}" do painel?\n\nO aparelho continua com o kiosk, mas para de aparecer aqui até ser cadastrado de novo.`)) e.preventDefault();
-      }}
+      onSubmit={(e) =>
+        ask.submit(e, {
+          title: `Remover "${name}" do painel?`,
+          message: "O aparelho continua com o kiosk, mas para de aparecer aqui até ser cadastrado de novo.",
+          confirmLabel: "Remover",
+          danger: true,
+        })
+      }
       className="row"
     >
       <input type="hidden" name="id" value={id} />

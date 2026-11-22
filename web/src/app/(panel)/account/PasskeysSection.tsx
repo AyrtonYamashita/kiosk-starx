@@ -1,5 +1,6 @@
 "use client";
 
+import { useConfirm } from "@/components/ConfirmDialog";
 import { browserSupportsWebAuthn } from "@simplewebauthn/browser";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -12,6 +13,7 @@ const fmt = (iso: string) => new Date(iso).toLocaleDateString("pt-BR", { timeZon
 
 /** Passkeys na Conta: lista, adicionar (senha atual + biometria) e remover. */
 export function PasskeysSection({ passkeys }: { passkeys: MfaInfo["passkeys"] }) {
+  const ask = useConfirm();
   const router = useRouter();
   const supported = useClientValue(browserSupportsWebAuthn, true);
   const [open, setOpen] = useState(false);
@@ -64,7 +66,7 @@ export function PasskeysSection({ passkeys }: { passkeys: MfaInfo["passkeys"] })
                     <form
                       action={removePasskey}
                       onSubmit={(e) => {
-                        if (!confirm(`Remover a passkey "${p.name}"? Ela deixa de entrar no painel.`)) e.preventDefault();
+                        ask.submit(e, { title: `Remover a passkey "${p.name}"?`, message: "Ela deixa de entrar no painel.", confirmLabel: "Remover", danger: true });
                       }}
                     >
                       <input type="hidden" name="id" value={p.id} />

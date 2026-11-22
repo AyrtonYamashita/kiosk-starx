@@ -1,5 +1,6 @@
 "use client";
 
+import { useConfirm } from "@/components/ConfirmDialog";
 import { useActionState } from "react";
 import { AnimateIcon } from "@animate-ui/react/icons";
 import { Camera } from "@/components/animate-ui/icons/camera";
@@ -19,12 +20,13 @@ function Feedback({ state }: { state: { ok?: string; error?: string } | undefine
 }
 
 function QuickCommand({ deviceId, type, label, confirmText, danger }: { deviceId: string; type: string; label: string; confirmText?: string; danger?: boolean }) {
+  const ask = useConfirm();
   const [state, action, pending] = useActionState(sendCommand, undefined);
   return (
     <form
       action={action}
       onSubmit={(e) => {
-        if (confirmText && !confirm(confirmText)) e.preventDefault();
+        if (confirmText) ask.submit(e, { title: confirmText, confirmLabel: label, danger });
       }}
       className="row"
     >
@@ -61,6 +63,7 @@ function MessageForm({ deviceId }: { deviceId: string }) {
 }
 
 export function AppForms({ device, repo }: { device: DeviceDetail; repo: RepoApp[] }) {
+  const ask = useConfirm();
   const [installState, install, installing] = useActionState(sendCommand, undefined);
   const [removeState, remove, removing] = useActionState(sendCommand, undefined);
   const removable = device.apps
@@ -97,7 +100,7 @@ export function AppForms({ device, repo }: { device: DeviceDetail; repo: RepoApp
       <form
         action={remove}
         onSubmit={(e) => {
-          if (!confirm("Remover o app deste aparelho? Os dados do app são apagados.")) e.preventDefault();
+          ask.submit(e, { title: "Remover o app deste aparelho?", message: "Os dados do app são apagados.", confirmLabel: "Remover", danger: true });
         }}
         className="stack"
       >
@@ -273,6 +276,7 @@ const BUTTONS = [
  * comandos continuam em DeviceCommands (não exibidos nesta tela, por decisão do design).
  */
 export function CommandButtons({ device, screenshots }: { device: DeviceDetail; screenshots: Screenshot[] }) {
+  const ask = useConfirm();
   const [state, action, pending] = useActionState(sendCommand, undefined);
   const latest = screenshots[0];
   const oldAppVersion = (device.appVersionCode ?? 0) < 5;
@@ -287,7 +291,7 @@ export function CommandButtons({ device, screenshots }: { device: DeviceDetail; 
         action={action}
         onSubmit={(e) => {
           const type = ((e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null)?.value;
-          if (type === "reboot" && !confirm(`Reiniciar "${device.name}"?`)) e.preventDefault();
+          if (type === "reboot") ask.submit(e, { title: `Reiniciar "${device.name}"?`, message: "O aparelho reinicia na hora.", confirmLabel: "Reiniciar", danger: true });
         }}
         className="cmd-buttons"
       >

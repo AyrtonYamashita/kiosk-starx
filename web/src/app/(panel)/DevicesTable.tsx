@@ -1,5 +1,6 @@
 "use client";
 
+import { useConfirm } from "@/components/ConfirmDialog";
 import Link from "next/link";
 import { useActionState, useMemo, useState } from "react";
 import { Search } from "lucide-react";
@@ -23,13 +24,15 @@ function Battery({ b, online }: { b: DeviceSummary["battery"]; online: boolean }
 }
 
 function BulkCommand({ ids, repo }: { ids: string[]; repo: { packageName: string; label: string }[] }) {
+  const ask = useConfirm();
   const [state, action, pending] = useActionState(sendCommand, undefined);
   const [type, setType] = useState("");
   return (
     <form
       action={action}
       onSubmit={(e) => {
-        if (type === "reboot" && !confirm(`Reiniciar ${ids.length} aparelho(s)?`)) e.preventDefault();
+        if (type === "reboot")
+          ask.submit(e, { title: `Reiniciar ${ids.length} aparelho(s)?`, message: "Os aparelhos selecionados reiniciam na hora.", confirmLabel: "Reiniciar", danger: true });
       }}
       className="row"
     >

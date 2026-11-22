@@ -232,6 +232,32 @@ button.danger, button.danger:hover {
 }
 button.danger:hover { color: var(--bad); }
 button.danger:disabled { background: none; color: var(--soft); }
+button.danger-solid { background: var(--bad); border-color: var(--bad); color: var(--surface); }
+button.danger-solid:hover { background: var(--bad); border-color: var(--bad); color: var(--surface); filter: brightness(0.92); }
+
+/* confirmação (ConfirmDialog): <dialog> modal no lugar do confirm() do navegador */
+dialog.confirm-dialog {
+  padding: 0; border: none; background: none; color: inherit; max-width: calc(100vw - 32px); width: 420px; overflow: visible;
+}
+dialog.confirm-dialog::backdrop { background: rgb(4 10 20 / 0.55); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
+dialog.confirm-dialog[open] { animation: confirm-in .16s ease-out; }
+dialog.confirm-dialog[open]::backdrop { animation: confirm-fade .16s ease-out; }
+@keyframes confirm-in { from { opacity: 0; transform: translateY(6px) scale(0.98); } to { opacity: 1; transform: none; } }
+@keyframes confirm-fade { from { opacity: 0; } to { opacity: 1; } }
+.confirm-box {
+  display: flex; flex-direction: column; gap: 18px; padding: 20px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); box-shadow: var(--shadow-float);
+}
+.confirm-head { display: flex; gap: 14px; align-items: flex-start; }
+.confirm-icon {
+  flex: none; width: 36px; height: 36px; display: grid; place-items: center; border-radius: var(--radius-chip);
+  background: var(--blue-tint); border: 1px solid var(--blue-edge); color: var(--blue-deep);
+}
+.confirm-icon.danger { background: var(--bad-tint); border-color: var(--bad-edge); color: var(--bad-deep); }
+.confirm-texts { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding-top: 2px; }
+.confirm-texts h2 { font-family: var(--font-display); font-size: 15px; line-height: 20px; letter-spacing: -0.01em; overflow-wrap: anywhere; }
+.confirm-texts p { margin: 0; font-size: 12.5px; line-height: 18px; overflow-wrap: anywhere; }
+.confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .link-button, .link-button:hover { height: auto; padding: 0; background: none; border: none; color: var(--soft); font-weight: 400; font-size: 11px; }
 .link-button:hover { color: var(--ink); }
 .icon-link { display: inline-flex; align-items: center; gap: 6px; }

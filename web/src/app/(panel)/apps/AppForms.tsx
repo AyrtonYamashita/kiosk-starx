@@ -1,5 +1,6 @@
 "use client";
 
+import { useConfirm } from "@/components/ConfirmDialog";
 import { useActionState } from "react";
 import { deleteApp, deleteAppVersion, renameApp } from "@/lib/actions";
 
@@ -17,12 +18,13 @@ export function RenameApp({ packageName, label }: { packageName: string; label: 
 }
 
 export function DeleteVersion({ packageName, versionCode, label }: { packageName: string; versionCode: number; label: string }) {
+  const ask = useConfirm();
   const [state, action, pending] = useActionState(deleteAppVersion, undefined);
   return (
     <form
       action={action}
       onSubmit={(e) => {
-        if (!confirm(`Remover a versão ${versionCode} de ${label} do repositório? Os aparelhos não são afetados.`)) e.preventDefault();
+        ask.submit(e, { title: `Remover a versão ${versionCode} de ${label}?`, message: "Ela sai do repositório. Os aparelhos não são afetados.", confirmLabel: "Remover", danger: true });
       }}
     >
       <input type="hidden" name="packageName" value={packageName} />
@@ -36,12 +38,13 @@ export function DeleteVersion({ packageName, versionCode, label }: { packageName
 }
 
 export function DeleteApp({ packageName, label }: { packageName: string; label: string }) {
+  const ask = useConfirm();
   const [state, action, pending] = useActionState(deleteApp, undefined);
   return (
     <form
       action={action}
       onSubmit={(e) => {
-        if (!confirm(`Remover ${label} (todas as versões) do repositório? Os aparelhos continuam com o app instalado.`)) e.preventDefault();
+        ask.submit(e, { title: `Remover ${label} do repositório?`, message: "Todas as versões saem do repositório. Os aparelhos continuam com o app instalado.", confirmLabel: "Remover", danger: true });
       }}
       className="row"
     >

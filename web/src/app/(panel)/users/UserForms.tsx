@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 import { createUser, resetUserMfa, updateUser } from "@/lib/actions";
 import type { UserInfo } from "@/lib/api";
+import { useConfirm } from "@/components/ConfirmDialog";
 
 function Feedback({ state }: { state: { ok?: string; error?: string } | undefined }) {
   if (state?.error) return <div className="alert error">{state.error}</div>;
@@ -53,6 +54,7 @@ export function CreateUserForm() {
 
 /** Editar e-mail e papel, redefinir senha e ativar/desativar (desativar e trocar papel/senha encerram as sessões). */
 export function EditUser({ user, self }: { user: UserInfo; self: boolean }) {
+  const ask = useConfirm();
   const [open, setOpen] = useState(false);
   const [state, action, pending] = useActionState(updateUser, undefined);
   const [mfaState, resetMfa, resetting] = useActionState(resetUserMfa, undefined);
@@ -107,9 +109,14 @@ export function EditUser({ user, self }: { user: UserInfo; self: boolean }) {
           formAction={resetMfa}
           className="danger"
           disabled={resetting}
-          onClick={(e) => {
-            if (!confirm(`Zerar o 2FA de ${user.username}? Apaga os códigos de recuperação e os navegadores confiáveis${self ? "" : " e encerra as sessões"}.`)) e.preventDefault();
-          }}
+          onClick={(e) =>
+            ask.click(e, {
+              title: `Zerar o 2FA de ${user.username}?`,
+              message: `Apaga os códigos de recuperação e os navegadores confiáveis${self ? "" : " e encerra as sessões"}.`,
+              confirmLabel: "Zerar 2FA",
+              danger: true,
+            })
+          }
         >
           Zerar 2FA (perdeu o acesso)
         </button>
