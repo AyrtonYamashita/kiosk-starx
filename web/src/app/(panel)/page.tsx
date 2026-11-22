@@ -15,7 +15,7 @@ export default async function DevicesPage() {
     api<Me>("/v1/admin/me"),
   ]);
   return (
-    <div className="stack wide">
+    <div className="stack wide fit-page">
       <AutoRefresh seconds={15} />
       <div className="row">
         <h1 style={{ margin: 0 }}>Aparelhos</h1>

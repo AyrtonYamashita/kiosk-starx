@@ -237,107 +237,109 @@ export function DevicesTable({
           </button>
         </div>
       ) : (
-        <div className="card table-wrap" style={{ padding: 0 }}>
-          <table>
-            <thead>
-              <tr>
-                <th style={{ width: 32 }}>
-                  <input
-                    type="checkbox"
-                    aria-label="Selecionar todos os exibidos"
-                    checked={all}
-                    onChange={() => setSelected(all ? new Set() : new Set(list.map((d) => d.id)))}
-                  />
-                </th>
-                <th>Aparelho</th>
-                <th className="hide-sm">Usuário</th>
-                <th className="hide-sm">Bateria</th>
-                <th className="hide-sm">Rede</th>
-                <th className="hide-sm">Ligado há</th>
-                <th className="hide-sm">Kiosk / perfil</th>
-                <th className="hide-sm">App</th>
-              </tr>
-            </thead>
-            <tbody>
-              {list.map((d) => {
-                const [, label, hint] = configStatusLabel[d.configStatus];
-                const mode = d.kioskEnabled ? kioskModeLabel[d.kioskMode ?? ""] ?? d.kioskMode : d.kioskEnabled === false ? "Kiosk desligado" : "—";
-                return (
-                  <tr key={d.id}>
-                    <td>
-                      <input type="checkbox" aria-label={`Selecionar ${d.name}`} checked={selected.has(d.id)} onChange={() => toggle(d.id)} />
-                    </td>
-                    <td>
-                      <span className="dev-name">
-                        <span
-                          className={`dot ${d.online ? "good" : "off"}`}
-                          role="img"
-                          aria-label={d.online ? "online" : "offline"}
-                          title={`${d.online ? "online" : "offline"} · último contato ${ago(d.lastSeenAt)}`}
-                        />
-                        <Link href={`/devices/${d.id}`}>
-                          <strong>{d.name}</strong>
-                        </Link>
-                      </span>
-                      <div className="muted small">
-                        {modelOf(d)} · {d.serial ?? "sem serial"}
-                      </div>
-                      <div className="show-sm dev-mobile">
-                        {d.loggedUser && <span className="mono">{d.loggedUser}</span>}
-                        <Battery b={d.battery} online={d.online} />
-                      </div>
-                    </td>
-                    <td className="hide-sm">{d.loggedUser ? <span className="mono">{d.loggedUser}</span> : <span className="muted small">—</span>}</td>
-                    <td className="hide-sm">
-                      <Battery b={d.battery} online={d.online} />
-                    </td>
-                    <td className="hide-sm">
-                      {d.network ? (
-                        <>
-                          {d.network.type === "wifi" ? <span className="mono">{d.network.ssid ?? "(rede oculta)"}</span> : networkLabel[d.network.type] ?? d.network.type}
-                          <div className="muted small mono">
-                            {d.network.ip ?? ""}
-                            {d.network.type === "wifi" && d.network.rssi !== null ? ` · ${d.network.rssi} dBm` : ""}
-                          </div>
-                          {d.network.mac && <div className="muted small mono">{d.network.mac}</div>}
-                        </>
-                      ) : (
-                        <span className="muted">—</span>
-                      )}
-                    </td>
-                    <td className="hide-sm">
-                      {d.uptimeMs === null ? (
-                        <span className="muted">—</span>
-                      ) : (
-                        <>
-                          <span className="mono" suppressHydrationWarning>
-                            {uptime(d.uptimeMs + (d.online ? msSince(d.infoUpdatedAt) : 0))}
-                          </span>
-                          {!d.online && <div className="muted small">no último contato</div>}
-                        </>
-                      )}
-                    </td>
-                    <td className="hide-sm">
-                      <span className="dev-kiosk">
-                        {mode} <span className="muted">/</span> {d.profileName ?? <span className="muted">sem perfil</span>}
-                      </span>
-                      {d.configStatus === "error" && (
-                        <div>
-                          <span className="badge danger" title={hint}>
-                            <span className="dot" /> {label}
-                          </span>
+        <div className="card list-card">
+          <div className="list-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th style={{ width: 32 }}>
+                    <input
+                      type="checkbox"
+                      aria-label="Selecionar todos os exibidos"
+                      checked={all}
+                      onChange={() => setSelected(all ? new Set() : new Set(list.map((d) => d.id)))}
+                    />
+                  </th>
+                  <th>Aparelho</th>
+                  <th className="hide-sm">Usuário</th>
+                  <th className="hide-sm">Bateria</th>
+                  <th className="hide-sm">Rede</th>
+                  <th className="hide-sm">Ligado há</th>
+                  <th className="hide-sm">Kiosk / perfil</th>
+                  <th className="hide-sm">App</th>
+                </tr>
+              </thead>
+              <tbody>
+                {list.map((d) => {
+                  const [, label, hint] = configStatusLabel[d.configStatus];
+                  const mode = d.kioskEnabled ? kioskModeLabel[d.kioskMode ?? ""] ?? d.kioskMode : d.kioskEnabled === false ? "Kiosk desligado" : "—";
+                  return (
+                    <tr key={d.id}>
+                      <td>
+                        <input type="checkbox" aria-label={`Selecionar ${d.name}`} checked={selected.has(d.id)} onChange={() => toggle(d.id)} />
+                      </td>
+                      <td>
+                        <span className="dev-name">
+                          <span
+                            className={`dot ${d.online ? "good" : "off"}`}
+                            role="img"
+                            aria-label={d.online ? "online" : "offline"}
+                            title={`${d.online ? "online" : "offline"} · último contato ${ago(d.lastSeenAt)}`}
+                          />
+                          <Link href={`/devices/${d.id}`}>
+                            <strong>{d.name}</strong>
+                          </Link>
+                        </span>
+                        <div className="muted small">
+                          {modelOf(d)} · {d.serial ?? "sem serial"}
                         </div>
-                      )}
-                    </td>
-                    <td className="hide-sm">
-                      {d.appVersion ?? "—"}
-                      <div className="muted small">Android {d.androidVersion ?? "?"}</div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                        <div className="show-sm dev-mobile">
+                          {d.loggedUser && <span className="mono">{d.loggedUser}</span>}
+                          <Battery b={d.battery} online={d.online} />
+                        </div>
+                      </td>
+                      <td className="hide-sm">{d.loggedUser ? <span className="mono">{d.loggedUser}</span> : <span className="muted small">—</span>}</td>
+                      <td className="hide-sm">
+                        <Battery b={d.battery} online={d.online} />
+                      </td>
+                      <td className="hide-sm">
+                        {d.network ? (
+                          <>
+                            {d.network.type === "wifi" ? <span className="mono">{d.network.ssid ?? "(rede oculta)"}</span> : networkLabel[d.network.type] ?? d.network.type}
+                            <div className="muted small mono">
+                              {d.network.ip ?? ""}
+                              {d.network.type === "wifi" && d.network.rssi !== null ? ` · ${d.network.rssi} dBm` : ""}
+                            </div>
+                            {d.network.mac && <div className="muted small mono">{d.network.mac}</div>}
+                          </>
+                        ) : (
+                          <span className="muted">—</span>
+                        )}
+                      </td>
+                      <td className="hide-sm">
+                        {d.uptimeMs === null ? (
+                          <span className="muted">—</span>
+                        ) : (
+                          <>
+                            <span className="mono" suppressHydrationWarning>
+                              {uptime(d.uptimeMs + (d.online ? msSince(d.infoUpdatedAt) : 0))}
+                            </span>
+                            {!d.online && <div className="muted small">no último contato</div>}
+                          </>
+                        )}
+                      </td>
+                      <td className="hide-sm">
+                        <span className="dev-kiosk">
+                          {mode} <span className="muted">/</span> {d.profileName ?? <span className="muted">sem perfil</span>}
+                        </span>
+                        {d.configStatus === "error" && (
+                          <div>
+                            <span className="badge danger" title={hint}>
+                              <span className="dot" /> {label}
+                            </span>
+                          </div>
+                        )}
+                      </td>
+                      <td className="hide-sm">
+                        {d.appVersion ?? "—"}
+                        <div className="muted small">Android {d.androidVersion ?? "?"}</div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
       </div>

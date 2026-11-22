@@ -45,7 +45,7 @@ export default async function CargasPage({ searchParams }: { searchParams: Promi
   const filtered = Object.values(filters).some(Boolean);
 
   return (
-    <div className="stack wide">
+    <div className="stack wide fit-page">
       <div className="row">
         <h1 style={{ margin: 0 }}>Cargas</h1>
       </div>
@@ -109,87 +109,91 @@ export default async function CargasPage({ searchParams }: { searchParams: Promi
       {data.operations.length === 0 ? (
         <div className="card muted">{filtered ? "Nenhuma carga com esses filtros." : "Nenhuma carga registrada ainda."}</div>
       ) : (
-        <div className="card table-wrap" style={{ padding: 0 }}>
-          <table className="cargas-table">
-            <thead>
-              <tr>
-                <th>Início</th>
-                <th>Placa</th>
-                <th className="hide-sm">Função</th>
-                <th>Colaborador</th>
-                <th className="hide-sm">Coletor</th>
-                <th style={{ textAlign: "right" }}>Volumes</th>
-                <th className="hide-sm" style={{ textAlign: "right" }}>
-                  Valor
-                </th>
-                <th className="hide-sm" style={{ textAlign: "right" }}>
-                  Duração
-                </th>
-                <th>Situação</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.operations.map((o) => {
-                const pct = o.totalQty > 0 ? Math.min(100, (o.readQty / o.totalQty) * 100) : 0;
-                return (
-                  <tr key={o.id}>
-                    <td className="mono">
-                      <Link href={`/operations/${o.device.id}?op=${o.id}`} className="cargas-link">
-                        {dateTime(o.startedAt)}
-                      </Link>
-                    </td>
-                    <td>
-                      <span className="ops-plate mono">{o.realPlate || o.plate}</span>
-                      {o.realPlate && o.realPlate !== o.plate && <div className="muted small mono">{o.plate}</div>}
-                    </td>
-                    <td className="hide-sm">
-                      {o.fnLabel}
-                      {o.units.length > 0 && <div className="muted small">{o.units.join(" · ")}</div>}
-                    </td>
-                    <td>{o.user ? <span className="mono">{o.user}</span> : <span className="muted">—</span>}</td>
-                    <td className="hide-sm">
-                      <Link href={`/devices/${o.device.id}`} className="mono small">
-                        {o.device.name}
-                      </Link>
-                      {o.branch && <div className="muted small">{o.branch}</div>}
-                    </td>
-                    <td style={{ textAlign: "right" }}>
-                      <span className="mono">
-                        {fmtQty(o.readQty)}/{fmtQty(o.totalQty)}
-                      </span>
-                      <div className="ops-bar cargas-bar" aria-hidden>
-                        <span style={{ width: `${pct}%` }} />
-                      </div>
-                    </td>
-                    <td className="hide-sm mono" style={{ textAlign: "right" }}>
-                      {fmtMoney(o.totalValue)}
-                    </td>
-                    <td className="hide-sm mono" style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                      {fmtDuration(o.durationSec)}
-                    </td>
-                    <td>
-                      <Status o={o} />
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {(data.next || s.before) && (
-        <div className="row">
-          {data.next && (
-            <Link href={`/cargas?${qs({ ...filters, before: data.next })}`} className="button">
-              Mais antigas
-            </Link>
-          )}
-          {s.before && (
-            <Link href={`/cargas?${qs(filters)}`} className="link-button">
-              voltar ao início
-            </Link>
-          )}
+        <div className="card list-card">
+          <div className="list-scroll">
+            <table className="cargas-table">
+              <thead>
+                <tr>
+                  <th>Início</th>
+                  <th>Placa</th>
+                  <th className="hide-sm">Função</th>
+                  <th>Colaborador</th>
+                  <th className="hide-sm">Coletor</th>
+                  <th style={{ textAlign: "right" }}>Volumes</th>
+                  <th className="hide-sm" style={{ textAlign: "right" }}>
+                    Valor
+                  </th>
+                  <th className="hide-sm" style={{ textAlign: "right" }}>
+                    Duração
+                  </th>
+                  <th>Situação</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.operations.map((o) => {
+                  const pct = o.totalQty > 0 ? Math.min(100, (o.readQty / o.totalQty) * 100) : 0;
+                  return (
+                    <tr key={o.id}>
+                      <td className="mono">
+                        <Link href={`/operations/${o.device.id}?op=${o.id}`} className="cargas-link">
+                          {dateTime(o.startedAt)}
+                        </Link>
+                      </td>
+                      <td>
+                        <span className="ops-plate mono">{o.realPlate || o.plate}</span>
+                        {o.realPlate && o.realPlate !== o.plate && <div className="muted small mono">{o.plate}</div>}
+                      </td>
+                      <td className="hide-sm">
+                        {o.fnLabel}
+                        {o.units.length > 0 && <div className="muted small">{o.units.join(" · ")}</div>}
+                      </td>
+                      <td>{o.user ? <span className="mono">{o.user}</span> : <span className="muted">—</span>}</td>
+                      <td className="hide-sm">
+                        <Link href={`/devices/${o.device.id}`} className="mono small">
+                          {o.device.name}
+                        </Link>
+                        {o.branch && <div className="muted small">{o.branch}</div>}
+                      </td>
+                      <td style={{ textAlign: "right" }}>
+                        <span className="mono">
+                          {fmtQty(o.readQty)}/{fmtQty(o.totalQty)}
+                        </span>
+                        <div className="ops-bar cargas-bar" aria-hidden>
+                          <span style={{ width: `${pct}%` }} />
+                        </div>
+                      </td>
+                      <td className="hide-sm mono" style={{ textAlign: "right" }}>
+                        {fmtMoney(o.totalValue)}
+                      </td>
+                      <td className="hide-sm mono" style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                        {fmtDuration(o.durationSec)}
+                      </td>
+                      <td>
+                        <Status o={o} />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="list-foot">
+            <span className="muted small">
+              {data.operations.length} {data.operations.length === 1 ? "carga" : "cargas"}
+              {data.next || s.before ? " nesta página" : ""}
+            </span>
+            <span className="spacer" />
+            {s.before && (
+              <Link href={`/cargas?${qs(filters)}`} className="link-button">
+                voltar ao início
+              </Link>
+            )}
+            {data.next && (
+              <Link href={`/cargas?${qs({ ...filters, before: data.next })}`} className="button">
+                Mais antigas
+              </Link>
+            )}
+          </div>
         </div>
       )}
     </div>

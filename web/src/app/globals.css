@@ -84,7 +84,19 @@ button:not(:disabled), [role='button'] { cursor: pointer; }
   /* Aparelhos: filtros e tabela descem até o fim */
   .main > .page > .stack > .dev-layout { flex-grow: 1; align-items: stretch; }
   .dev-layout > .dev-main > .card:not(:has(~ .card)) { flex-grow: 1; }
+
+  /* listas longas (Cargas, Aparelhos): a página fica na altura do menu e a lista rola dentro do card */
+  .main > .page > .fit-page { height: calc(100dvh - 48px); min-height: 0; }
+  .fit-page > .list-card, .fit-page .dev-main > .list-card { flex: 1 1 0; min-height: 160px; }
+  .fit-page > .dev-layout { flex: 1 1 0; min-height: 0; }
+  .fit-page .dev-filters { position: static; max-height: none; }
+  .fit-page .dev-main { min-height: 0; }
+  .fit-page .list-scroll { flex: 1 1 0; min-height: 0; overflow: auto; }
+  .fit-page .list-scroll thead th { position: sticky; top: 0; z-index: 1; background: var(--surface); }
 }
+.list-card { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
+.list-scroll { overflow-x: auto; }
+.list-foot { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-top: 1px solid var(--rule); flex: none; }
 
 /* celular: o menu lateral vira a barra de abas inferior */
 .tabbar { display: none; }
