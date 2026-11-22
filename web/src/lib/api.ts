@@ -181,6 +181,8 @@ export interface DeviceDetail {
   opsReaderAll: boolean;
   /** Usuário logado no SSW agora (última leitura). */
   sswUser: string | null;
+  /** última ciência do aviso de privacidade neste coletor (app 0.5.4+) */
+  privacyAck: { at: string; sswUser: string | null; hash: string } | null;
 }
 
 export type CommandType = "reboot" | "lock" | "message" | "screenshot" | "reload" | "install_app" | "uninstall_app";

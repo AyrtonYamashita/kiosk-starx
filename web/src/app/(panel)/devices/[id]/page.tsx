@@ -163,6 +163,22 @@ export default async function DevicePage({ params }: { params: Promise<{ id: str
             <dd>
               {d.sswUser ? <span className="mono">{d.sswUser}</span> : <span className="muted">{d.opsReader ? "ninguém no SSW" : "leitura desligada"}</span>}
             </dd>
+            <dt>Aviso de privacidade</dt>
+            <dd>
+              {d.privacyAck ? (
+                <>
+                  lido em {dateTime(d.privacyAck.at)}
+                  {d.privacyAck.sswUser && (
+                    <>
+                      {" "}
+                      por <span className="mono">{d.privacyAck.sswUser}</span>
+                    </>
+                  )}
+                </>
+              ) : (
+                <span className="muted">{(d.config?.display as { privacyNotice?: string } | undefined)?.privacyNotice ? "ainda não lido" : "sem aviso"}</span>
+              )}
+            </dd>
             <dt>Cadastro</dt>
             <dd>
               {dateTime(d.enrolledAt)}

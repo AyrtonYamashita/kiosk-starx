@@ -24,7 +24,7 @@ export async function privacyRoutes(app: FastifyInstance, opts: { db: Db; config
     const user = User.safeParse((req.params as { user: string }).user);
     if (!user.success) return reply.code(400).send({ error: "invalid_user" });
     const data = await exportSubject(db, user.data);
-    if (!data.cargas.length && !data.eventos_guardados.length && !data.estado_atual.length) {
+    if (!data.cargas.length && !data.eventos_guardados.length && !data.estado_atual.length && !data.ciencia_do_aviso_de_privacidade.length) {
       return reply.code(404).send({ error: "not_found", message: "Nenhum dado com esse usuário do SSW." });
     }
     await audit(db, req, "privacy_export", { adminId: req.admin!.id, details: { cargas: data.cargas.length } });
@@ -35,7 +35,7 @@ export async function privacyRoutes(app: FastifyInstance, opts: { db: Db; config
     const user = User.safeParse((req.params as { user: string }).user);
     if (!user.success) return reply.code(400).send({ error: "invalid_user" });
     const r = await anonymizeSubject(db, config.authSecret, user.data, req.admin!.id);
-    if (!r.operations && !r.current && !r.events) return reply.code(404).send({ error: "not_found", message: "Nenhum dado com esse usuário do SSW." });
+    if (!r.operations && !r.current && !r.events && !r.acks) return reply.code(404).send({ error: "not_found", message: "Nenhum dado com esse usuário do SSW." });
     // a trilha não guarda o usuário anonimizado (só o que mudou)
     await audit(db, req, "privacy_anonymize", { adminId: req.admin!.id, details: r });
     return { ok: true, ...r };

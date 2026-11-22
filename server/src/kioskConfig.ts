@@ -51,6 +51,8 @@ export const KioskConfigInput = z
         lowBatteryMessage: z.string().trim().min(1).max(200),
         orientation: z.enum(["auto", "portrait", "landscape"]),
         showStatusBar: z.boolean(),
+        /** Aviso de privacidade mostrado no coletor (app 0.5.4+); vazio = sem aviso. */
+        privacyNotice: z.string().max(4000),
       })
       .partial()
       .strict(),

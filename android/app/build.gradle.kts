@@ -10,8 +10,8 @@ plugins {
     id("com.android.application")
 }
 
-val appVersionCode = 13
-val appVersionName = "0.5.3"
+val appVersionCode = 14
+val appVersionName = "0.5.4"
 
 // ---------------------------------------------------------------------------------------------
 // Assinatura de release: keystore FORA do repositório e do OneDrive, com backup próprio.

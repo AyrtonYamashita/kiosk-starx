@@ -97,6 +97,11 @@ data class KioskConfig(
         val orientation: Orientation = Orientation.AUTO,
         /** Barra de status com hora/bateria/rede durante o kiosk. */
         val showStatusBar: Boolean = false,
+        /**
+         * Aviso de privacidade (LGPD) em tela cheia, com "Entendi": uma vez por aparelho e de novo quando o texto muda.
+         * A ciência vai ao painel no check-in. Vazio = sem aviso.
+         */
+        val privacyNotice: String = "",
     )
 
     data class Appearance(
@@ -181,7 +186,8 @@ data class KioskConfig(
                 .put("lowBatteryPercent", display.lowBatteryPercent)
                 .put("lowBatteryMessage", display.lowBatteryMessage)
                 .put("orientation", display.orientation.wire)
-                .put("showStatusBar", display.showStatusBar),
+                .put("showStatusBar", display.showStatusBar)
+                .put("privacyNotice", display.privacyNotice),
         )
         .put(
             "appearance",
@@ -256,6 +262,7 @@ data class KioskConfig(
                     lowBatteryMessage = r.str(disp, "display.lowBatteryMessage", d.display.lowBatteryMessage).take(200).ifBlank { d.display.lowBatteryMessage },
                     orientation = r.enum(disp, "display.orientation", d.display.orientation, Orientation::of),
                     showStatusBar = r.bool(disp, "display.showStatusBar", d.display.showStatusBar),
+                    privacyNotice = r.str(disp, "display.privacyNotice", d.display.privacyNotice).take(4000),
                 ),
                 appearance = Appearance(
                     title = r.str(look, "appearance.title", d.appearance.title).take(80),

@@ -38,6 +38,7 @@ import android.widget.TextView
 import com.pstarx.kiosk.config.KioskConfig
 import com.pstarx.kiosk.ops.OpsReader
 import com.pstarx.kiosk.panel.PanelStore
+import com.pstarx.kiosk.panel.PanelSync
 import com.pstarx.kiosk.security.TapCounter
 import com.pstarx.kiosk.ui.PinActivity
 import com.pstarx.kiosk.ui.Theme
@@ -77,6 +78,7 @@ class KioskActivity : Activity() {
     /** Operador parado no SSW: aviso de 30 s e saída (kiosk.web.idleLogoutMin). */
     private val idle = IdleLogout()
     private var idleOverlay: View? = null
+    private var privacyOverlay: View? = null
     private var idleButton: Button? = null
     private val idleTick = object : Runnable {
         override fun run() {
@@ -284,7 +286,10 @@ class KioskActivity : Activity() {
         applyWindow()
         // redesenha só se algo visível mudou (evita recarregar o site a cada aviso)
         val key = listOf(config.kiosk, config.appearance, config.security.exitCorner, config.security.exitTaps, appsVersion, kiosk.reloadNonce, systemBarsHidden).toString()
-        if (key == renderedKey) return
+        if (key == renderedKey) {
+            showPrivacyIfNeeded()
+            return
+        }
         renderedKey = key
         root.removeAllViews()
         webView?.destroy()
@@ -312,6 +317,54 @@ class KioskActivity : Activity() {
         root.addView(cornerZone())
         if (previousMode == KioskConfig.Mode.APP && config.kiosk.mode != KioskConfig.Mode.APP) cancelCountdown()
         applyOps()
+        showPrivacyIfNeeded()
+    }
+
+    // ---------------------------------------------------------------- aviso de privacidade (LGPD, 0.5.4)
+
+    /**
+     * Aviso de privacidade em tela cheia (display.privacyNotice): uma vez por aparelho e de novo quando o texto muda.
+     * Só o "Entendi" fecha; a ciência vai ao painel no check-in (pedido logo em seguida).
+     */
+    private fun showPrivacyIfNeeded() {
+        val text = config.display.privacyNotice
+        if (!PrivacyNotice.needsShowing(this, text)) {
+            privacyOverlay?.let { root.removeView(it) }
+            privacyOverlay = null
+            return
+        }
+        privacyOverlay?.let {
+            // a tela foi redesenhada: o aviso volta por cima
+            if (it.parent == null) root.addView(it, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+            return
+        }
+        val button = Ui.button(this, "Entendi", Ui.Variant.PRIMARY) {
+            PrivacyNotice.accept(this, text)
+            privacyOverlay?.let { root.removeView(it) }
+            privacyOverlay = null
+            PanelSync.now(this, "privacy")
+            Log.i(TAG, "Aviso de privacidade: ciência registrada")
+        }
+        val body = ScrollView(this).apply {
+            isVerticalScrollBarEnabled = true
+            addView(Ui.text(this@KioskActivity, text, Theme.Type.BODY).apply { setLineSpacing(0f, 1.25f) })
+        }
+        val card = Ui.card(this).apply {
+            setPadding(dp(20), dp(20), dp(20), dp(20))
+            addView(Ui.text(this@KioskActivity, "Aviso de privacidade", Theme.Type.SECTION_TITLE).apply { setPadding(0, 0, 0, dp(12)) })
+            addView(body, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
+            addView(button, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(16) })
+        }
+        val overlay = FrameLayout(this).apply {
+            setBackgroundColor(Theme.withAlpha(Color.BLACK, 0.7f))
+            isClickable = true
+            isFocusable = true
+            val maxH = (resources.displayMetrics.heightPixels * 0.8f).toInt()
+            addView(card, FrameLayout.LayoutParams(minOf(dp(420), resources.displayMetrics.widthPixels - dp(32)), maxH, Gravity.CENTER))
+        }
+        root.addView(overlay, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        privacyOverlay = overlay
+        Log.i(TAG, "Aviso de privacidade: mostrado")
     }
 
     // ---------------------------------------------------------------- leitura do SSW (fase 2.4)

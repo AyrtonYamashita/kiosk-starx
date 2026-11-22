@@ -1,5 +1,6 @@
 package com.pstarx.kiosk.panel
 
+import com.pstarx.kiosk.kiosk.PrivacyNotice
 import com.pstarx.kiosk.ops.OpsReader
 import android.content.Context
 import android.os.Handler
@@ -97,6 +98,8 @@ class PanelClient(context: Context) {
         // configuração do painel: o que já está aplicado e o resultado da última aplicação (uma vez)
         body.put("panelConfigHash", s.appliedHash ?: JSONObject.NULL)
         s.pendingApplyResult?.let { body.put("applyResult", it) }
+        // ciência do aviso de privacidade ("Entendi"): vai até o painel confirmar
+        PrivacyNotice.pending(ctx)?.let { body.put("privacyAck", it) }
         return try {
             val (status, json) = post("$url/v1/device/checkin", body, token)
             when (status) {
@@ -113,6 +116,7 @@ class PanelClient(context: Context) {
                     if (s.pendingApplyResult != null) store.clearApplyResult()
                     if (body.has("managedStatus")) store.setSentManagedStatus(managedText)
                     json.optJSONArray("ackResults")?.let { Commands.ack(ctx, it, results) }
+                    if (!json.isNull("privacyAcked")) PrivacyNotice.confirmed(ctx, json.optString("privacyAcked"))
                     json.optJSONObject("desired")?.let { applyDesired(it) }
                     json.optJSONArray("commands")?.let { Commands.receive(ctx, it) }
                     json.optJSONArray("apps")?.let { ManagedApps.reconcile(ctx, it) }

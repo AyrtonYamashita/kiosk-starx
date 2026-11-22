@@ -109,3 +109,39 @@ describe("direitos dos titulares (LGPD, Art. 18)", () => {
     expect((await t.api("GET", "/v1/admin/me/export", undefined, op)).status).toBe(200);
   });
 });
+
+describe("aviso de privacidade no coletor (0.5.4)", () => {
+  const hash = "a".repeat(64);
+
+  it("o perfil aceita o texto do aviso", async () => {
+    const r = await t.api("POST", "/v1/admin/profiles", { name: "Com aviso", config: { display: { privacyNotice: "Seus dados de carga são lidos para coordenar a operação." } } });
+    expect(r.status).toBeLessThan(300);
+    expect((await t.api("POST", "/v1/admin/profiles", { name: "Aviso longo", config: { display: { privacyNotice: "x".repeat(4001) } } })).status).toBe(400);
+  });
+
+  it("registra a ciência com o usuário do SSW do momento, uma vez por versão do texto", async () => {
+    await send([{ id: id(), at: Date.now() - 1000, type: "session", user: "diego.rocha", domain: "ALT", branch: "OTI" }]);
+    const at = Date.now() - 500;
+    const r = await t.api("POST", "/v1/device/checkin", { info: info("PRV1"), privacyAck: { hash, at } }, token);
+    expect(r.status).toBe(200);
+    expect(r.json.privacyAcked).toBe(hash);
+    // reenvio (o app repete até ver a confirmação): não duplica
+    expect((await t.api("POST", "/v1/device/checkin", { info: info("PRV1"), privacyAck: { hash, at } }, token)).status).toBe(200);
+    const rows = (await t.db.query("SELECT ssw_user FROM privacy_acks WHERE device_id = $1", [deviceId])).rows;
+    expect(rows).toEqual([{ ssw_user: "diego.rocha" }]);
+    // hash inválido é recusado
+    expect((await t.api("POST", "/v1/device/checkin", { privacyAck: { hash: "xyz", at } }, token)).status).toBe(400);
+    // aparece no detalhe do coletor
+    const d = (await t.api("GET", `/v1/admin/devices/${deviceId}`)).json;
+    expect(d.privacyAck).toMatchObject({ sswUser: "diego.rocha", hash });
+  });
+
+  it("entra na exportação do colaborador e sai na anonimização", async () => {
+    const ex = (await t.api("GET", "/v1/admin/privacy/subjects/diego.rocha/export")).json;
+    expect(ex.ciencia_do_aviso_de_privacidade).toHaveLength(1);
+    const an = await t.api("POST", "/v1/admin/privacy/subjects/diego.rocha/anonymize");
+    expect(an.status).toBe(200);
+    expect(an.json.acks).toBe(1);
+    expect((await t.db.query("SELECT ssw_user FROM privacy_acks WHERE device_id = $1", [deviceId])).rows[0].ssw_user).toBeNull();
+  });
+});
