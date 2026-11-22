@@ -1,13 +1,14 @@
 "use client";
 
+import { useActionToast } from "@/components/Toasts";
 import { useActionState, useState } from "react";
 import { createUser, resetUserMfa, updateUser } from "@/lib/actions";
 import type { UserInfo } from "@/lib/api";
 import { useConfirm } from "@/components/ConfirmDialog";
 
 function Feedback({ state }: { state: { ok?: string; error?: string } | undefined }) {
+  useActionToast(state, "pronto");
   if (state?.error) return <div className="alert error">{state.error}</div>;
-  if (state?.ok) return <div className="alert ok">{state.ok}</div>;
   return null;
 }
 

@@ -1,13 +1,14 @@
 "use client";
 
+import { useActionToast } from "@/components/Toasts";
 import { useActionState, useState } from "react";
 import { confirmTotp, disableTotp, setupTotp } from "@/lib/actions";
 
 const fmt = (iso: string) => new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
 
 function Feedback({ state }: { state: { ok?: string; error?: string } | undefined }) {
+  useActionToast(state, "pronto");
   if (state?.error) return <div className="alert error">{state.error}</div>;
-  if (state?.ok) return <div className="alert ok">{state.ok}</div>;
   return null;
 }
 

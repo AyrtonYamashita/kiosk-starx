@@ -221,7 +221,7 @@ export default async function DevicePage({ params }: { params: Promise<{ id: str
             </Link>
           </div>
           <div className="row" style={{ gap: 8 }}>
-            <EditableName key={d.name} id={d.id} name={d.name} fallback={defaultDeviceName(d.model, d.serial)} />
+            <EditableName id={d.id} name={d.name} fallback={defaultDeviceName(d.model, d.serial)} />
             {d.online ? (
               <span className="badge ok">
                 <span className="dot" /> online

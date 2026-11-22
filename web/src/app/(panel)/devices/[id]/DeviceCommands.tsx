@@ -1,5 +1,6 @@
 "use client";
 
+import { useActionToast } from "@/components/Toasts";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { useActionState } from "react";
 import { AnimateIcon } from "@animate-ui/react/icons";
@@ -14,8 +15,8 @@ import { ago, commandLabel, commandStatusLabel, dateTime } from "@/lib/format";
 const KIOSK_PACKAGE = "com.pstarx.kiosk";
 
 function Feedback({ state }: { state: { ok?: string; error?: string } | undefined }) {
+  useActionToast(state, "comando enviado");
   if (state?.error) return <span className="alert error small">{state.error}</span>;
-  if (state?.ok) return <span className="alert ok small">{state.ok}</span>;
   return null;
 }
 

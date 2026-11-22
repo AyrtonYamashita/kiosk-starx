@@ -1,10 +1,11 @@
 "use client";
 
+import { useToast } from "@/components/Toasts";
 import { useRef, useState } from "react";
 import { refreshApps, uploadToken } from "@/lib/actions";
 import type { Json } from "@/lib/api";
 
-type Status = { kind: "idle" } | { kind: "sending"; pct: number } | { kind: "ok"; text: string } | { kind: "error"; text: string };
+type Status = { kind: "idle" } | { kind: "sending"; pct: number } | { kind: "error"; text: string };
 
 /**
  * Envio de APK: o painel pede um token de uso único e o navegador manda o arquivo direto para a API
@@ -14,6 +15,7 @@ export function UploadApk({ maxApkMb, target = "repo" }: { maxApkMb: number; tar
   const fileRef = useRef<HTMLInputElement>(null);
   const [label, setLabel] = useState("");
   const [status, setStatus] = useState<Status>({ kind: "idle" });
+  const toast = useToast();
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -42,14 +44,14 @@ export function UploadApk({ maxApkMb, target = "repo" }: { maxApkMb: number; tar
       if (xhr.status !== 200) {
         return setStatus({ kind: "error", text: body?.message ?? (xhr.status === 413 ? "Arquivo grande demais para o servidor." : `Erro HTTP ${xhr.status}.`) });
       }
-      setStatus({
-        kind: "ok",
-        text: target === "kiosk"
+      const text =
+        target === "kiosk"
           ? `Recebida a ${body.pending.versionName} (${body.pending.versionCode}). Confira e toque em Publicar.`
           : body.alreadyExisted
           ? `${body.packageName} ${body.versionName ?? ""} (${body.versionCode}) já estava no repositório.`
-          : `Enviado: ${body.packageName} ${body.versionName ?? ""} (${body.versionCode}).`,
-      });
+          : `Enviado: ${body.packageName} ${body.versionName ?? ""} (${body.versionCode}).`;
+      setStatus({ kind: "idle" });
+      toast({ tone: "ok", label: target === "kiosk" ? "versão recebida" : "APK enviado", title: text });
       if (fileRef.current) fileRef.current.value = "";
       setLabel("");
       await refreshApps();
@@ -75,7 +77,6 @@ export function UploadApk({ maxApkMb, target = "repo" }: { maxApkMb: number; tar
         <button className="primary" disabled={status.kind === "sending"}>
           {status.kind === "sending" ? `Enviando… ${status.pct}%` : target === "kiosk" ? "Enviar versão" : "Enviar APK"}
         </button>
-        {status.kind === "ok" && <span className="alert ok small">{status.text}</span>}
         {status.kind === "error" && <span className="alert error small">{status.text}</span>}
       </div>
       {target === "repo" && <span className="muted small">

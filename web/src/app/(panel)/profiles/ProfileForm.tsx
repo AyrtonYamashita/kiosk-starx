@@ -1,5 +1,6 @@
 "use client";
 
+import { useActionToast } from "@/components/Toasts";
 import { useActionState } from "react";
 import { ConfigEditor } from "@/components/ConfigEditor";
 import { saveProfile } from "@/lib/actions";
@@ -7,6 +8,7 @@ import type { CatalogApp, Profile, RepoApp } from "@/lib/api";
 
 export function ProfileForm({ profile, catalog, repo, justSaved }: { profile: Profile | null; catalog: CatalogApp[]; repo: RepoApp[]; justSaved?: boolean }) {
   const [state, action, pending] = useActionState(saveProfile, justSaved ? { ok: "Perfil criado." } : undefined);
+  useActionToast(state, "perfil salvo");
   return (
     <form action={action} className="stack">
       {profile && <input type="hidden" name="id" value={profile.id} />}
@@ -48,7 +50,6 @@ export function ProfileForm({ profile, catalog, repo, justSaved }: { profile: Pr
         )}
       </section>
       {state?.error && <div className="alert error">{state.error}</div>}
-      {state?.ok && <div className="alert ok">{state.ok}</div>}
       <div>
         <button className="primary" disabled={pending}>
           {pending ? "Salvando…" : "Salvar perfil"}

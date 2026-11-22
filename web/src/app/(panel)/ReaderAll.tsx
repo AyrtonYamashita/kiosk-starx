@@ -1,5 +1,6 @@
 "use client";
 
+import { useActionToast } from "@/components/Toasts";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { useActionState } from "react";
 import { setOpsReaderAll } from "@/lib/actions";
@@ -9,6 +10,7 @@ import type { OpsSettings } from "@/lib/api";
 export function ReaderAll({ settings, canEdit }: { settings: OpsSettings; canEdit: boolean }) {
   const ask = useConfirm();
   const [state, action, pending] = useActionState(setOpsReaderAll, undefined);
+  useActionToast(state, "leitura do SSW");
   const { readerAll, devices } = settings;
   return (
     <form

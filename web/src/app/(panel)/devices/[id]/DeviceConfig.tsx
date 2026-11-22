@@ -1,5 +1,6 @@
 "use client";
 
+import { useActionToast } from "@/components/Toasts";
 import Link from "next/link";
 import { useActionState, useState } from "react";
 import { ConfigEditor } from "@/components/ConfigEditor";
@@ -23,6 +24,7 @@ export function DeviceConfig({
   children?: React.ReactNode;
 }) {
   const [state, action, pending] = useActionState(setDeviceConfig, undefined);
+  useActionToast(state, "configuração salva");
   const [profileId, setProfileId] = useState(device.profileId ?? "");
   const profile = profiles.find((p) => p.id === profileId) ?? null;
   // trocar o perfil no seletor redesenha o editor com o novo perfil como base (os ajustes continuam por cima)
@@ -67,7 +69,6 @@ export function DeviceConfig({
 
         {children}
         {state?.error && <div className="alert error">{state.error}</div>}
-        {state?.ok && <div className="alert ok">{state.ok}</div>}
         <div className="row">
           <button className="primary" disabled={pending}>
             {pending ? "Salvando…" : "Salvar configuração deste aparelho"}

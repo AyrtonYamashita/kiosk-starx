@@ -1,5 +1,6 @@
 "use client";
 
+import { useActionToast } from "@/components/Toasts";
 import { useConfirm } from "@/components/ConfirmDialog";
 import Link from "next/link";
 import { useActionState, useMemo, useState } from "react";
@@ -26,6 +27,7 @@ function Battery({ b, online }: { b: DeviceSummary["battery"]; online: boolean }
 function BulkCommand({ ids, repo }: { ids: string[]; repo: { packageName: string; label: string }[] }) {
   const ask = useConfirm();
   const [state, action, pending] = useActionState(sendCommand, undefined);
+  useActionToast(state, "comando enviado");
   const [type, setType] = useState("");
   return (
     <form
@@ -64,7 +66,6 @@ function BulkCommand({ ids, repo }: { ids: string[]; repo: { packageName: string
         </select>
       )}
       <button disabled={pending || !type}>Enviar</button>
-      {state?.ok && <span className="alert ok small">{state.ok}</span>}
       {state?.error && <span className="alert error small">{state.error}</span>}
     </form>
   );
@@ -131,6 +132,7 @@ export function DevicesTable({
   const set = (patch: Partial<Filters>) => setF((cur) => ({ ...cur, ...patch }));
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [state, action, pending] = useActionState(bulkAssignProfile, undefined);
+  useActionToast(state, "perfil aplicado");
 
   const groups = useMemo(() => {
     const count = (g: Group) => {
@@ -225,7 +227,6 @@ export function DevicesTable({
             <button type="button" className="link-button" onClick={() => setSelected(new Set())}>
               limpar seleção
             </button>
-            {state?.ok && <span className="alert ok">{state.ok}</span>}
             {state?.error && <span className="alert error">{state.error}</span>}
           </form>
           <BulkCommand ids={[...selected]} repo={repo} />

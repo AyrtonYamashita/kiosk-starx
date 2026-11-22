@@ -1,17 +1,18 @@
 "use client";
 
+import { useActionToast } from "@/components/Toasts";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { useActionState } from "react";
 import { deleteApp, deleteAppVersion, renameApp } from "@/lib/actions";
 
 export function RenameApp({ packageName, label }: { packageName: string; label: string }) {
   const [state, action, pending] = useActionState(renameApp, undefined);
+  useActionToast(state, "salvo");
   return (
     <form action={action} className="row">
       <input type="hidden" name="packageName" value={packageName} />
       <input name="label" defaultValue={label} maxLength={80} required style={{ maxWidth: 260 }} aria-label="Nome no painel" />
       <button disabled={pending}>Salvar nome</button>
-      {state?.ok && <span className="alert ok small">{state.ok}</span>}
       {state?.error && <span className="alert error small">{state.error}</span>}
     </form>
   );
@@ -20,6 +21,7 @@ export function RenameApp({ packageName, label }: { packageName: string; label: 
 export function DeleteVersion({ packageName, versionCode, label }: { packageName: string; versionCode: number; label: string }) {
   const ask = useConfirm();
   const [state, action, pending] = useActionState(deleteAppVersion, undefined);
+  useActionToast(state, "removido");
   return (
     <form
       action={action}
@@ -40,6 +42,7 @@ export function DeleteVersion({ packageName, versionCode, label }: { packageName
 export function DeleteApp({ packageName, label }: { packageName: string; label: string }) {
   const ask = useConfirm();
   const [state, action, pending] = useActionState(deleteApp, undefined);
+  useActionToast(state, "removido");
   return (
     <form
       action={action}

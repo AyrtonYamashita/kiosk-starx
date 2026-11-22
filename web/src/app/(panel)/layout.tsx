@@ -4,11 +4,13 @@ import { PageTransition } from "@/components/animate-ui/components/page-transiti
 import { OpsNotifications } from "@/components/OpsNotifications";
 import { OpsStreamProvider } from "@/lib/useOpsStream";
 import { ConfirmProvider } from "@/components/ConfirmDialog";
+import { ToastProvider } from "@/components/Toasts";
 
 export default async function PanelLayout({ children }: { children: React.ReactNode }) {
   const me = await api<Me>("/v1/admin/me");
   return (
     <OpsStreamProvider>
+      <ToastProvider>
       <ConfirmProvider>
       <div className="shell">
         <Sidebar username={me.username} role={me.role} />
@@ -22,6 +24,7 @@ export default async function PanelLayout({ children }: { children: React.ReactN
         <OpsNotifications />
       </div>
       </ConfirmProvider>
+      </ToastProvider>
     </OpsStreamProvider>
   );
 }

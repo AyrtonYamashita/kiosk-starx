@@ -1,5 +1,6 @@
 "use client";
 
+import { useActionToast } from "@/components/Toasts";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { useActionState } from "react";
 import { discardKiosk, publishKiosk } from "@/lib/actions";
@@ -24,6 +25,8 @@ export function KioskRelease({ data }: { data: KR }) {
   const [disState, discard, discarding] = useActionState(discardKiosk, undefined);
   const { release, pending } = data;
   const state = pubState ?? disState;
+  useActionToast(pubState, "publicado");
+  useActionToast(disState, "descartado");
 
   return (
     <div className="stack">
@@ -109,7 +112,6 @@ export function KioskRelease({ data }: { data: KR }) {
           </div>
         </div>
       )}
-      {state?.ok && <div className="alert ok">{state.ok}</div>}
       {state?.error && <div className="alert error">{state.error}</div>}
 
       <details>

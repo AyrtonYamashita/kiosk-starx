@@ -1,21 +1,15 @@
 "use client";
 
-import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { AnimatePresence, motion } from "motion/react";
-import { blur, ReducedMotionConfig, scale, spring, transition as motionTransition, useTempoTransition } from "@animate-ui/react/utils/motion";
-import { X } from "lucide-react";
+import { useToast, type ToastInput } from "@/components/Toasts";
 import { opsOperationEnd } from "@/lib/actions";
 import type { OpsCard } from "@/lib/api";
 import { useOpsStream } from "@/lib/useOpsStream";
 
 type Kind = "login" | "start" | "done" | "stopped";
-type Toast = { id: number; kind: Kind; title: string; text: string; href?: string };
+type Toast = { kind: Kind; title: string; text: string; href?: string };
 
-const TONE: Record<Kind, string> = { login: "blue", start: "ok", done: "ok", stopped: "warn" };
+const TONE: Record<Kind, ToastInput["tone"]> = { login: "blue", start: "ok", done: "ok", stopped: "warn" };
 const LABEL: Record<Kind, string> = { login: "login no SSW", start: "carga iniciada", done: "carga concluída", stopped: "carga encerrada" };
-const LIFE_MS = 9000;
-const MAX = 4;
 
 type Op = NonNullable<OpsCard["operation"]>;
 
@@ -28,7 +22,7 @@ const TITLE: Record<string, (who: string, fn: string) => string> = {
 };
 
 /** Aviso de carga encerrada, com o motivo de verdade (o canal ao vivo pode trazer o fim antes da última contagem). */
-async function ended(c: OpsCard, prev: OpsCard, was: Op): Promise<Omit<Toast, "id">> {
+async function ended(c: OpsCard, prev: OpsCard, was: Op): Promise<Toast> {
   const info = await opsOperationEnd(c.deviceId, was.id);
   const reason = info?.endReason ?? (was.missing.qty === 0 ? "concluded" : null);
   const read = info?.read ?? was.read.qty;
@@ -44,8 +38,8 @@ async function ended(c: OpsCard, prev: OpsCard, was: Op): Promise<Omit<Toast, "i
 }
 
 /** O que mudou entre o estado anterior e o novo de um coletor e vale aviso (o fim de carga vem à parte, de ended()). */
-function changes(c: OpsCard, prev: OpsCard): Omit<Toast, "id">[] {
-  const out: Omit<Toast, "id">[] = [];
+function changes(c: OpsCard, prev: OpsCard): Toast[] {
+  const out: Toast[] = [];
   const who = c.user ?? prev.user ?? "Alguém";
   const where = c.deviceName;
   const was = prev.operation;
@@ -62,41 +56,11 @@ function changes(c: OpsCard, prev: OpsCard): Omit<Toast, "id">[] {
   return out;
 }
 
-/** Avisos em tempo real (login no SSW, carga iniciada, concluída ou encerrada), no canto da tela, em todo o painel. */
+/** Avisos em tempo real (login no SSW, carga iniciada, concluída ou encerrada), na pilha de avisos do painel. */
 export function OpsNotifications() {
-  const [toasts, setToasts] = useState<Toast[]>([]);
-  const seq = useRef(0);
-  const timers = useRef(new Map<number, ReturnType<typeof setTimeout>>());
-
-  const dismiss = useCallback((id: number) => {
-    const t = timers.current.get(id);
-    if (t) clearTimeout(t);
-    timers.current.delete(id);
-    setToasts((list) => list.filter((x) => x.id !== id));
-  }, []);
-  const arm = useCallback((id: number) => timers.current.set(id, setTimeout(() => dismiss(id), LIFE_MS)), [dismiss]);
-  const hold = (id: number) => {
-    const t = timers.current.get(id);
-    if (t) clearTimeout(t);
-  };
-
-  const push = useCallback(
-    (items: Omit<Toast, "id">[]) => {
-      const fresh = items.map((t) => ({ ...t, id: ++seq.current }));
-      if (!fresh.length) return;
-      fresh.forEach((t) => arm(t.id));
-      setToasts((list) => {
-        const next = [...list, ...fresh];
-        next.slice(0, Math.max(0, next.length - MAX)).forEach((t) => {
-          const tm = timers.current.get(t.id);
-          if (tm) clearTimeout(tm);
-          timers.current.delete(t.id);
-        });
-        return next.slice(-MAX);
-      });
-    },
-    [arm],
-  );
+  const toast = useToast();
+  const push = (items: Toast[]) =>
+    toast(items.map((t) => ({ tone: TONE[t.kind], label: LABEL[t.kind], title: t.title, text: t.text, href: t.href, actionLabel: "Acompanhar operação" })));
 
   useOpsStream({
     card: (c, prev) => {
@@ -107,53 +71,5 @@ export function OpsNotifications() {
     },
   });
 
-  useEffect(() => {
-    const all = timers.current;
-    return () => all.forEach((t) => clearTimeout(t));
-  }, []);
-
-  const enter = useTempoTransition(spring.toast);
-  const leave = useTempoTransition(motionTransition.dismiss);
-
-  return (
-    <ReducedMotionConfig>
-      <ol className="toasts" aria-label="Avisos">
-        <AnimatePresence initial={false}>
-          {toasts.map((t) => (
-            <motion.li
-              key={t.id}
-              role="status"
-              className="toast"
-              layout="position"
-              initial={{ opacity: 0, y: "100%", scale: scale.toast, filter: blur.surface }}
-              animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)", transition: enter }}
-              exit={{ opacity: 0, scale: scale.toast, filter: blur.surface, transition: leave }}
-              transition={enter}
-              style={{ originY: 1 }}
-              onPointerEnter={() => hold(t.id)}
-              onPointerLeave={() => arm(t.id)}
-              onFocus={() => hold(t.id)}
-              onBlur={() => arm(t.id)}
-            >
-              <div className="toast-head">
-                <span className={`badge ${TONE[t.kind]}`}>
-                  <span className="dot" /> {LABEL[t.kind]}
-                </span>
-                <button type="button" className="toast-close" aria-label="Fechar aviso" onClick={() => dismiss(t.id)}>
-                  <X size={16} strokeWidth={1.75} aria-hidden />
-                </button>
-              </div>
-              <strong className="toast-title">{t.title}</strong>
-              <span className="toast-text">{t.text}</span>
-              {t.href && (
-                <Link href={t.href} className="button toast-action" onClick={() => dismiss(t.id)}>
-                  Acompanhar operação
-                </Link>
-              )}
-            </motion.li>
-          ))}
-        </AnimatePresence>
-      </ol>
-    </ReducedMotionConfig>
-  );
+  return null;
 }

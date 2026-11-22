@@ -1,5 +1,6 @@
 "use client";
 
+import { useToast } from "@/components/Toasts";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { browserSupportsWebAuthn } from "@simplewebauthn/browser";
 import { useRouter } from "next/navigation";
@@ -21,21 +22,20 @@ export function PasskeysSection({ passkeys }: { passkeys: MfaInfo["passkeys"] })
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [ok, setOk] = useState<string | null>(null);
+  const toast = useToast();
 
 
   async function add(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError(null);
-    setOk(null);
     try {
       const start = await registerPasskeyOptions(password);
       if (start.error || !start.options || !start.challengeId) throw new Error(start.error ?? "Não foi possível começar.");
       const response = await createCredential(start.options);
       const done = await registerPasskeyFinish(start.challengeId, response, name.trim() || "Passkey");
       if (done.error) throw new Error(done.error);
-      setOk("Passkey cadastrada. Na tela de login use “Entrar com passkey”.");
+      toast({ tone: "ok", label: "passkey", title: "Passkey cadastrada", text: "Na tela de login use “Entrar com passkey”." });
       setOpen(false);
       setPassword("");
       router.refresh();
@@ -79,7 +79,6 @@ export function PasskeysSection({ passkeys }: { passkeys: MfaInfo["passkeys"] })
           </table>
         </div>
       )}
-      {ok && <div className="alert ok">{ok}</div>}
       {!supported ? (
         <span className="muted small">Este navegador não suporta passkeys.</span>
       ) : open ? (

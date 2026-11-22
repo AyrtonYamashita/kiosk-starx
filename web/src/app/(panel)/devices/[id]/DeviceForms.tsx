@@ -1,5 +1,6 @@
 "use client";
 
+import { useActionToast } from "@/components/Toasts";
 import { useActionState, useRef, useState } from "react";
 import { PencilLine } from "lucide-react";
 import { deleteDevice, renameDevice, setOpsReader } from "@/lib/actions";
@@ -11,6 +12,7 @@ import { useConfirm } from "@/components/ConfirmDialog";
  */
 export function EditableName({ id, name, fallback }: { id: string; name: string; fallback: string }) {
   const [state, action, pending] = useActionState(renameDevice, undefined);
+  useActionToast(state, "salvo");
   const [editing, setEditing] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
   const cancelled = useRef(false);
@@ -98,6 +100,7 @@ export function OpsReaderToggle({
   appVersionCode: number | null;
 }) {
   const [state, action, pending] = useActionState(setOpsReader, undefined);
+  useActionToast(state, "leitura do SSW");
   const oldApp = appVersionCode !== null && appVersionCode < OPS_MIN_VERSION_CODE;
   const source = choice === null ? `pela chave geral (${all ? "todos os coletores" : "só no piloto"})` : "escolhido neste coletor";
   return (
@@ -121,7 +124,6 @@ export function OpsReaderToggle({
         </form>
       )}
       {on && oldApp && <span className="badge warn">precisa do app 0.5.0 ou mais novo</span>}
-      {state?.ok && <span className="alert ok">{state.ok}</span>}
       {state?.error && <span className="alert error">{state.error}</span>}
     </div>
   );

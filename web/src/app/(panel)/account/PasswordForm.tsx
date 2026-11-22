@@ -1,10 +1,12 @@
 "use client";
 
+import { useActionToast } from "@/components/Toasts";
 import { useActionState } from "react";
 import { changePassword } from "@/lib/actions";
 
 export function PasswordForm() {
   const [state, action, pending] = useActionState(changePassword, undefined);
+  useActionToast(state, "senha");
   return (
     <form action={action} className="stack">
       <label>
@@ -20,7 +22,6 @@ export function PasswordForm() {
         <input name="confirm" type="password" autoComplete="new-password" minLength={10} required />
       </label>
       {state?.error && <div className="alert error">{state.error}</div>}
-      {state?.ok && <div className="alert ok">{state.ok}</div>}
       <div>
         <button className="primary" disabled={pending}>
           Trocar senha
