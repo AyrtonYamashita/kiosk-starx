@@ -46,7 +46,7 @@ Regras:
 ## Superfícies, raios e alturas
 
 - Cartões e menu sobre o fundo são **vidro**: classe `.glass` (72–74% de opacidade, desfoque de 18 px, borda visível).
-- Raios: chip 6, menu 10, campo/botão 12, cartão 16, pílula 20.
+- Raios: 4px em tudo (chip, menu, campo/botão, cartão, pílula e vidro). Só pontos de status, o pino do mapa e as bolhas do fundo são redondos.
 - Alvo de toque mínimo 44 px (botões, itens de menu, segmentos, alternador de tema).
 
 ## Fundo: Bubble (Animate UI)
@@ -97,7 +97,7 @@ Referência: páginas "Dispositivo · modo escuro" e "Dispositivo · modo claro"
 
 - **Mapa em tela cheia:** na página do dispositivo o mapa da localização é o **fundo da tela toda** (1440×900 no canvas; `position:absolute; inset:0` atrás do menu lateral e dos cards). OpenMapTiles: escuro = Dark Matter, claro = estilo claro do mesmo esquema. O Bubble continua como fundo nas demais páginas e aqui quando não há localização.
 - **Cards sobre o mapa** com **vidro líquido** (`.liquid-glass` + `<LiquidGlassDefs />`, refração em Chromium e vidro fosco nos outros). Margem de 24 px da borda da tela e 16 px entre colunas.
-- **Raios concêntricos (cantos aninhados):** card e menu lateral com `border-radius: 28px` e `padding: 16px`; tudo que fica dentro (botões, campos, itens do menu, abas) usa `28 − 16 = 12px`. Regra geral: raio interno = raio externo − padding. Não use raios soltos nesta página.
+- **Cantos:** card e menu lateral de vidro com `border-radius: 4px`, como o resto do painel; o que fica dentro também usa 4px.
 - **Esquerda (440 px, topo em 24 px):** um card compacto com voltar, nome, online/offline, último contato e, numa linha, Bateria, Rede, Armazenamento e Memória (sem ícones, só título e valor). Abaixo, um card com **abas de texto sublinhadas** (ativa: texto `ink`, peso 600, sublinhado 2 px azul; inativa: `soft`, sem borda): Comandos · Leitura SSW · Apps · JSON. O card tem **altura automática** (conteúdo limitado a 340 px, rola por dentro). Fontes menores que o resto do painel (nome 17 px, texto 11–12,5 px).
 - **Aba Comandos:** apenas 4 botões em uma linha, ícone em cima e rótulo curto embaixo (Bloquear, Recarregar, Capturar, Reiniciar em vermelho) e a nota "Chegam em até 30 s.". **Sem campo de mensagem e sem lista de últimos comandos** nesta tela (decisão do design); mantenha os endpoints e componentes existentes, só não os renderize aqui.
 - **Direita (440 px, 24 px de margem):** card **Aparelho** (modelo, serial, Android, patch, ligado há, app StarX, kiosk, usuário no SSW, cadastro) e card **Configuração pelo painel** (status, perfil, apps gerenciados, salvar e reaplicar), alinhados ao topo e à base do menu lateral.

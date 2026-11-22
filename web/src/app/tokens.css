@@ -48,14 +48,14 @@
   --bubble-to: #DCE9FC;
   --bubble-opacity: 0.3; /* bolhas atrás das tabelas: o azul só sugere */
 
-  /* raios (maiores que os antigos: 10/8 → 16/12) */
+  /* raios: 4px em tudo (cantos quase retos) */
   --radius-bar: 2px;
-  --radius-chip: 6px;
-  --radius-nav: 10px;
-  --radius-field: 12px;
-  --radius-card: 16px;
-  --radius-pill: 20px;
-  --radius-glass: 28px; /* cards de vidro e menu lateral na página do dispositivo */
+  --radius-chip: 4px;
+  --radius-nav: 4px;
+  --radius-field: 4px;
+  --radius-card: 4px;
+  --radius-pill: 4px;
+  --radius-glass: 4px; /* cards de vidro e menu lateral na página do dispositivo */
   --glass-pad: 16px;
 
   --control: 44px;       /* alvo de toque mínimo */
@@ -166,7 +166,7 @@
 .liquid-glass {
   background: var(--lg-bg);
   border: 1px solid var(--lg-border);
-  /* Raios concêntricos: raio interno = raio externo − padding. 28 − 16 = 12 (controles internos = --radius-field). */
+  /* Cantos retos de 4px em todo o painel (cards, campos, chips e vidro). */
   border-radius: var(--radius-glass);
   padding: var(--glass-pad);
   box-shadow: inset 0 1px 0 var(--lg-hi), inset 0 -18px 30px -20px var(--lg-hi2);

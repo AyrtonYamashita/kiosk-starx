@@ -360,7 +360,7 @@ label.dev-check { min-height: 32px; gap: 8px; font-size: 12.5px; }
 .dev-name .dot { width: 8px; height: 8px; }
 .reader-all { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .segmented { display: inline-flex; padding: 3px; gap: 2px; border: 1px solid var(--line); border-radius: var(--radius-field); background: var(--subtle); }
-.segmented button { height: 32px; padding: 0 14px; border: none; border-radius: 9px; background: none; color: var(--soft); font-weight: 500; }
+.segmented button { height: 32px; padding: 0 14px; border: none; border-radius: 3px; background: none; color: var(--soft); font-weight: 500; }
 .segmented button:hover:not(:disabled) { background: var(--surface); color: var(--ink); }
 .segmented button.on, .segmented button.on:disabled { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: 0 0 0 1px var(--line); cursor: default; }
 .segmented button:disabled:not(.on) { background: none; color: var(--soft); }
@@ -373,7 +373,7 @@ label.dev-check { min-height: 32px; gap: 8px; font-size: 12.5px; }
 .dev-main table :is(th, td):first-child { padding-left: 14px; }
 .batt {
   position: relative; display: inline-flex; align-items: center; justify-content: center; width: 46px; height: 20px;
-  border: 1.5px solid var(--mid); border-radius: 5px; overflow: visible; vertical-align: middle;
+  border: 1.5px solid var(--mid); border-radius: 3px; overflow: visible; vertical-align: middle;
 }
 .batt::after { content: ""; position: absolute; right: -5px; top: 5px; width: 3px; height: 7px; border-radius: 0 2px 2px 0; background: var(--mid); }
 .batt-fill { position: absolute; left: 2px; top: 2px; bottom: 2px; max-width: calc(100% - 4px); border-radius: 2px; opacity: 0.38; }
