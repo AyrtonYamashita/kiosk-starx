@@ -642,3 +642,19 @@ export async function opsOperationEnd(deviceId: string, opId: string): Promise<{
     return null;
   }
 }
+
+// ---------------------------------------------------------------- direitos dos titulares (LGPD, Fase 1, parte 5)
+
+/** Anonimiza um colaborador (usuário do SSW): some de cargas, estado atual e eventos; os números ficam. */
+export async function anonymizeSubject(_: FormState, form: FormData): Promise<FormState> {
+  const user = String(form.get("user") ?? "").trim();
+  if (!user) return { error: "Informe o usuário do SSW." };
+  try {
+    const r = await api<{ operations: number }>(`/v1/admin/privacy/subjects/${encodeURIComponent(user)}/anonymize`, { method: "POST" });
+    revalidatePath("/titulares");
+    revalidatePath("/cargas");
+    return { ok: `Colaborador anonimizado. ${r.operations} carga(s) ficaram sem identificação.` };
+  } catch (e) {
+    return { error: message(e) };
+  }
+}

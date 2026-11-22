@@ -56,11 +56,16 @@ export default async function AccountPage() {
               <LogOut size={14} aria-hidden /> Sair desta sessão
             </button>
           </form>
-          {privacyConfig() && (
-            <Link href="/privacidade" className="muted small" target="_blank">
-              Política de privacidade
-            </Link>
-          )}
+          <div className="row" style={{ gap: 12, justifyContent: "space-between" }}>
+            <a href="/account/export" className="link-button small" download>
+              Baixar meus dados
+            </a>
+            {privacyConfig() && (
+              <Link href="/privacidade" className="muted small" target="_blank">
+                Política de privacidade
+              </Link>
+            )}
+          </div>
         </section>
 
         <section className="card account-card">

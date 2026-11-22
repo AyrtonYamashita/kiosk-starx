@@ -13,6 +13,7 @@ import { ShieldCheck } from "@/components/animate-ui/icons/shield-check";
 import { SlidersHorizontal } from "@/components/animate-ui/icons/sliders-horizontal";
 import { Smartphone } from "@/components/animate-ui/icons/smartphone";
 import { UserRound } from "@/components/animate-ui/icons/user-round";
+import { Lock } from "@/components/animate-ui/icons/lock";
 import { logout } from "@/lib/actions";
 import { StarxLogo } from "@/components/brand/Logo";
 
@@ -24,6 +25,7 @@ const LINKS: { href: string; label: string; short: string; icon: ComponentType<{
   { href: "/apps", label: "Apps", short: "Apps", icon: Package, match: (p) => p.startsWith("/apps") },
   { href: "/enroll", label: "Cadastro", short: "Cadastro", icon: QrCode, match: (p) => p.startsWith("/enroll") },
   { href: "/users", label: "Usuários", short: "Usuários", icon: ShieldCheck, match: (p) => p.startsWith("/users"), adminOnly: true },
+  { href: "/titulares", label: "Privacidade", short: "Privacidade", icon: Lock, match: (p) => p.startsWith("/titulares"), adminOnly: true },
   { href: "/account", label: "Conta", short: "Conta", icon: UserRound, match: (p) => p.startsWith("/account") },
 ];
 

@@ -18,6 +18,9 @@ const EVENT_LABEL: Record<string, [string, string]> = {
   password_changed: ["blue", "trocou a senha"],
   user_created: ["blue", "usuário criado"],
   user_updated: ["blue", "usuário alterado"],
+  privacy_export: ["blue", "dados de colaborador exportados"],
+  privacy_anonymize: ["warn", "colaborador anonimizado"],
+  privacy_self_export: ["off", "baixou os próprios dados"],
 };
 
 const REASON: Record<string, string> = { unknown_account: "conta inexistente", bad_password: "senha errada", disabled: "conta desativada" };
