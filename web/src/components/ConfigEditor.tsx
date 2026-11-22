@@ -21,7 +21,6 @@ const DEFAULTS: Cfg = {
     dimAfterSec: 0,
     lowBatteryPercent: 15,
     lowBatteryMessage: "Troque a bateria antes de continuar a operação.",
-    privacyNotice: "",
     orientation: "auto",
     showStatusBar: false,
   },
@@ -128,7 +127,6 @@ const FIELD_LABEL: Record<string, string> = {
   "display.dimAfterSec": "Escurecer após inatividade",
   "display.lowBatteryPercent": "Aviso de bateria fraca",
   "display.lowBatteryMessage": "Mensagem de bateria fraca",
-  "display.privacyNotice": "Aviso de privacidade",
   "display.orientation": "Orientação",
   "display.showStatusBar": "Barra de status",
   "appearance.title": "Título",
@@ -141,18 +139,6 @@ const FIELD_LABEL: Record<string, string> = {
   "security.exitTaps": "Toques no canto",
   "security.reportLocation": "Enviar localização",
 };
-
-/** Modelo curto do aviso no coletor (base: .lgpd/kit-cliente/aviso-colaboradores-modelo.md); o cliente ajusta. */
-const PRIVACY_NOTICE_TEMPLATE = `Este coletor registra dados do seu trabalho para a empresa organizar a operação:
-• seu usuário do SSW, a carga (função, placa, volumes) e os horários;
-• cada volume bipado (código e hora);
-• indicadores da carga (ritmo, tempo na função, previsão de término) — nenhuma decisão sobre você é tomada só por esses números;
-• a última localização do coletor, se ativada, só para encontrar o aparelho;
-• imagens da tela, só quando o suporte técnico pede.
-
-O sistema não lê a sua senha do SSW. Os dados detalhados ficam até 90 dias, as bipagens até 1 ano.
-
-Você pode pedir acesso, correção ou exclusão dos seus dados pelo canal de privacidade da empresa: [preencher contato].`;
 
 const TABS = ["Kiosk", "Tela", "Segurança", "JSON"] as const;
 type Tab = (typeof TABS)[number];
@@ -405,28 +391,6 @@ export function ConfigEditor({
             </select>
           </label>
           {check("display.showStatusBar", "Barra de status", "hora, bateria e rede visíveis no kiosk")}
-          <h2 style={{ marginTop: 8 }}>Aviso de privacidade</h2>
-          <label>
-            Texto mostrado no coletor (vazio = sem aviso)
-            <textarea
-              rows={8}
-              maxLength={4000}
-              value={d.privacyNotice ?? ""}
-              onChange={(e) => set("display.privacyNotice", e.target.value)}
-              placeholder="O que o coletor registra, para quê, por quanto tempo, quem vê e como falar com o canal de privacidade da empresa."
-            />
-          </label>
-          <div className="row" style={{ gap: 8 }}>
-            {!(d.privacyNotice ?? "").trim() && (
-              <button type="button" onClick={() => set("display.privacyNotice", PRIVACY_NOTICE_TEMPLATE)}>
-                Usar o modelo
-              </button>
-            )}
-            <span className="muted small">
-              Aparece uma vez em cada coletor, em tela cheia, com o botão &quot;Entendi&quot;; volta a aparecer quando o texto mudar. A ciência (coletor, hora,
-              usuário do SSW se a leitura estiver ligada) fica registrada por 1 ano. App 0.5.4 ou mais novo.
-            </span>
-          </div>
         </div>
       )}
 

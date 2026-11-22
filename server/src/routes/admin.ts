@@ -276,9 +276,7 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
         `SELECT d.*, e.name AS enrollment_name, d.last_seen_at > now() - make_interval(secs => $2) AS online,
                 p.name AS profile_name, p.config AS profile_config, p.managed_apps,
                 (SELECT ssw_user FROM ops_device_state s WHERE s.device_id = d.id) AS ssw_user,
-                ${OPS_READER_ON_SQL} AS ops_reader_on, (SELECT reader_all FROM ops_settings LIMIT 1) AS ops_reader_all,
-                (SELECT json_build_object('at', a.acknowledged_at, 'sswUser', a.ssw_user, 'hash', a.notice_hash)
-                   FROM privacy_acks a WHERE a.device_id = d.id ORDER BY a.acknowledged_at DESC LIMIT 1) AS privacy_ack
+                ${OPS_READER_ON_SQL} AS ops_reader_on, (SELECT reader_all FROM ops_settings LIMIT 1) AS ops_reader_all
          FROM devices d LEFT JOIN enrollment_codes e ON e.id = d.enrollment_code_id LEFT JOIN profiles p ON p.id = d.profile_id
          WHERE d.id = $1`,
         [id, onlineWindowSec(config)],
@@ -322,8 +320,6 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
         opsReaderChoice: d.ops_reader ?? null,
         opsReaderAll: d.ops_reader_all === true,
         sswUser: d.ssw_user ?? null,
-        // última ciência do aviso de privacidade neste coletor (app 0.5.4+)
-        privacyAck: d.privacy_ack ?? null,
       };
     });
 

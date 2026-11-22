@@ -19,8 +19,6 @@ export interface RetentionOptions {
   authEventDays: number;
   authUnknownDays: number;
   adminDisabledDays: number;
-  /** Ciências do aviso de privacidade (padrão 365). */
-  privacyAckDays?: number;
   /** Com o segredo, reaplica anonimizações a pedido do titular depois de restaurar um backup antigo. */
   erasureSecret?: string;
 }
@@ -31,7 +29,6 @@ export interface RetentionResult {
   commands: number;
   authEvents: number;
   adminsAnonymized: number;
-  privacyAcks: number;
   erasuresReapplied: number;
 }
 
@@ -55,8 +52,6 @@ export async function applyRetention(db: Db, o: RetentionOptions): Promise<Reten
         OR (admin_id IS NULL AND created_at < now() - make_interval(days => $2))`,
     [o.authEventDays, o.authUnknownDays],
   );
-
-  const privacyAcks = await count("DELETE FROM privacy_acks WHERE acknowledged_at < now() - make_interval(days => $1)", [o.privacyAckDays ?? 365]);
 
   // usuários desativados há muito tempo: anonimiza um por um (cada um numa transação)
   const stale = (
@@ -91,7 +86,7 @@ export async function applyRetention(db: Db, o: RetentionOptions): Promise<Reten
 
   const erasuresReapplied = o.erasureSecret ? await reapplyErasures(db, o.erasureSecret) : 0;
 
-  return { operationsAnonymized, screenshots, commands, authEvents, adminsAnonymized, privacyAcks, erasuresReapplied };
+  return { operationsAnonymized, screenshots, commands, authEvents, adminsAnonymized, erasuresReapplied };
 }
 
 /** Roda pouco depois de a API subir e depois a cada 6 horas. Devolve a função que para. */

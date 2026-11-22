@@ -61,8 +61,6 @@ const Checkin = z.object({
   applyResult: z
     .object({ hash: z.string().max(64), ok: z.boolean(), error: z.string().max(500).nullable().optional(), warnings: z.array(z.string().max(300)).max(50).optional() })
     .optional(),
-  /** Ciência do aviso de privacidade ("Entendi"), enviada até o painel confirmar com `privacyAcked`. */
-  privacyAck: z.object({ hash: z.string().regex(/^[0-9a-f]{64}$/), at: z.number().int().positive() }).optional(),
 });
 
 function hardwareFields(info: z.infer<typeof Info> | undefined) {
@@ -265,15 +263,6 @@ export async function deviceRoutes(app: FastifyInstance, opts: { db: Db; config:
     if (hw.serial && !device.serial) name = await mergeBySerial(device.id, hw.serial, device.name, device.enrollment_code_id);
     await db.query(`UPDATE devices SET ${sets.join(", ")} WHERE id = $1`, params);
     if (b.commandResults?.length) await recordResults(db, device.id, b.commandResults);
-    // ciência do aviso de privacidade: o usuário do SSW é o do coletor no momento (se a leitura estiver ligada)
-    if (b.privacyAck) {
-      await db.query(
-        `INSERT INTO privacy_acks (device_id, notice_hash, acknowledged_at, ssw_user)
-         VALUES ($1, $2, LEAST(to_timestamp($3 / 1000.0), now()), (SELECT ssw_user FROM ops_device_state WHERE device_id = $1))
-         ON CONFLICT (device_id, notice_hash) DO NOTHING`,
-        [device.id, b.privacyAck.hash, b.privacyAck.at],
-      );
-    }
 
     // configuração do painel: vai só quando o aparelho ainda não aplicou a versão atual
     const row = (
@@ -291,7 +280,6 @@ export async function deviceRoutes(app: FastifyInstance, opts: { db: Db; config:
       desired: sendDesired ? { hash: desired.hash, config: desired.config } : null,
       commands: await commandsForDevice(db, device.id),
       ackResults: (b.commandResults ?? []).map((r) => r.id),
-      privacyAcked: b.privacyAck?.hash ?? null,
       apps: await managedArtifacts((row.managed_apps as string[] | null) ?? [], row.app_version_code),
       serverTime: new Date().toISOString(),
       name,

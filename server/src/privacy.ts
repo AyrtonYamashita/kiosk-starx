@@ -74,12 +74,6 @@ export async function exportSubject(db: Db, sswUser: string) {
       [ids, sswUser],
     )
   ).rows;
-  const acks = (
-    await db.query(
-      "SELECT d.name AS device, a.acknowledged_at, a.notice_hash FROM privacy_acks a JOIN devices d ON d.id = a.device_id WHERE a.ssw_user = $1 ORDER BY a.acknowledged_at",
-      [sswUser],
-    )
-  ).rows;
   const current = (
     await db.query("SELECT d.name AS device, s.screen, s.last_event_at FROM ops_device_state s JOIN devices d ON d.id = s.device_id WHERE s.ssw_user = $1", [
       sswUser,
@@ -110,7 +104,6 @@ export async function exportSubject(db: Db, sswUser: string) {
     bipagens: scans.map((s) => ({ carga: s.operation_id, hora: s.at, codigo: s.code, tipo: s.kind, lidos: s.read_qty === null ? null : Number(s.read_qty) })),
     eventos_guardados: events.map((e) => ({ tipo: e.type, hora: e.at, dados: e.data })),
     estado_atual: current.map((c) => ({ coletor: c.device, tela: c.screen, ultimo_evento: c.last_event_at })),
-    ciencia_do_aviso_de_privacidade: acks.map((a) => ({ coletor: a.device, em: a.acknowledged_at, versao_do_texto: a.notice_hash.slice(0, 12) })),
   };
 }
 
@@ -141,7 +134,6 @@ async function scrub(c: Q, sswUser: string) {
     operations: await n("UPDATE ops_operations SET ssw_user = NULL, updated_at = now() WHERE ssw_user = $1"),
     current: await n("UPDATE ops_device_state SET ssw_user = NULL, updated_at = now() WHERE ssw_user = $1"),
     events: await n("UPDATE ops_events SET data = data - 'user' WHERE type IN ('session', 'heartbeat') AND data->>'user' = $1"),
-    acks: await n("UPDATE privacy_acks SET ssw_user = NULL WHERE ssw_user = $1"),
   };
 }
 
@@ -158,8 +150,7 @@ export async function reapplyErasures(db: Db, secret: string): Promise<number> {
     await db.query<{ u: string }>(
       `SELECT ssw_user AS u FROM ops_operations WHERE ssw_user IS NOT NULL
        UNION SELECT ssw_user FROM ops_device_state WHERE ssw_user IS NOT NULL
-       UNION SELECT data->>'user' FROM ops_events WHERE type IN ('session', 'heartbeat') AND data->>'user' IS NOT NULL
-       UNION SELECT ssw_user FROM privacy_acks WHERE ssw_user IS NOT NULL`,
+       UNION SELECT data->>'user' FROM ops_events WHERE type IN ('session', 'heartbeat') AND data->>'user' IS NOT NULL`,
     )
   ).rows.map((x) => x.u);
   let n = 0;

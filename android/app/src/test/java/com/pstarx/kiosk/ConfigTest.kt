@@ -221,18 +221,4 @@ class PinTest {
         repeat(3) { assertFalse(t.onTap(13_100L + it * 100)) }
         assertTrue(t.onTap(13_500))
     }
-
-    @Test
-    fun avisoDePrivacidade() {
-        // ausente: sem aviso; presente: texto (até 4000), e volta igual no JSON
-        assertEquals("", KioskConfig.parse(JSONObject()).config.display.privacyNotice)
-        val c = KioskConfig.parse(JSONObject("""{"display": {"privacyNotice": "  Seus dados de carga são lidos.  "}}""")).config
-        assertEquals("Seus dados de carga são lidos.", c.display.privacyNotice)
-        assertEquals(c.display.privacyNotice, KioskConfig.parse(JSONObject(c.toJson().toString())).config.display.privacyNotice)
-        val long = KioskConfig.parse(JSONObject().put("display", JSONObject().put("privacyNotice", "x".repeat(5000)))).config
-        assertEquals(4000, long.display.privacyNotice.length)
-        // a versão do aviso muda quando o texto muda
-        assertTrue(com.pstarx.kiosk.kiosk.PrivacyNotice.hash("a") != com.pstarx.kiosk.kiosk.PrivacyNotice.hash("b"))
-        assertEquals(64, com.pstarx.kiosk.kiosk.PrivacyNotice.hash("a").length)
-    }
 }
