@@ -12,6 +12,7 @@ import { securityRoutes } from "./security.js";
 import { mfaAccountRoutes, mfaDeps, mfaPublicRoutes, revokeTrust } from "./mfa.js";
 import { passkeyAccountRoutes, passkeyPublicRoutes } from "./passkeys.js";
 import { opsAdminRoutes } from "./opsAdmin.js";
+import { privacyRoutes } from "./privacy.js";
 import { OPS_READER_ON_SQL } from "../ops.js";
 import type { OpsLive } from "../opsLive.js";
 import type { Mailer } from "../mfa.js";
@@ -197,6 +198,7 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
     await priv.register(mfaAccountRoutes, { db, config });
     await priv.register(passkeyAccountRoutes, { db, config });
     await priv.register(opsAdminRoutes, { db, config, live: opts.live, waker });
+    await priv.register(privacyRoutes, { db, config });
 
     priv.post("/v1/admin/password", async (req, reply) => {
       const body = ChangePassword.safeParse(req.body);

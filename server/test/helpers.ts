@@ -74,6 +74,7 @@ export async function setupApi(opts: { config?: Partial<Config> } = {}) {
   const ctx = {
     db,
     app,
+    config,
     apkDir,
     schema,
     adminToken: "",

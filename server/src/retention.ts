@@ -1,4 +1,5 @@
 import type { Db } from "./db.js";
+import { reapplyErasures } from "./privacy.js";
 
 /*
   Prazos de guarda (LGPD, .lgpd/retention.md). Complementa a limpeza dos eventos do SSW (opsRetention.ts):
@@ -18,6 +19,8 @@ export interface RetentionOptions {
   authEventDays: number;
   authUnknownDays: number;
   adminDisabledDays: number;
+  /** Com o segredo, reaplica anonimizações a pedido do titular depois de restaurar um backup antigo. */
+  erasureSecret?: string;
 }
 
 export interface RetentionResult {
@@ -26,6 +29,7 @@ export interface RetentionResult {
   commands: number;
   authEvents: number;
   adminsAnonymized: number;
+  erasuresReapplied: number;
 }
 
 const ANON_PREFIX = "removido-";
@@ -80,7 +84,9 @@ export async function applyRetention(db: Db, o: RetentionOptions): Promise<Reten
     }
   }
 
-  return { operationsAnonymized, screenshots, commands, authEvents, adminsAnonymized };
+  const erasuresReapplied = o.erasureSecret ? await reapplyErasures(db, o.erasureSecret) : 0;
+
+  return { operationsAnonymized, screenshots, commands, authEvents, adminsAnonymized, erasuresReapplied };
 }
 
 /** Roda pouco depois de a API subir e depois a cada 6 horas. Devolve a função que para. */

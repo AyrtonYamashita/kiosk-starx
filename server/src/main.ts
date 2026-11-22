@@ -11,7 +11,7 @@ const applied = await migrate(db, config.dbSchema);
 const app = await buildApp(config, db);
 if (applied.length) app.log.info({ applied }, "migrações aplicadas");
 await ensureAdmin(db, config, app.log);
-const stopDataRetention = scheduleRetention(db, config.retention, app.log);
+const stopDataRetention = scheduleRetention(db, { ...config.retention, erasureSecret: config.authSecret }, app.log);
 const stopRetention = scheduleOpsRetention(db, { eventDays: config.opsRetentionDays, heartbeatDays: config.opsHeartbeatRetentionDays, scanDays: config.opsScanRetentionDays }, app.log);
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
