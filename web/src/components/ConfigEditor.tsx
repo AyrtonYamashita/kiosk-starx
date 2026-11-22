@@ -269,9 +269,9 @@ export function ConfigEditor({
           </option>
         ))}
       </datalist>
-      <div className="row">
+      <div className="segmented segmented-fill" role="tablist" aria-label="Seções da configuração">
         {TABS.map((t) => (
-          <button type="button" key={t} className={t === tab ? "primary" : undefined} onClick={() => openTab(t)}>
+          <button type="button" key={t} role="tab" aria-selected={t === tab} className={t === tab ? "on" : undefined} onClick={() => openTab(t)}>
             {t}
           </button>
         ))}

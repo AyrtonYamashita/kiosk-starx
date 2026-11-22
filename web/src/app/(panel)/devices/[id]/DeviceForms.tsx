@@ -1,26 +1,80 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useRef, useState } from "react";
+import { PencilLine } from "lucide-react";
 import { deleteDevice, renameDevice, setOpsReader } from "@/lib/actions";
 
 /**
- * Identidade do coletor: o nome usado no painel todo (lista, avisos, acompanhamento). Em branco, vale o nome padrão
- * gerado no cadastro.
+ * Nome do coletor no topo da página: clique para editar. Enter ou clicar fora salva, Esc desiste. Em branco, volta ao
+ * nome padrão gerado no cadastro. É o nome usado no painel todo (lista, avisos, acompanhamento).
  */
-export function IdentityForm({ id, name, fallback }: { id: string; name: string; fallback: string }) {
+export function EditableName({ id, name, fallback }: { id: string; name: string; fallback: string }) {
   const [state, action, pending] = useActionState(renameDevice, undefined);
-  return (
-    <form action={action} className="stack" style={{ gap: 10 }}>
-      <input type="hidden" name="id" value={id} />
-      <label>
-        Nome do coletor
-        <input name="name" defaultValue={name === fallback ? "" : name} maxLength={80} placeholder={fallback} />
-      </label>
-      <div className="row" style={{ gap: 8 }}>
-        <button disabled={pending}>Salvar nome</button>
-        <span className="muted small">Em branco, fica {fallback}.</span>
+  const [editing, setEditing] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
+  const cancelled = useRef(false);
+  // enquanto salva, já mostra o nome novo (o da página só chega depois do refresh)
+  const [saving, setSaving] = useState(name);
+
+  if (!editing)
+    return (
+      <div className="device-name-wrap">
+        <h1 className="device-name">
+          <button type="button" className="device-name-btn" title="Clique para renomear" onClick={() => setEditing(true)}>
+            {pending ? saving : name}
+            <PencilLine size={13} className="device-name-pen" aria-hidden />
+          </button>
+        </h1>
+        {pending && <span className="muted small">salvando…</span>}
+        {state?.error && <span className="alert error small">{state.error}</span>}
       </div>
-      {state?.error && <span className="alert error small">{state.error}</span>}
+    );
+
+  const finish = () => {
+    setEditing(false);
+    const input = formRef.current?.elements.namedItem("name") as HTMLInputElement | null;
+    if (cancelled.current || !input) return;
+    const next = input.value.trim();
+    // sem mudança: não manda nada
+    if ((next || fallback) === name) return;
+    setSaving(next || fallback);
+    formRef.current?.requestSubmit();
+  };
+
+  return (
+    <form
+      ref={formRef}
+      action={action}
+      className="device-name-form"
+      onSubmit={() => {
+        cancelled.current = false;
+      }}
+    >
+      <input type="hidden" name="id" value={id} />
+      <input
+        name="name"
+        className="device-name-input"
+        defaultValue={name === fallback ? "" : name}
+        placeholder={fallback}
+        maxLength={80}
+        aria-label="Nome do coletor"
+        autoFocus
+        onFocus={(e) => {
+          cancelled.current = false;
+          e.currentTarget.select();
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            e.currentTarget.blur();
+          } else if (e.key === "Escape") {
+            cancelled.current = true;
+            e.currentTarget.blur();
+          }
+        }}
+        onBlur={finish}
+      />
+      <span className="muted small">Enter salva · Esc cancela · em branco fica {fallback}</span>
     </form>
   );
 }

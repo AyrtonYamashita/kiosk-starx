@@ -364,6 +364,8 @@ label.dev-check { min-height: 32px; gap: 8px; font-size: 12.5px; }
 .segmented button:hover:not(:disabled) { background: var(--surface); color: var(--ink); }
 .segmented button.on, .segmented button.on:disabled { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: 0 0 0 1px var(--line); cursor: default; }
 .segmented button:disabled:not(.on) { background: none; color: var(--soft); }
+.segmented-fill { display: flex; width: 100%; }
+.segmented-fill button { flex: 1 1 0; min-width: 0; padding: 0 8px; }
 @media (max-width: 1023.98px) {
   .dev-layout { grid-template-columns: minmax(0, 1fr); }
   .dev-filters { position: static; max-height: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -406,19 +408,20 @@ tr.selected td { background: var(--blue-tint); }
 }
 
 /* ---------------------------------------------------------------- página do dispositivo
-   Mapa em tela cheia atrás de tudo; cards de vidro líquido (raio 28, padding 16, controles 12 = 28 − 16).
-   Colunas de 440 px com 16 px entre elas e 24 px da borda; o centro fica livre para o marcador. */
+   Mapa em tela cheia atrás de tudo; cards de vidro líquido (raio 4, padding 16).
+   Esquerda 360 px (Aparelho + Configuração), direita 440 px (resumo, abas, coordenadas); o centro fica livre para o
+   marcador. */
 
 .main > .page > .device-page { max-width: none; }
 .device-page {
   display: grid; gap: 16px; font-size: 12px; line-height: 17px;
-  grid-template-columns: 440px minmax(0, 1fr) 440px;
-  grid-template-areas: "left . right";
+  grid-template-columns: 360px minmax(0, 1fr) 440px;
+  grid-template-areas: "info . main";
   height: calc(100dvh - 48px);
 }
 .device-col { display: flex; flex-direction: column; gap: 16px; min-height: 0; min-width: 0; }
-.device-left { grid-area: left; overflow-y: auto; padding-right: 2px; }
-.device-right { grid-area: right; overflow-y: auto; }
+.device-info { grid-area: info; overflow-y: auto; padding-right: 2px; }
+.device-main { grid-area: main; overflow-y: auto; }
 .device-card { flex: none; min-width: 0; }
 .device-card > h2 { font-family: var(--font-display); font-size: 14px; line-height: 20px; margin: 0 0 10px; letter-spacing: -0.01em; }
 .device-card dl.kv { gap: 6px 12px; }
@@ -430,7 +433,17 @@ tr.selected td { background: var(--blue-tint); }
 .device-head { display: flex; flex-direction: column; gap: 6px; }
 .device-back { color: var(--soft); }
 .device-back:hover { color: var(--ink); }
-.device-name { font-family: var(--font-display); font-size: 17px; line-height: 22px; margin: 0; letter-spacing: -0.02em; }
+.device-name { font-family: var(--font-display); font-size: 17px; line-height: 22px; margin: 0; letter-spacing: -0.02em; min-width: 0; }
+.device-name-wrap { display: flex; align-items: center; gap: 8px; min-width: 0; }
+button.device-name-btn {
+  display: inline-flex; align-items: center; gap: 6px; height: auto; min-height: 0; padding: 2px 4px; margin: -2px -4px;
+  border: 1px solid transparent; background: none; color: inherit; font: inherit; letter-spacing: inherit; cursor: text;
+}
+button.device-name-btn:hover { background: none; border-color: var(--lg-border); }
+.device-name-pen { color: var(--soft); opacity: 0; transition: opacity .15s; }
+.device-name-btn:hover .device-name-pen, .device-name-btn:focus-visible .device-name-pen { opacity: 1; }
+.device-name-form { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+.device-card input.device-name-input { font-family: var(--font-display); font-size: 17px; font-weight: 600; letter-spacing: -0.02em; height: 32px; }
 .device-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 6px 0 0; padding-top: 10px; border-top: 1px solid var(--lg-border); }
 .device-stats dt { font-size: 10.5px; line-height: 14px; color: var(--soft); }
 .device-stats dd { margin: 2px 0 0; font-size: 12.5px; line-height: 17px; font-weight: 600; overflow-wrap: anywhere; }
@@ -499,15 +512,15 @@ button.cmd-button.bad, button.cmd-button.bad:hover { color: var(--bad-deep); }
 @media (max-width: 1279.98px) {
   .device-page {
     height: auto; align-items: start;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    grid-template-areas: "left right";
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+    grid-template-areas: "info main";
   }
-  .device-right { overflow: visible; }
+  .device-main { overflow: visible; }
   .device-config { flex: none; overflow: visible; }
-  .device-left { overflow: visible; }
+  .device-info { overflow: visible; }
 }
 @media (max-width: 1023.98px) {
-  .device-page { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-template-areas: "left" "right"; }
+  .device-page { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-template-areas: "main" "info"; }
   .device-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 } /* fim da camada components */

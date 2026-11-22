@@ -4,7 +4,7 @@ import { AutoRefresh } from "@/components/AutoRefresh";
 import { LiquidGlassDefs } from "@/components/brand/LiquidGlass";
 import { api, ApiError, type CatalogApp, type Command, type DeviceDetail, type Profile, type RepoApp, type Screenshot } from "@/lib/api";
 import { ago, bytes, dateTime, defaultDeviceName, kioskModeLabel, networkLabel, uptime } from "@/lib/format";
-import { DeleteDevice, IdentityForm, OpsReaderToggle } from "./DeviceForms";
+import { DeleteDevice, EditableName, OpsReaderToggle } from "./DeviceForms";
 import { MoreInfo } from "./MoreInfo";
 import { AppsTable } from "./AppsTable";
 import { AppForms, CommandButtons, ManagedAppsStatus } from "./DeviceCommands";
@@ -17,8 +17,9 @@ export const dynamic = "force-dynamic";
 
 /*
   Página do dispositivo (identidade visual Starx, ver starx-kiosk-brand/BRAND.md § Página do dispositivo):
-  mapa da última posição como fundo da tela toda, cards de vidro líquido por cima (raio 28, padding 16, controles 12).
-  Esquerda: resumo + abas (Comandos · Leitura SSW · Apps · JSON). Direita: Aparelho + Configuração pelo painel.
+  mapa da última posição como fundo da tela toda, cards de vidro líquido por cima (raio 4, padding 16).
+  Esquerda (estreita): Aparelho + Configuração pelo painel. Direita: resumo com o nome editável + abas (Comandos ·
+  Leitura SSW · Apps · JSON) + coordenadas.
   Centro livre: o marcador e o cartão da posição. Sem localização, sem mapa (fica o fundo Bubble).
 */
 export default async function DevicePage({ params }: { params: Promise<{ id: string }> }) {
@@ -121,69 +122,7 @@ export default async function DevicePage({ params }: { params: Promise<{ id: str
       <LiquidGlassDefs />
       {hasMap && <DeviceMapLazy lat={loc.lat} lon={loc.lon} accuracyM={loc.accuracyM} />}
 
-      <div className="device-col device-left">
-        <section className="liquid-glass device-card device-head">
-          <div className="row" style={{ gap: 8 }}>
-            <Link href="/" className="device-back small" transitionTypes={["nav-back"]}>
-              ← Aparelhos
-            </Link>
-          </div>
-          <div className="row" style={{ gap: 8 }}>
-            <h1 className="device-name">{d.name}</h1>
-            {d.online ? (
-              <span className="badge ok">
-                <span className="dot" /> online
-              </span>
-            ) : (
-              <span className="badge off">
-                <span className="dot" /> offline
-              </span>
-            )}
-          </div>
-          <span className="muted small" title={dateTime(d.lastSeenAt)}>
-            último contato {ago(d.lastSeenAt)}
-          </span>
-          <dl className="device-stats">
-            <div>
-              <dt>Bateria</dt>
-              <dd className={bat.level !== undefined && bat.level <= 15 && !bat.charging ? "bad" : undefined}>
-                {bat.level ?? "—"}%{bat.charging ? " · carregando" : ""}
-              </dd>
-            </div>
-            <div>
-              <dt>Rede</dt>
-              <dd>{netValue}</dd>
-            </div>
-            <div>
-              <dt>Armazenamento</dt>
-              <dd>{bytes(st.freeBytes)} livres</dd>
-            </div>
-            <div>
-              <dt>Memória</dt>
-              <dd>{bytes(mem.availBytes)} livres</dd>
-            </div>
-          </dl>
-        </section>
-
-        <section className="liquid-glass device-card">
-          <UnderlineTabs tabs={tabs} label="Seções do aparelho" />
-        </section>
-
-        <section className="liquid-glass device-card device-loc-card" aria-label="Última posição">
-          <h2>Coordenadas</h2>
-          <LocationCard location={loc} enabled={locEnabled} />
-        </section>
-
-        <section className="liquid-glass device-card">
-          <h2>Identidade</h2>
-          <IdentityForm id={d.id} name={d.name} fallback={defaultDeviceName(d.model, d.serial)} />
-          <div className="device-danger">
-            <DeleteDevice id={d.id} name={d.name} />
-          </div>
-        </section>
-      </div>
-
-      <div className="device-col device-right">
+      <div className="device-col device-info">
         <section className="liquid-glass device-card">
           <h2>Aparelho</h2>
           <dl className="kv">
@@ -257,6 +196,9 @@ export default async function DevicePage({ params }: { params: Promise<{ id: str
               </dd>
             </dl>
           </MoreInfo>
+          <div className="device-danger">
+            <DeleteDevice id={d.id} name={d.name} />
+          </div>
         </section>
 
         <section className="liquid-glass device-card device-config">
@@ -271,6 +213,61 @@ export default async function DevicePage({ params }: { params: Promise<{ id: str
           </DeviceConfig>
         </section>
       </div>
+      <div className="device-col device-main">
+        <section className="liquid-glass device-card device-head">
+          <div className="row" style={{ gap: 8 }}>
+            <Link href="/" className="device-back small" transitionTypes={["nav-back"]}>
+              ← Aparelhos
+            </Link>
+          </div>
+          <div className="row" style={{ gap: 8 }}>
+            <EditableName key={d.name} id={d.id} name={d.name} fallback={defaultDeviceName(d.model, d.serial)} />
+            {d.online ? (
+              <span className="badge ok">
+                <span className="dot" /> online
+              </span>
+            ) : (
+              <span className="badge off">
+                <span className="dot" /> offline
+              </span>
+            )}
+          </div>
+          <span className="muted small" title={dateTime(d.lastSeenAt)}>
+            último contato {ago(d.lastSeenAt)}
+          </span>
+          <dl className="device-stats">
+            <div>
+              <dt>Bateria</dt>
+              <dd className={bat.level !== undefined && bat.level <= 15 && !bat.charging ? "bad" : undefined}>
+                {bat.level ?? "—"}%{bat.charging ? " · carregando" : ""}
+              </dd>
+            </div>
+            <div>
+              <dt>Rede</dt>
+              <dd>{netValue}</dd>
+            </div>
+            <div>
+              <dt>Armazenamento</dt>
+              <dd>{bytes(st.freeBytes)} livres</dd>
+            </div>
+            <div>
+              <dt>Memória</dt>
+              <dd>{bytes(mem.availBytes)} livres</dd>
+            </div>
+          </dl>
+        </section>
+
+        <section className="liquid-glass device-card">
+          <UnderlineTabs tabs={tabs} label="Seções do aparelho" />
+        </section>
+
+        <section className="liquid-glass device-card device-loc-card" aria-label="Última posição">
+          <h2>Coordenadas</h2>
+          <LocationCard location={loc} enabled={locEnabled} />
+        </section>
+
+      </div>
+
     </div>
   );
 }
