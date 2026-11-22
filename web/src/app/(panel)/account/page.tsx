@@ -7,6 +7,8 @@ import { PasswordForm } from "./PasswordForm";
 import { PasskeysSection } from "./PasskeysSection";
 import { TotpSection } from "./TotpSection";
 import { RecoveryCodes, TrustedDevices } from "./MfaCard";
+import Link from "next/link";
+import { privacyConfig } from "@/lib/privacy";
 
 export const dynamic = "force-dynamic";
 
@@ -54,6 +56,11 @@ export default async function AccountPage() {
               <LogOut size={14} aria-hidden /> Sair desta sessão
             </button>
           </form>
+          {privacyConfig() && (
+            <Link href="/privacidade" className="muted small" target="_blank">
+              Política de privacidade
+            </Link>
+          )}
         </section>
 
         <section className="card account-card">

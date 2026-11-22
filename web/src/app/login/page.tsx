@@ -1,6 +1,8 @@
 import { StarxLogo } from "@/components/brand/Logo";
 import { LoginForm } from "./LoginForm";
 import { PasskeyLogin } from "./PasskeyLogin";
+import Link from "next/link";
+import { privacyConfig } from "@/lib/privacy";
 
 const ETAPA: Record<string, string> = {
   expirou: "A confirmação do código expirou. Entre de novo.",
@@ -26,6 +28,11 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         <LoginForm />
         <PasskeyLogin />
       </div>
+      {privacyConfig() && (
+        <p className="login-foot">
+          <Link href="/privacidade">Política de privacidade</Link>
+        </p>
+      )}
     </main>
   );
 }
