@@ -169,3 +169,15 @@ describe("histórico de cargas", () => {
     expect(page2.operations.map((o: { plate: string }) => o.plate)).toEqual(["HIS1A00", "HIS0A00"]);
   });
 });
+
+describe("histórico de cargas: dia de Brasília", () => {
+  it("carga às 23h30 de Brasília entra no próprio dia (não no seguinte)", async () => {
+    await t.db.query(
+      "INSERT INTO ops_operations (device_id, fn, plate, ssw_user, started_at) VALUES ($1, 'coleta', 'NOITE11', 'turno.noite', '2026-11-10 23:30:00-03')",
+      [deviceId],
+    );
+    const on = (d: string) => t.api("GET", `/v1/admin/ops/operations?user=turno.noite&from=${d}&to=${d}`);
+    expect((await on("2026-11-10")).json.operations.map((o: { plate: string }) => o.plate)).toEqual(["NOITE11"]);
+    expect((await on("2026-11-11")).json.operations).toHaveLength(0);
+  });
+});

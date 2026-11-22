@@ -81,8 +81,10 @@ export async function opsAdminRoutes(app: FastifyInstance, opts: { db: Db; confi
     if (f.fn) add("o.fn = ?", f.fn);
     if (f.status === "open") where.push("o.ended_at IS NULL");
     else if (f.status) add("o.end_reason = ?", f.status);
-    if (f.from) add("o.started_at >= (?::date AT TIME ZONE 'America/Sao_Paulo')", f.from);
-    if (f.to) add("o.started_at < ((?::date + 1) AT TIME ZONE 'America/Sao_Paulo')", f.to);
+    // dia de Brasília: a data vira timestamp sem fuso e só então é lida como horário de Brasília (date AT TIME ZONE
+    // usaria o fuso da sessão do banco, UTC, e deslocava o dia em 3 h)
+    if (f.from) add("o.started_at >= (?::date::timestamp AT TIME ZONE 'America/Sao_Paulo')", f.from);
+    if (f.to) add("o.started_at < ((?::date + 1)::timestamp AT TIME ZONE 'America/Sao_Paulo')", f.to);
     if (f.before) {
       const [ms, id] = f.before.split("_");
       args.push(new Date(Number(ms)), id);
