@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { sha256hex, signBatch } from "../src/ops.js";
-import { pruneOpsEvents } from "../src/opsRetention.js";
+import { closeStaleOps, pruneOpsEvents } from "../src/opsRetention.js";
 import { info, setupApi } from "./helpers.js";
 
 let t: Awaited<ReturnType<typeof setupApi>>;
@@ -112,5 +112,34 @@ describe("limpeza dos eventos do SSW (2.5)", () => {
       [5, 7],
       [2, null],
     ]);
+  });
+});
+
+describe("carga de coletor sem sinal", () => {
+  it("encerra como signal_lost depois do limite e reabre se o coletor voltar na mesma placa", async () => {
+    const now = Date.now();
+    await send([
+      { id: id(), at: now - 3000, type: "op_start", fn: "manifesto", plate: "SIN1A23", total: tot(10) },
+      { id: id(), at: now - 2000, type: "progress", fn: "manifesto", plate: "SIN1A23", read: tot(4) },
+    ]);
+    const op = (await t.db.query("SELECT id FROM ops_operations WHERE plate = 'SIN1A23'")).rows[0].id as string;
+    // ainda com sinal: nada muda
+    expect(await closeStaleOps(t.db, 120)).not.toContain(deviceId);
+    // sem sinal há 3 h
+    await t.db.query(
+      "UPDATE ops_device_state SET last_event_at = now() - interval '3 hours', last_heartbeat_at = now() - interval '3 hours' WHERE device_id = $1",
+      [deviceId],
+    );
+    expect(await closeStaleOps(t.db, 120)).toContain(deviceId);
+    const closed = (await t.db.query("SELECT end_reason, ended_at, last_scan_at FROM ops_operations WHERE id = $1", [op])).rows[0];
+    expect(closed.end_reason).toBe("signal_lost");
+    expect(closed.ended_at.getTime()).toBe(closed.last_scan_at.getTime());
+    expect((await t.db.query("SELECT operation_id FROM ops_device_state WHERE device_id = $1", [deviceId])).rows[0].operation_id).toBeNull();
+    // voltou ao ar e continuou bipando a mesma placa: a mesma carga reabre
+    await send([{ id: id(), at: Date.now(), type: "progress", fn: "manifesto", plate: "SIN1A23", read: tot(5) }]);
+    const rows = (await t.db.query("SELECT id, ended_at, read_qty FROM ops_operations WHERE plate = 'SIN1A23'")).rows;
+    expect(rows).toHaveLength(1);
+    expect(rows[0].ended_at).toBeNull();
+    expect(Number(rows[0].read_qty)).toBe(5);
   });
 });

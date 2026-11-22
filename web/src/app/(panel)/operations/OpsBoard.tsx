@@ -7,7 +7,7 @@ import { ScanBarcode } from "@/components/animate-ui/icons/scan-barcode";
 import { Num } from "@/components/Num";
 import type { OpsCard } from "@/lib/api";
 import { setClockOffset, useClockValue } from "@/lib/clock";
-import { fmtAgo, fmtDuration, fmtTime, isOffline, SCREEN_LABEL } from "@/lib/opsFormat";
+import { fmtAgo, fmtDuration, fmtTime, isOffline, SCREEN_LABEL, STALE_AFTER_MS } from "@/lib/opsFormat";
 import { useOpsStream } from "@/lib/useOpsStream";
 
 /** Cards ao vivo, um por coletor: em operação primeiro, depois logados, depois o resto. */
@@ -30,21 +30,24 @@ export function OpsBoard({ initial, initialServerTime }: { initial: OpsCard[]; i
 
   const all = useMemo(() => Object.values(cards), [cards]);
   // só redesenha a lista quando algum coletor entra ou sai do "sem sinal"
+  // redesenha só quando algum coletor entra ou sai do "sem sinal" (e do sem sinal há mais de 15 min)
   const offlineKey = useClockValue(
     (now) =>
       all
         .filter((c) => isOffline(c.lastSeenAt, now))
-        .map((c) => c.deviceId)
+        .map((c) => `${c.deviceId}${c.lastSeenAt && now - new Date(c.lastSeenAt).getTime() > STALE_AFTER_MS ? "!" : ""}`)
         .sort()
         .join(","),
     initialServerTime,
   );
 
   const list = useMemo(() => {
-    const offline = new Set(offlineKey ? offlineKey.split(",") : []);
+    const keys = offlineKey ? offlineKey.split(",") : [];
+    const offline = new Set(keys.map((k) => k.replace("!", "")));
+    const stale = new Set(keys.filter((k) => k.endsWith("!")).map((k) => k.slice(0, -1)));
     const rank = (c: OpsCard) => (offline.has(c.deviceId) ? 3 : c.operation ? 0 : c.user ? 1 : 2);
     return all
-      .filter((c) => !onlyLogged || c.user || c.operation)
+      .filter((c) => !onlyLogged || ((c.user || c.operation) && !stale.has(c.deviceId)))
       .sort((a, b) => rank(a) - rank(b) || (a.user ?? a.deviceName).localeCompare(b.user ?? b.deviceName, "pt-BR"));
   }, [all, offlineKey, onlyLogged]);
 

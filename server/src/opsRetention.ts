@@ -170,3 +170,57 @@ export function scheduleOpsRetention(
     clearInterval(timer);
   };
 }
+
+/**
+ * Cargas abertas de coletores sem sinal há `afterMin` minutos (desligado, sem bateria, fora da rede): o app não
+ * consegue encerrá-las, então a API encerra como "signal_lost" no horário da última bipagem. Se o coletor voltar na
+ * mesma placa, a carga é reaberta (ops.ts). Devolve os coletores afetados (para avisar as telas ao vivo).
+ */
+export async function closeStaleOps(db: Db, afterMin: number): Promise<string[]> {
+  const r = await db.query<{ device_id: string }>(
+    `WITH stale AS (
+       SELECT o.id, o.device_id, COALESCE(o.last_scan_at, o.started_at) AS at
+       FROM ops_operations o JOIN ops_device_state s ON s.device_id = o.device_id
+       WHERE o.ended_at IS NULL
+         AND GREATEST(COALESCE(s.last_event_at, '-infinity'), COALESCE(s.last_heartbeat_at, '-infinity')) < now() - make_interval(mins => $1)
+       FOR UPDATE OF o SKIP LOCKED)
+     UPDATE ops_operations o SET ended_at = GREATEST(stale.at, o.started_at), end_reason = 'signal_lost', updated_at = now()
+     FROM stale WHERE o.id = stale.id
+     RETURNING o.device_id`,
+    [afterMin],
+  );
+  const ids = [...new Set(r.rows.map((x) => x.device_id))];
+  if (ids.length) {
+    await db.query("UPDATE ops_device_state SET operation_id = NULL, updated_at = now() WHERE device_id = ANY($1) AND operation_id IS NOT NULL", [ids]);
+  }
+  return ids;
+}
+
+/** Confere a cada 5 min (e 1 min depois de subir). Devolve a função que para. */
+export function scheduleStaleOps(
+  db: Db,
+  afterMin: number,
+  onClosed: (deviceIds: string[]) => void,
+  log: { info: (obj: object, msg: string) => void; error: (obj: object, msg: string) => void },
+  everyMs = 5 * 60_000,
+): () => void {
+  const run = async () => {
+    try {
+      const ids = await closeStaleOps(db, afterMin);
+      if (ids.length) {
+        log.info({ devices: ids.length, afterMin }, "cargas encerradas por falta de sinal");
+        onClosed(ids);
+      }
+    } catch (err) {
+      log.error({ err }, "falha ao encerrar cargas sem sinal");
+    }
+  };
+  const first = setTimeout(run, 60_000);
+  const timer = setInterval(run, everyMs);
+  first.unref();
+  timer.unref();
+  return () => {
+    clearTimeout(first);
+    clearInterval(timer);
+  };
+}

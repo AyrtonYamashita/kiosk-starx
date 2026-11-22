@@ -11,6 +11,7 @@ import { deviceScreenshotRoutes } from "./routes/commands.js";
 import { deviceRoutes } from "./routes/device.js";
 import { Waker } from "./wake.js";
 import { OpsBus } from "./ops.js";
+import { scheduleStaleOps } from "./opsRetention.js";
 import { opsDeviceRoutes } from "./routes/ops.js";
 import { OpsLive } from "./opsLive.js";
 import { opsStreamRoutes } from "./routes/opsAdmin.js";
@@ -73,6 +74,9 @@ export async function buildApp(config: Config, db: Db, waker = new Waker(), mail
   await app.register(opsDeviceRoutes, { db, bus });
   const live = new OpsLive(db, bus);
   app.addHook("onClose", async () => live.close());
+  // carga aberta de coletor sem sinal por 2 h: a API encerra (o app não consegue)
+  const stopStale = scheduleStaleOps(db, config.opsSignalLostMin, (ids) => ids.forEach((id) => bus.changed(id)), app.log);
+  app.addHook("onClose", async () => stopStale());
   await app.register(opsStreamRoutes, { db, config, live });
   await app.register(deviceAppRoutes, { db, config });
   await app.register(deviceScreenshotRoutes, { db });

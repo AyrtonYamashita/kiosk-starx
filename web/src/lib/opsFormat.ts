@@ -52,6 +52,10 @@ export const END_LABEL: Record<string, string> = {
   interrupted: "interrompida",
   left: "saiu sem concluir",
   replaced: "trocou de placa",
+  signal_lost: "perdeu o sinal",
 };
+
+/** Sem sinal há mais que isso, o coletor não conta como "logado" no Acompanhamento (o último estado fica velho). */
+export const STALE_AFTER_MS = 15 * 60_000;
 
 export const isOffline = (lastSeenAt: string | null, now: number) => !lastSeenAt || now - new Date(lastSeenAt).getTime() > OFFLINE_AFTER_MS;

@@ -46,6 +46,8 @@ export interface Config {
   opsHeartbeatRetentionDays: number;
   /** Códigos de barras bipados: dias guardados (padrão 365). */
   opsScanRetentionDays: number;
+  /** Carga aberta de coletor sem sinal há tanto tempo (min) é encerrada pela API como "signal_lost". */
+  opsSignalLostMin: number;
   /** Atrás do Caddy: usa X-Forwarded-For para o IP do aparelho. */
   trustProxy: boolean;
   logLevel: string;
@@ -71,6 +73,14 @@ function days(name: string, fallback: number): number {
   if (!raw) return fallback;
   const n = Number(raw);
   if (!Number.isInteger(n) || n < 1) throw new Error(`${name} precisa ser um número inteiro de dias (1 ou mais)`);
+  return n;
+}
+
+function minutes(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (!raw) return fallback;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 1) throw new Error(`${name} precisa ser um número inteiro de minutos (1 ou mais)`);
   return n;
 }
 
@@ -108,6 +118,7 @@ export function loadConfig(): Config {
     opsRetentionDays: days("OPS_RETENTION_DAYS", 90),
     opsHeartbeatRetentionDays: days("OPS_HEARTBEAT_RETENTION_DAYS", 7),
     opsScanRetentionDays: days("OPS_SCAN_RETENTION_DAYS", 365),
+    opsSignalLostMin: minutes("OPS_SIGNAL_LOST_MIN", 120),
     trustProxy: (process.env.TRUST_PROXY ?? "true") === "true",
     logLevel: process.env.LOG_LEVEL ?? "info",
   };

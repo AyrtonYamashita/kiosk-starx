@@ -37,6 +37,7 @@ const config: Config = {
   opsRetentionDays: 90,
   opsHeartbeatRetentionDays: 7,
     opsScanRetentionDays: 365,
+    opsSignalLostMin: 120,
   trustProxy: false,
   logLevel: "silent",
 };

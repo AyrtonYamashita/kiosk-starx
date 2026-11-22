@@ -24,6 +24,7 @@ const TITLE: Record<string, (who: string, fn: string) => string> = {
   interrupted: (who, fn) => `${who} interrompeu ${fn}`,
   left: (who, fn) => `${who} saiu de ${fn} sem concluir`,
   replaced: (who, fn) => `${who} trocou de placa em ${fn}`,
+  signal_lost: (who, fn) => `${who}: ${fn} encerrada (coletor sem sinal)`,
 };
 
 /** Aviso de carga encerrada, com o motivo de verdade (o canal ao vivo pode trazer o fim antes da última contagem). */

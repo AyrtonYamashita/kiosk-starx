@@ -134,6 +134,21 @@ async function openOp(c: Client, deviceId: string): Promise<Open | null> {
   );
 }
 
+/**
+ * O coletor voltou ao ar na mesma carga que a API encerrou por falta de sinal: reabre aquela carga em vez de
+ * começar outra (o histórico não fica partido em duas).
+ */
+async function reopenLost(c: Client, deviceId: string, fn: string, plate: string): Promise<Open | null> {
+  const r = await c.query<Open>(
+    `UPDATE ops_operations SET ended_at = NULL, end_reason = NULL, updated_at = now()
+     WHERE id = (SELECT id FROM ops_operations WHERE device_id = $1 ORDER BY started_at DESC LIMIT 1)
+       AND end_reason = 'signal_lost' AND fn = $2 AND plate = $3 AND ended_at > now() - interval '24 hours'
+     RETURNING id, fn, plate, read_qty, last_scan_at`,
+    [deviceId, fn, plate],
+  );
+  return r.rows[0] ?? null;
+}
+
 async function closeOp(c: Client, opId: string, at: number, reason: string) {
   await c.query("UPDATE ops_operations SET ended_at = GREATEST($2, started_at), end_reason = $3, updated_at = now() WHERE id = $1 AND ended_at IS NULL", [
     opId,
@@ -176,7 +191,7 @@ async function applyEvent(c: Client, deviceId: string, st: State, e: OpsEvent): 
       return null;
     }
     case "op_start": {
-      const open = await openOp(c, deviceId);
+      const open = (await openOp(c, deviceId)) ?? (await reopenLost(c, deviceId, e.fn, e.plate));
       st.screen = "bipagem";
       if (open && open.fn === e.fn && open.plate === e.plate) {
         // voltou à mesma descarga (recarregou a tela): só atualiza os dados
@@ -193,7 +208,7 @@ async function applyEvent(c: Client, deviceId: string, st: State, e: OpsEvent): 
       return st.operation_id;
     }
     case "progress": {
-      let open = await openOp(c, deviceId);
+      let open = (await openOp(c, deviceId)) ?? (await reopenLost(c, deviceId, e.fn, e.plate));
       if (!open || open.fn !== e.fn || open.plate !== e.plate) {
         // o início se perdeu (ex.: app reiniciado no meio): abre a operação a partir do progresso
         if (open) await closeOp(c, open.id, e.at, "replaced");
