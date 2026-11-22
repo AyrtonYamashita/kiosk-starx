@@ -7,6 +7,13 @@ import { ConfigEditor } from "@/components/ConfigEditor";
 import { saveProfile } from "@/lib/actions";
 import type { CatalogApp, Profile, RepoApp } from "@/lib/api";
 
+/**
+ * Ponto de partida de um perfil novo. A localização nasce desligada (LGPD: minimização, .lgpd/kit-cliente/lia-modelos/
+ * localizacao-coletores.md): o cliente liga só onde precisar. Perfis existentes não mudam (o padrão geral do editor e
+ * do app continua "ligado" para quem não tem o campo gravado).
+ */
+const NEW_PROFILE_CONFIG = { security: { reportLocation: false } };
+
 export function ProfileForm({ profile, catalog, repo, justSaved }: { profile: Profile | null; catalog: CatalogApp[]; repo: RepoApp[]; justSaved?: boolean }) {
   const [state, action, pending] = useActionState(saveProfile, justSaved ? { ok: "Perfil criado." } : undefined);
   useActionToast(state);
@@ -24,7 +31,7 @@ export function ProfileForm({ profile, catalog, repo, justSaved }: { profile: Pr
         </label>
       </div>
       <section className="card">
-        <ConfigEditor key={profile?.updatedAt ?? "novo"} name="config" initial={profile?.config ?? null} catalog={catalog} hasExistingPin={profile?.config?.security?.pinHash === "<definido>"} />
+        <ConfigEditor key={profile?.updatedAt ?? "novo"} name="config" initial={profile?.config ?? NEW_PROFILE_CONFIG} catalog={catalog} hasExistingPin={profile?.config?.security?.pinHash === "<definido>"} />
       </section>
       <section className="card stack">
         <h2 style={{ margin: 0 }}>Apps gerenciados</h2>
