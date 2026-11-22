@@ -381,6 +381,11 @@ label.dev-check { min-height: 32px; gap: 8px; font-size: 12.5px; }
 .batt.warn .batt-fill { background: var(--warn); }
 .batt.bad .batt-fill { background: var(--bad); }
 .batt-n { position: relative; font-size: 11px; font-weight: 600; line-height: 1; color: var(--ink); font-variant-numeric: tabular-nums; }
+.cargas-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; align-items: end; }
+.cargas-actions { display: flex; align-items: center; gap: 12px; height: var(--control); }
+.cargas-link { font-weight: 500; white-space: nowrap; }
+.cargas-bar { width: 72px; height: 4px; margin: 4px 0 0 auto; }
+.cargas-table td { vertical-align: middle; }
 .num { display: inline-flex; align-items: baseline; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .good { color: var(--good-deep); }
 .bad { color: var(--bad-deep); }

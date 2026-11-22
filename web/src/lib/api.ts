@@ -474,3 +474,31 @@ export interface OpsDetail {
   functionTimeTodaySec: number | null;
   serverTime: number;
 }
+
+/** Histórico de cargas (/v1/admin/ops/operations). */
+export interface OpsHistory {
+  operations: {
+    id: string;
+    device: { id: string; name: string };
+    fn: string;
+    fnLabel: string;
+    plate: string;
+    realPlate: string | null;
+    user: string | null;
+    branch: string | null;
+    units: string[];
+    startedAt: string;
+    endedAt: string | null;
+    endReason: string | null;
+    durationSec: number;
+    totalQty: number;
+    readQty: number;
+    totalValue: number;
+    readValue: number;
+    scans: number;
+    avgSecPerVolume: number | null;
+  }[];
+  next: string | null;
+  users: string[];
+  functions: { value: string; label: string }[];
+}

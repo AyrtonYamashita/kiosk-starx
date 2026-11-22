@@ -143,3 +143,29 @@ describe("carga de coletor sem sinal", () => {
     expect(Number(rows[0].read_qty)).toBe(5);
   });
 });
+
+describe("histórico de cargas", () => {
+  it("lista da mais nova para a mais antiga, filtra por placa, usuário, situação e pagina", async () => {
+    const base = Date.now() - 10 * 60_000;
+    await send([{ id: id(), at: base, type: "session", user: "joana", domain: "ALT", branch: "OTI" }]);
+    for (let i = 0; i < 3; i++) {
+      const plate = `HIS${i}A00`;
+      await send([
+        { id: id(), at: base + i * 1000 + 1, type: "op_start", fn: "coleta", plate, total: tot(2) },
+        { id: id(), at: base + i * 1000 + 2, type: "op_end", fn: "coleta", plate, reason: i === 2 ? "interrupted" : "concluded" },
+      ]);
+    }
+    const all = (await t.api("GET", "/v1/admin/ops/operations?user=joana")).json;
+    expect(all.operations.map((o: { plate: string }) => o.plate)).toEqual(["HIS2A00", "HIS1A00", "HIS0A00"]);
+    expect(all.operations[0]).toMatchObject({ fnLabel: "Descarga de Coleta", user: "joana", endReason: "interrupted" });
+    expect(all.users).toContain("joana");
+    expect((await t.api("GET", "/v1/admin/ops/operations?plate=his1")).json.operations.map((o: { plate: string }) => o.plate)).toEqual(["HIS1A00"]);
+    expect((await t.api("GET", "/v1/admin/ops/operations?user=joana&status=interrupted")).json.operations).toHaveLength(1);
+    expect((await t.api("GET", "/v1/admin/ops/operations?status=xyz")).status).toBe(400);
+    const today = new Date().toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" });
+    expect((await t.api("GET", `/v1/admin/ops/operations?user=joana&from=${today}&to=${today}`)).json.operations).toHaveLength(3);
+    const first = all.operations[0];
+    const page2 = (await t.api("GET", `/v1/admin/ops/operations?user=joana&before=${new Date(first.startedAt).getTime()}_${first.id}`)).json;
+    expect(page2.operations.map((o: { plate: string }) => o.plate)).toEqual(["HIS1A00", "HIS0A00"]);
+  });
+});

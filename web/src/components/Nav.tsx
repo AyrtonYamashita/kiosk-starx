@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import type { ComponentType } from "react";
 import { AnimateIcon } from "@animate-ui/react/icons";
 import { Activity } from "@/components/animate-ui/icons/activity";
+import { Truck } from "@/components/animate-ui/icons/truck";
 import { LogOut } from "@/components/animate-ui/icons/log-out";
 import { Package } from "@/components/animate-ui/icons/package";
 import { QrCode } from "@/components/animate-ui/icons/qr-code";
@@ -17,6 +18,7 @@ import { StarxLogo } from "@/components/brand/Logo";
 
 const LINKS: { href: string; label: string; short: string; icon: ComponentType<{ size?: number; strokeWidth?: number; "aria-hidden"?: boolean }>; match: (p: string) => boolean; adminOnly?: boolean }[] = [
   { href: "/operations", label: "Acompanhamento", short: "Ao vivo", icon: Activity, match: (p) => p.startsWith("/operations") },
+  { href: "/cargas", label: "Cargas", short: "Cargas", icon: Truck, match: (p) => p.startsWith("/cargas") },
   { href: "/", label: "Aparelhos", short: "Aparelhos", icon: Smartphone, match: (p) => p === "/" || p.startsWith("/devices") },
   { href: "/profiles", label: "Perfis", short: "Perfis", icon: SlidersHorizontal, match: (p) => p.startsWith("/profiles") },
   { href: "/apps", label: "Apps", short: "Apps", icon: Package, match: (p) => p.startsWith("/apps") },

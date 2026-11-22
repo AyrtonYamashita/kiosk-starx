@@ -49,6 +49,90 @@ export async function opsAdminRoutes(app: FastifyInstance, opts: { db: Db; confi
     };
   });
 
+  /**
+   * Histórico de cargas: da mais nova para a mais antiga, 50 por página (continua com `before`, o cursor da última).
+   * Filtros: placa (começo ou parte, sem diferenciar maiúsculas), usuário do SSW, função, situação e período (dias,
+   * horário de Brasília).
+   */
+  const OpsListQuery = z.object({
+    plate: z.string().trim().max(20).optional(),
+    user: z.string().trim().max(80).optional(),
+    fn: z.string().trim().max(30).optional(),
+    status: z.enum(["open", "concluded", "interrupted", "left", "replaced", "signal_lost"]).optional(),
+    from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    before: z.string().regex(/^\d{13}_[0-9a-f-]{36}$/).optional(),
+  });
+  app.get("/v1/admin/ops/operations", async (req, reply) => {
+    const q = OpsListQuery.safeParse(req.query);
+    if (!q.success) return reply.code(400).send({ error: "invalid_query" });
+    const f = q.data;
+    const where: string[] = [];
+    const args: unknown[] = [];
+    const add = (sql: string, v: unknown) => {
+      args.push(v);
+      where.push(sql.replace("?", `$${args.length}`));
+    };
+    if (f.plate) {
+      args.push("%" + f.plate.toUpperCase().replace(/[\\%_]/g, (c) => "\\" + c) + "%");
+      where.push(`(upper(o.plate) LIKE $${args.length} OR upper(COALESCE(o.real_plate, '')) LIKE $${args.length})`);
+    }
+    if (f.user) add("o.ssw_user = ?", f.user);
+    if (f.fn) add("o.fn = ?", f.fn);
+    if (f.status === "open") where.push("o.ended_at IS NULL");
+    else if (f.status) add("o.end_reason = ?", f.status);
+    if (f.from) add("o.started_at >= (?::date AT TIME ZONE 'America/Sao_Paulo')", f.from);
+    if (f.to) add("o.started_at < ((?::date + 1) AT TIME ZONE 'America/Sao_Paulo')", f.to);
+    if (f.before) {
+      const [ms, id] = f.before.split("_");
+      args.push(new Date(Number(ms)), id);
+      where.push(`(o.started_at, o.id) < ($${args.length - 1}, $${args.length}::uuid)`);
+    }
+    const r = await db.query(
+      `SELECT o.id, o.device_id, d.name AS device_name, o.fn, o.plate, o.real_plate, o.ssw_user, o.branch, o.units,
+              o.started_at, o.ended_at, o.end_reason, o.total_qty, o.read_qty, o.total_value, o.read_value, o.scans,
+              o.scan_interval_sum_ms, o.scan_interval_count,
+              extract(epoch FROM COALESCE(o.ended_at, now()) - o.started_at)::int AS duration_sec
+       FROM ops_operations o JOIN devices d ON d.id = o.device_id
+       ${where.length ? "WHERE " + where.join(" AND ") : ""}
+       ORDER BY o.started_at DESC, o.id DESC LIMIT 51`,
+      args,
+    );
+    const rows = r.rows.slice(0, 50);
+    const last = rows[rows.length - 1];
+    const users = (
+      await db.query<{ u: string }>(
+        "SELECT DISTINCT ssw_user AS u FROM ops_operations WHERE ssw_user IS NOT NULL AND started_at > now() - interval '180 days' ORDER BY 1 LIMIT 500",
+      )
+    ).rows.map((x) => x.u);
+    return {
+      operations: rows.map((o) => ({
+        id: o.id,
+        device: { id: o.device_id, name: o.device_name },
+        fn: o.fn,
+        fnLabel: FN_LABEL[o.fn] ?? o.fn,
+        plate: o.plate,
+        realPlate: o.real_plate,
+        user: o.ssw_user,
+        branch: o.branch,
+        units: o.units ?? [],
+        startedAt: o.started_at,
+        endedAt: o.ended_at,
+        endReason: o.end_reason,
+        durationSec: o.duration_sec,
+        totalQty: Number(o.total_qty),
+        readQty: Number(o.read_qty),
+        totalValue: Number(o.total_value),
+        readValue: Number(o.read_value),
+        scans: o.scans,
+        avgSecPerVolume: Number(o.scan_interval_count) > 0 ? Math.round(Number(o.scan_interval_sum_ms) / Number(o.scan_interval_count) / 100) / 10 : null,
+      })),
+      next: r.rows.length > 50 && last ? `${new Date(last.started_at).getTime()}_${last.id}` : null,
+      users,
+      functions: Object.entries(FN_LABEL).map(([value, label]) => ({ value, label })),
+    };
+  });
+
   /** Chave geral da leitura do SSW e quantos coletores leem agora. */
   app.get("/v1/admin/ops/settings", async () => {
     const r = (
