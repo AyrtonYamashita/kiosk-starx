@@ -35,7 +35,7 @@ export function PasskeysSection({ passkeys }: { passkeys: MfaInfo["passkeys"] })
       const response = await createCredential(start.options);
       const done = await registerPasskeyFinish(start.challengeId, response, name.trim() || "Passkey");
       if (done.error) throw new Error(done.error);
-      toast({ tone: "ok", label: "passkey", title: "Passkey cadastrada", text: "Na tela de login use “Entrar com passkey”." });
+      toast({ tone: "ok", title: "Passkey cadastrada", text: "Na tela de login use “Entrar com passkey”." });
       setOpen(false);
       setPassword("");
       router.refresh();

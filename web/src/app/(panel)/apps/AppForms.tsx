@@ -7,7 +7,7 @@ import { deleteApp, deleteAppVersion, renameApp } from "@/lib/actions";
 
 export function RenameApp({ packageName, label }: { packageName: string; label: string }) {
   const [state, action, pending] = useActionState(renameApp, undefined);
-  useActionToast(state, "salvo");
+  useActionToast(state);
   return (
     <form action={action} className="row">
       <input type="hidden" name="packageName" value={packageName} />
@@ -21,7 +21,7 @@ export function RenameApp({ packageName, label }: { packageName: string; label: 
 export function DeleteVersion({ packageName, versionCode, label }: { packageName: string; versionCode: number; label: string }) {
   const ask = useConfirm();
   const [state, action, pending] = useActionState(deleteAppVersion, undefined);
-  useActionToast(state, "removido");
+  useActionToast(state);
   return (
     <form
       action={action}
@@ -42,7 +42,7 @@ export function DeleteVersion({ packageName, versionCode, label }: { packageName
 export function DeleteApp({ packageName, label }: { packageName: string; label: string }) {
   const ask = useConfirm();
   const [state, action, pending] = useActionState(deleteApp, undefined);
-  useActionToast(state, "removido");
+  useActionToast(state);
   return (
     <form
       action={action}

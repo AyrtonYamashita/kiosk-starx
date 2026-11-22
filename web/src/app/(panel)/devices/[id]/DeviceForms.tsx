@@ -12,7 +12,7 @@ import { useConfirm } from "@/components/ConfirmDialog";
  */
 export function EditableName({ id, name, fallback }: { id: string; name: string; fallback: string }) {
   const [state, action, pending] = useActionState(renameDevice, undefined);
-  useActionToast(state, "salvo");
+  useActionToast(state);
   const [editing, setEditing] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
   const cancelled = useRef(false);
@@ -100,7 +100,7 @@ export function OpsReaderToggle({
   appVersionCode: number | null;
 }) {
   const [state, action, pending] = useActionState(setOpsReader, undefined);
-  useActionToast(state, "leitura do SSW");
+  useActionToast(state);
   const oldApp = appVersionCode !== null && appVersionCode < OPS_MIN_VERSION_CODE;
   const source = choice === null ? `pela chave geral (${all ? "todos os coletores" : "só no piloto"})` : "escolhido neste coletor";
   return (

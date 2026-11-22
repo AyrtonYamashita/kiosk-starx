@@ -1,6 +1,6 @@
 "use client";
 
-import { useToast } from "@/components/Toasts";
+import { splitMessage, useToast } from "@/components/Toasts";
 import { useRef, useState } from "react";
 import { refreshApps, uploadToken } from "@/lib/actions";
 import type { Json } from "@/lib/api";
@@ -51,7 +51,7 @@ export function UploadApk({ maxApkMb, target = "repo" }: { maxApkMb: number; tar
           ? `${body.packageName} ${body.versionName ?? ""} (${body.versionCode}) já estava no repositório.`
           : `Enviado: ${body.packageName} ${body.versionName ?? ""} (${body.versionCode}).`;
       setStatus({ kind: "idle" });
-      toast({ tone: "ok", label: target === "kiosk" ? "versão recebida" : "APK enviado", title: text });
+      toast({ tone: "ok", ...splitMessage(text) });
       if (fileRef.current) fileRef.current.value = "";
       setLabel("");
       await refreshApps();

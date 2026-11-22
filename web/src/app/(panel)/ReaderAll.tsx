@@ -10,7 +10,7 @@ import type { OpsSettings } from "@/lib/api";
 export function ReaderAll({ settings, canEdit }: { settings: OpsSettings; canEdit: boolean }) {
   const ask = useConfirm();
   const [state, action, pending] = useActionState(setOpsReaderAll, undefined);
-  useActionToast(state, "leitura do SSW");
+  useActionToast(state);
   const { readerAll, devices } = settings;
   return (
     <form

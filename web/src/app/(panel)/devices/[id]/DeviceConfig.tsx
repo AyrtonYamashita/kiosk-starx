@@ -24,7 +24,7 @@ export function DeviceConfig({
   children?: React.ReactNode;
 }) {
   const [state, action, pending] = useActionState(setDeviceConfig, undefined);
-  useActionToast(state, "configuração salva");
+  useActionToast(state);
   const [profileId, setProfileId] = useState(device.profileId ?? "");
   const profile = profiles.find((p) => p.id === profileId) ?? null;
   // trocar o perfil no seletor redesenha o editor com o novo perfil como base (os ajustes continuam por cima)

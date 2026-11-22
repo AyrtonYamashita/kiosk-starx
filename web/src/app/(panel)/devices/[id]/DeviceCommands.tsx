@@ -15,7 +15,7 @@ import { ago, commandLabel, commandStatusLabel, dateTime } from "@/lib/format";
 const KIOSK_PACKAGE = "com.pstarx.kiosk";
 
 function Feedback({ state }: { state: { ok?: string; error?: string } | undefined }) {
-  useActionToast(state, "comando enviado");
+  useActionToast(state);
   if (state?.error) return <span className="alert error small">{state.error}</span>;
   return null;
 }

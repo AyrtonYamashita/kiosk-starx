@@ -27,7 +27,7 @@ function Battery({ b, online }: { b: DeviceSummary["battery"]; online: boolean }
 function BulkCommand({ ids, repo }: { ids: string[]; repo: { packageName: string; label: string }[] }) {
   const ask = useConfirm();
   const [state, action, pending] = useActionState(sendCommand, undefined);
-  useActionToast(state, "comando enviado");
+  useActionToast(state);
   const [type, setType] = useState("");
   return (
     <form
@@ -132,7 +132,7 @@ export function DevicesTable({
   const set = (patch: Partial<Filters>) => setF((cur) => ({ ...cur, ...patch }));
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [state, action, pending] = useActionState(bulkAssignProfile, undefined);
-  useActionToast(state, "perfil aplicado");
+  useActionToast(state);
 
   const groups = useMemo(() => {
     const count = (g: Group) => {

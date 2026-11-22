@@ -4,7 +4,7 @@ import Link from "next/link";
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { blur, ReducedMotionConfig, scale, spring, transition as motionTransition, useTempoTransition } from "@animate-ui/react/utils/motion";
-import { X } from "lucide-react";
+import { CircleCheck, X } from "lucide-react";
 
 /*
   Avisos no canto da tela (toast com as animações da Animate UI), em todo o painel: os avisos ao vivo do
@@ -15,8 +15,8 @@ import { X } from "lucide-react";
 export type ToastTone = "ok" | "blue" | "warn" | "danger" | "off";
 export interface ToastInput {
   tone: ToastTone;
-  /** etiqueta curta no topo (ex.: "comando enviado") */
-  label: string;
+  /** etiqueta curta no topo (ex.: "login no SSW"); sem ela o título fica na linha do X */
+  label?: string;
   title: string;
   text?: string;
   href?: string;
@@ -96,14 +96,21 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                 onBlur={() => arm(t.id)}
               >
                 <div className="toast-head">
-                  <span className={`badge ${t.tone}`}>
-                    <span className="dot" /> {t.label}
-                  </span>
+                  {t.label ? (
+                    <span className={`badge ${t.tone}`}>
+                      <span className="dot" /> {t.label}
+                    </span>
+                  ) : (
+                    <strong className="toast-title toast-title-head">
+                      {t.tone === "ok" ? <CircleCheck size={16} strokeWidth={2} className="toast-ico ok" aria-hidden /> : null}
+                      {t.title}
+                    </strong>
+                  )}
                   <button type="button" className="toast-close" aria-label="Fechar aviso" onClick={() => dismiss(t.id)}>
                     <X size={16} strokeWidth={1.75} aria-hidden />
                   </button>
                 </div>
-                <strong className="toast-title">{t.title}</strong>
+                {t.label && <strong className="toast-title">{t.title}</strong>}
                 {t.text && <span className="toast-text">{t.text}</span>}
                 {t.href && (
                   <Link href={t.href} className="button toast-action" onClick={() => dismiss(t.id)}>
@@ -126,7 +133,7 @@ export function useToast(): Push {
 }
 
 /** "Bloquear tela: enviado para 1 aparelho. Chega..." → título "Bloquear tela", texto "Enviado para 1 aparelho. Chega..." */
-function split(message: string): { title: string; text?: string } {
+export function splitMessage(message: string): { title: string; text?: string } {
   const m = /^(.{3,80}?)(?:: |\. )(.+)$/s.exec(message.trim());
   if (!m) return { title: message.trim().replace(/\.$/, "") };
   const text = m[2].trim();
@@ -137,11 +144,11 @@ function split(message: string): { title: string; text?: string } {
 const shown = new WeakSet<object>();
 
 /** Mostra o `ok` do resultado de uma Server Action (useActionState) como aviso, uma vez por resultado. */
-export function useActionToast(state: { ok?: string } | undefined | null, label = "pronto") {
+export function useActionToast(state: { ok?: string } | undefined | null, label?: string) {
   const push = useToast();
   useEffect(() => {
     if (!state || typeof state.ok !== "string" || !state.ok || shown.has(state)) return;
     shown.add(state);
-    push({ tone: "ok", label, ...split(state.ok) });
+    push({ tone: "ok", ...(label ? { label } : {}), ...splitMessage(state.ok) });
   }, [state, label, push]);
 }

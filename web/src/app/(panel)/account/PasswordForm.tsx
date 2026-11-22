@@ -6,7 +6,7 @@ import { changePassword } from "@/lib/actions";
 
 export function PasswordForm() {
   const [state, action, pending] = useActionState(changePassword, undefined);
-  useActionToast(state, "senha");
+  useActionToast(state);
   return (
     <form action={action} className="stack">
       <label>

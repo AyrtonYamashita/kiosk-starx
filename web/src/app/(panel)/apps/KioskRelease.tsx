@@ -25,8 +25,8 @@ export function KioskRelease({ data }: { data: KR }) {
   const [disState, discard, discarding] = useActionState(discardKiosk, undefined);
   const { release, pending } = data;
   const state = pubState ?? disState;
-  useActionToast(pubState, "publicado");
-  useActionToast(disState, "descartado");
+  useActionToast(pubState);
+  useActionToast(disState);
 
   return (
     <div className="stack">

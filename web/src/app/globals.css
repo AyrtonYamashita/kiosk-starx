@@ -386,6 +386,9 @@ a.ops-load:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; 
 button.toast-close { width: 28px; height: 28px; padding: 0; border: none; background: none; color: var(--soft); border-radius: var(--radius-chip); }
 button.toast-close:hover { background: var(--subtle); color: var(--ink); }
 .toast-title { font-size: 13px; line-height: 18px; color: var(--ink); }
+.toast-title-head { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; }
+.toast-ico { flex: none; }
+.toast-ico.ok { color: var(--good); }
 .toast-text { font-size: 11.5px; line-height: 16px; color: var(--soft); }
 .toast-action { align-self: flex-start; margin-top: 2px; }
 @media (max-width: 1023.98px) { .toasts { right: 16px; bottom: calc(72px + env(safe-area-inset-bottom)); } }

@@ -8,7 +8,7 @@ import type { CatalogApp, Profile, RepoApp } from "@/lib/api";
 
 export function ProfileForm({ profile, catalog, repo, justSaved }: { profile: Profile | null; catalog: CatalogApp[]; repo: RepoApp[]; justSaved?: boolean }) {
   const [state, action, pending] = useActionState(saveProfile, justSaved ? { ok: "Perfil criado." } : undefined);
-  useActionToast(state, "perfil salvo");
+  useActionToast(state);
   return (
     <form action={action} className="stack">
       {profile && <input type="hidden" name="id" value={profile.id} />}

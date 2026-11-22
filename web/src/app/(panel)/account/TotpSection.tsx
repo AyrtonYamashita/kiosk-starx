@@ -7,7 +7,7 @@ import { confirmTotp, disableTotp, setupTotp } from "@/lib/actions";
 const fmt = (iso: string) => new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
 
 function Feedback({ state }: { state: { ok?: string; error?: string } | undefined }) {
-  useActionToast(state, "pronto");
+  useActionToast(state);
   if (state?.error) return <div className="alert error">{state.error}</div>;
   return null;
 }
