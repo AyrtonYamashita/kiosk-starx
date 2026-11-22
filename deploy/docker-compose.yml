@@ -2,8 +2,17 @@
 # O Caddy que já existe na VPS faz o HTTPS e encaminha para a API (veja Caddyfile.snippet).
 # A API escuta em API_BIND:API_PORT. Caddy na mesma máquina: 127.0.0.1. Caddy em outra VM: o IP interno desta VM
 # (e o firewall libera a porta só para a VM do Caddy).
+# Logs dos contêineres com limite (3 arquivos de 10 MB por serviço): sem isso crescem sem fim, com o IP de cada
+# requisição (LGPD: prazo de guarda, .lgpd/retention.md).
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   api:
+    logging: *logging
     build: ../server
     restart: unless-stopped
     env_file: .env
@@ -26,6 +35,7 @@ services:
   postgres:
     image: postgres:17-alpine
     restart: unless-stopped
+    logging: *logging
     environment:
       POSTGRES_USER: kiosk
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -38,23 +48,18 @@ services:
       timeout: 5s
       retries: 10
 
-  # pg_dump diário em ./backups (mantém os últimos 14)
+  # pg_dump diário em ./backups, cifrado com a chave pública BACKUP_AGE_RECIPIENT (mantém os últimos 14; backup.sh)
   backup:
     image: postgres:17-alpine
     restart: unless-stopped
+    logging: *logging
     environment:
       PGPASSWORD: ${POSTGRES_PASSWORD}
+      BACKUP_AGE_RECIPIENT: ${BACKUP_AGE_RECIPIENT:-}
     volumes:
       - ./backups:/backups
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        while true; do
-          f=/backups/kiosk-$$(date +%Y%m%d-%H%M).sql.gz
-          if pg_dump -h postgres -U kiosk kiosk | gzip > $$f.tmp; then mv $$f.tmp $$f; echo "backup $$f"; else rm -f $$f.tmp; echo "backup falhou"; fi
-          ls -1t /backups/kiosk-*.sql.gz 2>/dev/null | tail -n +15 | xargs -r rm -f
-          sleep 86400
-        done
+      - ./backup.sh:/backup.sh:ro
+    entrypoint: ["/bin/sh", "/backup.sh"]
     depends_on:
       postgres:
         condition: service_healthy

@@ -71,12 +71,25 @@ Um APK ainda incompleto durante a cópia não chega a ser instalado: o aparelho 
 
 ## Backup
 
-O serviço `backup` faz um `pg_dump` diário em `deploy/backups/` e guarda os últimos 14. Copie essa pasta para fora
-da VPS. Restaurar:
+O serviço `backup` (`deploy/backup.sh`) faz um `pg_dump` diário em `deploy/backups/`, **cifrado com [age](https://age-encryption.org)**,
+e guarda os últimos 14. Na VPS fica só a **chave pública** (`BACKUP_AGE_RECIPIENT` no `.env`): quem tiver acesso ao
+servidor não consegue ler os backups. A **chave privada** fica com o responsável, fora da VPS (ex.: gerenciador de
+senhas + uma segunda cópia offline). **Sem ela, os backups não podem ser restaurados.**
+
+Gerar um par de chaves (uma vez, no seu computador): `age-keygen -o starx-kiosk-backup-age.key` (ou
+`docker run --rm alpine sh -c "apk add -q age && age-keygen" > starx-kiosk-backup-age.key`). A linha
+`# public key: age1...` vai para o `BACKUP_AGE_RECIPIENT`.
+
+Restaurar (no seu computador, com a chave privada; depois envie o `.sql` para a VPS):
 
 ```bash
-gunzip -c backups/kiosk-AAAAMMDD-HHMM.sql.gz | docker compose exec -T postgres psql -U kiosk kiosk
+age -d -i starx-kiosk-backup-age.key kiosk-AAAAMMDD-HHMM.sql.gz.age | gunzip > kiosk.sql
+# na VPS:
+docker compose exec -T postgres psql -U kiosk kiosk < kiosk.sql
 ```
+
+Backups antigos em claro (`kiosk-*.sql.gz`, de antes da cifra) continuam restauráveis com `gunzip -c` e saem
+sozinhos pela rotação em até 14 dias. Os logs dos contêineres têm limite de 3 arquivos de 10 MB por serviço.
 
 Fora do banco, guarde também:
 
