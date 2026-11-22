@@ -73,9 +73,18 @@ button:not(:disabled), [role='button'] { cursor: pointer; }
 
 .main { flex: 1; min-width: 0; padding: 24px; }
 .main > .page { min-width: 0; }
-.main > .page > * { max-width: 1080px; }
-/* telas de tabela larga (lista de aparelhos): ocupam toda a largura ao lado do menu */
-.main > .page > .wide { max-width: none; }
+/*
+  Alinhamento com o menu lateral (todas as páginas, no desktop): o conteúdo ocupa a largura toda até 24 px da borda
+  e a altura do menu (24 px em cima e embaixo); o último card da página estica até a linha de baixo do menu.
+*/
+.main > .page > * { max-width: none; }
+@media (min-width: 1024px) {
+  .main > .page > .stack { min-height: calc(100dvh - 48px); }
+  .main > .page > .stack > .card:not(:has(~ .card)) { flex-grow: 1; }
+  /* Aparelhos: filtros e tabela descem até o fim */
+  .main > .page > .stack > .dev-layout { flex-grow: 1; align-items: stretch; }
+  .dev-layout > .dev-main > .card:not(:has(~ .card)) { flex-grow: 1; }
+}
 
 /* celular: o menu lateral vira a barra de abas inferior */
 .tabbar { display: none; }

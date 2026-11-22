@@ -52,12 +52,12 @@ export function KioskRelease({ data }: { data: KR }) {
         <dd>
           <div className="row" style={{ gap: 8 }}>
             {data.devices.length === 0 && <span className="muted">nenhum cadastrado</span>}
-            {data.devices.map((v) => {
+            {data.devices.map((v, i) => {
               const upToDate = release && v.versionCode !== null && v.versionCode >= release.versionCode;
               const manual = v.versionCode === null || v.versionCode < SELF_UPDATE_FROM;
               return (
                 <span
-                  key={`${v.versionCode}`}
+                  key={`${v.versionCode ?? "sem"}-${v.versionName ?? i}`}
                   className={`badge ${upToDate ? "ok" : manual ? "danger" : "warn"}`}
                   title={upToDate ? "em dia" : manual ? "versão sem atualização automática: atualize uma vez por USB, ADB ou QR" : "atualiza sozinho no próximo contato"}
                 >
