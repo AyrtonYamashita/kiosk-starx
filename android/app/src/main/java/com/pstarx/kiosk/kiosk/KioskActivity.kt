@@ -96,6 +96,7 @@ class KioskActivity : Activity() {
     }
 
     override fun onDestroy() {
+        IdleVibration.stop(this)
         kiosk.removeListener(onChange)
         PanelStore.get(this).removeListener(onPanelChange)
         if (OpsReader.onScriptChanged === onReaderChange) OpsReader.onScriptChanged = null
@@ -144,6 +145,7 @@ class KioskActivity : Activity() {
 
     override fun onPause() {
         resumed = false
+        IdleVibration.stop(this)
         cancelCountdown()
         handler.removeCallbacks(idleTick)
         super.onPause()
@@ -165,6 +167,8 @@ class KioskActivity : Activity() {
 
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
         if (ev.actionMasked == MotionEvent.ACTION_DOWN) {
+            // aviso de inatividade aberto: qualquer toque para a vibração (o aviso continua até confirmar)
+            IdleVibration.stop(this)
             restartInactivity()
             idle.activity(SystemClock.elapsedRealtime())
             swallowGesture = ScreenDimmer.onUserActivity()
@@ -226,6 +230,7 @@ class KioskActivity : Activity() {
         root.addView(overlay, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         idleOverlay = overlay
         idleButton = button
+        IdleVibration.start(this)
         Log.i(TAG, "Operador parado: aviso de inatividade")
     }
 
@@ -237,6 +242,7 @@ class KioskActivity : Activity() {
     }
 
     private fun hideIdle() {
+        IdleVibration.stop(this)
         idleOverlay?.let { root.removeView(it) }
         idleOverlay = null
         idleButton = null
