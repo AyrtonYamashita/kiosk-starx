@@ -407,6 +407,37 @@ tr.selected td { background: var(--blue-tint); }
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
 
+/* ---------------------------------------------------------------- conta
+   Desktop: duas colunas com a altura do menu lateral (o .main tem 24 px em cima e embaixo, como o menu), o último
+   card de cada coluna estica até o fim. Abaixo de 1280 px a página cresce normalmente. */
+.account-page {
+  display: grid; gap: 16px; align-items: stretch;
+  grid-template-columns: 340px minmax(0, 1fr);
+  height: calc(100dvh - 48px);
+}
+.account-col { display: flex; flex-direction: column; gap: 16px; min-height: 0; min-width: 0; overflow-y: auto; }
+.account-col > .card { flex: none; display: flex; flex-direction: column; gap: 12px; }
+.account-col > .account-fill { flex: 1 0 auto; }
+.account-profile { gap: 16px !important; }
+.account-who { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.avatar.account-avatar { width: 48px; height: 48px; font-size: 15px; }
+.account-id { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.account-name { font-size: 16px; line-height: 22px; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-email { overflow-wrap: anywhere; }
+button.account-logout { width: 100%; justify-content: center; gap: 8px; }
+button.account-logout:hover { background: var(--bad-tint); border-color: var(--bad-edge, var(--line)); color: var(--bad-deep); }
+.account-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 24px; }
+.account-sec { display: flex; flex-direction: column; gap: 10px; padding: 14px 0 6px; border-top: 1px solid var(--rule); min-width: 0; }
+.account-sec h3 { font-size: 12px; line-height: 16px; font-weight: 600; margin: 0; }
+@media (max-width: 1279.98px) {
+  .account-page { height: auto; grid-template-columns: 300px minmax(0, 1fr); align-items: start; }
+  .account-col { overflow: visible; }
+  .account-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 1023.98px) {
+  .account-page { grid-template-columns: minmax(0, 1fr); }
+}
+
 /* ---------------------------------------------------------------- página do dispositivo
    Mapa em tela cheia atrás de tudo; cards de vidro líquido (raio 4, padding 16).
    Esquerda 360 px (Aparelho + Configuração), direita 440 px (resumo, abas, coordenadas); o centro fica livre para o

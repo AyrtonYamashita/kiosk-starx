@@ -3,8 +3,6 @@
 import { useActionState } from "react";
 import { generateRecoveryCodes, revokeTrustedDevice } from "@/lib/actions";
 import type { MfaInfo } from "@/lib/api";
-import { TotpSection } from "./TotpSection";
-import { PasskeysSection } from "./PasskeysSection";
 
 function device(ua: string | null): string {
   if (!ua) return "—";
@@ -15,25 +13,13 @@ function device(ua: string | null): string {
 
 const fmt = (iso: string) => new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
 
-/** Segundo fator na Conta: como entra (e-mail), códigos de recuperação e navegadores confiáveis. */
-export function MfaCard({ info }: { info: MfaInfo }) {
+/** Códigos de recuperação: quantos restam e o botão para gerar novos (mostrados uma vez só). */
+export function RecoveryCodes({ left }: { left: number }) {
   const [state, generate, pending] = useActionState(generateRecoveryCodes, undefined);
   return (
-    <div className="stack">
-      <span className="small" style={{ overflowWrap: "anywhere" }}>
-        {info.required ? <span className="badge ok">obrigatório</span> : <span className="badge off">ainda opcional</span>} Código por e-mail para{" "}
-        <span className="mono">{info.email ?? "— (sem e-mail: peça ao administrador)"}</span>
-      </span>
-
-      <strong className="small">Passkeys ({info.passkeys.length})</strong>
-      <PasskeysSection passkeys={info.passkeys} />
-
-      <strong className="small">App autenticador</strong>
-      <TotpSection enabled={info.totp.enabled} since={info.totp.since} />
-
-      <strong className="small">Códigos de recuperação</strong>
+    <div className="stack" style={{ gap: 10 }}>
       <span className="muted small">
-        <span className="mono">{info.recoveryCodesLeft}</span> disponíveis. Para entrar sem passkey, e-mail ou app. Cada um vale uma vez.
+        <span className="mono">{left}</span> disponíveis. Servem para entrar sem passkey, e-mail ou app; cada um vale uma vez.
       </span>
       {state?.codes ? (
         <div className="alert warn" style={{ flexDirection: "column", alignItems: "stretch" }}>
@@ -51,16 +37,24 @@ export function MfaCard({ info }: { info: MfaInfo }) {
         <form
           action={generate}
           onSubmit={(e) => {
-            if (info.recoveryCodesLeft > 0 && !confirm("Gerar códigos novos? Os anteriores deixam de valer.")) e.preventDefault();
+            if (left > 0 && !confirm("Gerar códigos novos? Os anteriores deixam de valer.")) e.preventDefault();
           }}
         >
-          <button disabled={pending}>{info.recoveryCodesLeft > 0 ? "Gerar códigos novos" : "Gerar códigos de recuperação"}</button>
+          <button disabled={pending}>{left > 0 ? "Gerar códigos novos" : "Gerar códigos de recuperação"}</button>
         </form>
       )}
       {state?.error && <div className="alert error">{state.error}</div>}
+    </div>
+  );
+}
 
-      <strong className="small">Navegadores confiáveis ({info.trustedDevices.length})</strong>
-      <span className="muted small">Nestes navegadores o código não é pedido por {info.trustDays} dias (a senha continua). Trocar a senha remove todos.</span>
+/** Navegadores em que o código não é pedido por alguns dias (a senha continua). */
+export function TrustedDevices({ info }: { info: MfaInfo }) {
+  return (
+    <div className="stack" style={{ gap: 10 }}>
+      <span className="muted small">
+        Nestes navegadores o código não é pedido por {info.trustDays} dias (a senha continua). Trocar a senha remove todos.
+      </span>
       {info.trustedDevices.length === 0 ? (
         <span className="muted small">Nenhum.</span>
       ) : (
