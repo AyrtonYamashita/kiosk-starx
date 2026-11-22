@@ -48,6 +48,15 @@ export interface Config {
   opsScanRetentionDays: number;
   /** Carga aberta de coletor sem sinal há tanto tempo (min) é encerrada pela API como "signal_lost". */
   opsSignalLostMin: number;
+  /** Prazos de guarda (LGPD, retention.ts), em dias. */
+  retention: {
+    operationIdentifiedDays: number;
+    screenshotDays: number;
+    commandDays: number;
+    authEventDays: number;
+    authUnknownDays: number;
+    adminDisabledDays: number;
+  };
   /** Atrás do Caddy: usa X-Forwarded-For para o IP do aparelho. */
   trustProxy: boolean;
   logLevel: string;
@@ -119,6 +128,14 @@ export function loadConfig(): Config {
     opsHeartbeatRetentionDays: days("OPS_HEARTBEAT_RETENTION_DAYS", 7),
     opsScanRetentionDays: days("OPS_SCAN_RETENTION_DAYS", 365),
     opsSignalLostMin: minutes("OPS_SIGNAL_LOST_MIN", 120),
+    retention: {
+      operationIdentifiedDays: days("OPS_OPERATION_IDENTIFIED_DAYS", 365),
+      screenshotDays: days("SCREENSHOT_RETENTION_DAYS", 7),
+      commandDays: days("COMMAND_RETENTION_DAYS", 180),
+      authEventDays: days("AUTH_EVENT_RETENTION_DAYS", 365),
+      authUnknownDays: days("AUTH_UNKNOWN_RETENTION_DAYS", 30),
+      adminDisabledDays: days("ADMIN_DISABLED_ANONYMIZE_DAYS", 365),
+    },
     trustProxy: (process.env.TRUST_PROXY ?? "true") === "true",
     logLevel: process.env.LOG_LEVEL ?? "info",
   };

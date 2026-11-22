@@ -53,6 +53,14 @@ export async function setupApi(opts: { config?: Partial<Config> } = {}) {
     opsHeartbeatRetentionDays: 7,
     opsScanRetentionDays: 365,
     opsSignalLostMin: 120,
+    retention: {
+      operationIdentifiedDays: 365,
+      screenshotDays: 7,
+      commandDays: 180,
+      authEventDays: 365,
+      authUnknownDays: 30,
+      adminDisabledDays: 365,
+    },
     trustProxy: false,
     logLevel: "silent",
   };
