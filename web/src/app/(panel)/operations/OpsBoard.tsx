@@ -1,5 +1,6 @@
 "use client";
 
+import { Toggle } from "@/components/Toggle";
 import Link from "next/link";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { AnimateIcon } from "@animate-ui/react/icons";
@@ -72,7 +73,7 @@ export function OpsBoard({ initial, initialServerTime }: { initial: OpsCard[]; i
         </div>
         <div className="ops-tools">
           <label className="check-label small">
-            <input type="checkbox" checked={onlyLogged} onChange={(e) => setOnlyLogged(e.target.checked)} />
+            <Toggle checked={onlyLogged} onCheckedChange={setOnlyLogged} />
             só com colaborador
           </label>
           <AnimateIcon animateOnHover animateOnTap asChild>

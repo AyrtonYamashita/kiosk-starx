@@ -1,5 +1,6 @@
 "use client";
 
+import { Toggle } from "@/components/Toggle";
 import { useActionToast } from "@/components/Toasts";
 import { useActionState } from "react";
 import { ConfigEditor } from "@/components/ConfigEditor";
@@ -40,7 +41,7 @@ export function ProfileForm({ profile, catalog, repo, justSaved }: { profile: Pr
           <div className="grid" style={{ gap: 6 }}>
             {repo.map((a) => (
               <label key={a.packageName} className="check-label">
-                <input type="checkbox" name="managedApp" value={a.packageName} defaultChecked={profile?.managedApps.includes(a.packageName)} />
+                <Toggle name="managedApp" value={a.packageName} defaultChecked={profile?.managedApps.includes(a.packageName)} />
                 <span>
                   {a.label} <span className="muted small">{a.versions[0] ? `${a.versions[0].versionName ?? ""} (${a.versions[0].versionCode})` : ""}</span>
                 </span>

@@ -1,5 +1,6 @@
 "use client";
 
+import { Toggle } from "@/components/Toggle";
 import { useActionState } from "react";
 import { generateQr } from "@/lib/actions";
 
@@ -20,7 +21,7 @@ export function QrGenerator({ id }: { id: string }) {
           </label>
         </div>
         <label className="check-label small">
-          <input type="checkbox" name="hidden" /> rede oculta
+          <Toggle name="hidden" /> rede oculta
         </label>
         <span className="muted small">A senha do Wi-Fi entra só no QR; não fica gravada no servidor.</span>
         <div>

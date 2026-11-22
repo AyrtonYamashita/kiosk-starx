@@ -1,5 +1,6 @@
 "use client";
 
+import { Toggle } from "@/components/Toggle";
 import { useMemo, useState } from "react";
 import type { CatalogApp } from "@/lib/api";
 import type { Json } from "@/lib/api";
@@ -232,7 +233,7 @@ export function ConfigEditor({
     const value = path.split(".").reduce((o: Json, key) => o?.[key], cfg);
     return (
       <label className="check-label">
-        <input type="checkbox" checked={!!value} onChange={(e) => set(path, e.target.checked)} />
+        <Toggle checked={!!value} onCheckedChange={(v) => set(path, v)} />
         <span>
           {label}
           {hint && <span className="muted small"> — {hint}</span>}
@@ -372,7 +373,7 @@ export function ConfigEditor({
             Sem carregar e com a bateria nesse nível, o aviso abre por cima de qualquer tela do coletor; repete a cada 5% a menos e fecha sozinho ao começar a carregar.
           </span>
           <label className="check-label">
-            <input type="checkbox" checked={d.brightness !== null} onChange={(e) => set("display.brightness", e.target.checked ? 80 : null)} />
+            <Toggle checked={d.brightness !== null} onCheckedChange={(v) => set("display.brightness", v ? 80 : null)} />
             Brilho fixo
           </label>
           {d.brightness !== null && (

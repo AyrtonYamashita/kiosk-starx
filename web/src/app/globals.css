@@ -210,6 +210,20 @@ input[type='file']::file-selector-button:hover { background: var(--subtle); }
 label { display: flex; flex-direction: column; gap: 6px; font-size: 11px; font-weight: 500; color: var(--mid); }
 label.check-label { flex-direction: row; align-items: center; gap: 8px; font-size: 12px; font-weight: 400; color: var(--ink); }
 label.check-label input { width: auto; }
+/* Toggle (Switch da Animate UI): trilho com cantos de 4 px; o polegar só muda de lado no CSS, a mola anima */
+button.toggle {
+  flex: none; display: inline-flex; align-items: center; justify-content: flex-start;
+  width: 34px; height: 20px; min-height: 0; padding: 2px; border: 1px solid var(--line); border-radius: var(--radius-chip);
+  background: var(--subtle); transition: background-color .15s ease-out, border-color .15s ease-out;
+}
+button.toggle:hover { background: var(--subtle); border-color: var(--mid); }
+button.toggle[data-state="checked"] { justify-content: flex-end; background: var(--blue); border-color: var(--blue); }
+button.toggle[data-state="checked"]:hover { background: var(--blue-press); border-color: var(--blue-press); }
+button.toggle:disabled { opacity: .5; }
+button.toggle:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.toggle-thumb { display: block; width: 14px; height: 14px; border-radius: 2px; background: #fff; box-shadow: 0 1px 2px rgb(0 0 0 / 0.25); }
+button.toggle[data-state="unchecked"] .toggle-thumb { background: var(--soft); box-shadow: none; }
+label.check-label:has(button.toggle) { cursor: pointer; }
 form.stack { gap: 12px; }
 details > summary { cursor: pointer; color: var(--mid); font-weight: 500; }
 

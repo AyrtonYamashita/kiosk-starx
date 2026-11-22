@@ -1,5 +1,6 @@
 "use client";
 
+import { Toggle } from "@/components/Toggle";
 import { useState } from "react";
 import type { Enrollment, Release } from "@/lib/api";
 import { useClientValue } from "@/lib/client";
@@ -239,7 +240,7 @@ export function AdbInstall({ enrollment, release }: { enrollment: Enrollment; re
         </button>
       </div>
       <label className="check-label" style={{ alignItems: "flex-start" }}>
-        <input type="checkbox" checked={disableVerifier} onChange={(e) => setDisableVerifier(e.target.checked)} style={{ marginTop: 2 }} />
+        <Toggle checked={disableVerifier} onCheckedChange={setDisableVerifier} style={{ marginTop: 2 }} />
         <span>
           Desligar a verificação do Play Protect (só em aparelhos com serviços do Google)
           <span className="muted small" style={{ display: "block" }}>

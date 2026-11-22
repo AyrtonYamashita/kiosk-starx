@@ -1,5 +1,6 @@
 "use client";
 
+import { Toggle } from "@/components/Toggle";
 import { browserSupportsWebAuthn } from "@simplewebauthn/browser";
 import { AnimateIcon } from "@animate-ui/react/icons";
 import { KeyRound } from "@/components/animate-ui/icons/key-round";
@@ -104,7 +105,7 @@ export function VerifyForm({
 
   const trustBox = (
     <label className="check-label">
-      <input type="checkbox" name="trust" checked={trust} onChange={(e) => setTrust(e.target.checked)} />
+      <Toggle name="trust" checked={trust} onCheckedChange={setTrust} />
       Confiar neste navegador por {trustDays} dias (não pedir o código aqui)
     </label>
   );
