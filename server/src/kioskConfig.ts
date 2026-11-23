@@ -36,6 +36,8 @@ export const KioskConfigInput = z
             allowZoom: z.boolean(),
             reloadButton: z.boolean(),
             idleLogoutMin: z.number().int().min(0).max(240),
+            /** Mesmo aviso de inatividade, na tela de bipagem (app 0.5.4+). */
+            idleLogoutScanMin: z.number().int().min(0).max(240),
           })
           .partial()
           .strict(),

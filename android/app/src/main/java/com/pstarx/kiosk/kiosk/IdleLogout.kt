@@ -3,8 +3,9 @@ package com.pstarx.kiosk.kiosk
 /**
  * Inatividade do operador logado no SSW (perfil: kiosk.web.idleLogoutMin). Só a regra, sem tela, para testar:
  *
- *  - O tempo só corre quando vale a pena (`eligible`): modo site, alguém logado no SSW e nenhuma bipagem aberta.
- *    Fora disso o contador fica zerado — quem está bipando nunca é desconectado.
+ *  - O tempo só corre com alguém logado no SSW (`eligible`, modo site); fora disso o contador fica zerado.
+ *    O limite vem da tela: kiosk.web.idleLogoutMin fora da bipagem e idleLogoutScanMin (maior) na bipagem.
+ *  - Leituras na tela de bipagem também zeram o tempo: quem está bipando nunca vê o aviso.
  *  - Toque, tecla (inclusive o leitor de código que digita como teclado) e digitação/rolagem na página zeram o tempo.
  *  - Passado o limite, mostra o aviso com 30 s; durante o aviso só o botão confirma (um toque qualquer não basta).
  *  - Sem confirmação até o fim dos 30 s: desconecta.

@@ -221,4 +221,20 @@ class PinTest {
         repeat(3) { assertFalse(t.onTap(13_100L + it * 100)) }
         assertTrue(t.onTap(13_500))
     }
+
+    @Test
+    fun inatividadeETelaLigada() {
+        val d = KioskConfig.parse(JSONObject()).config
+        // padrões: 1 min fora da bipagem, 3 min na bipagem
+        assertEquals(1, d.kiosk.web.idleLogoutMin)
+        assertEquals(3, d.kiosk.web.idleLogoutScanMin)
+        val c = KioskConfig.parse(JSONObject("""{"kiosk": {"web": {"idleLogoutMin": 2, "idleLogoutScanMin": 5}}}""")).config
+        assertEquals(5, c.kiosk.web.idleLogoutScanMin)
+        assertEquals(5, KioskConfig.parse(JSONObject(c.toJson().toString())).config.kiosk.web.idleLogoutScanMin)
+        // modo site: a tela nunca apaga, mesmo com "manter a tela ligada" desligado no perfil
+        val web = KioskConfig.parse(JSONObject("""{"kiosk": {"enabled": true, "mode": "web", "web": {"url": "https://x.ssw.inf.br"}}, "display": {"keepScreenOn": false}}""")).config
+        assertTrue(web.screenAlwaysOn())
+        val grid = KioskConfig.parse(JSONObject("""{"kiosk": {"enabled": true, "mode": "apps"}, "display": {"keepScreenOn": false}}""")).config
+        assertFalse(grid.screenAlwaysOn())
+    }
 }

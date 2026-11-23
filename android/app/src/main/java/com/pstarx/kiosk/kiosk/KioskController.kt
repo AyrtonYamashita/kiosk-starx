@@ -241,7 +241,7 @@ class KioskController private constructor(context: Context) {
     private fun applyScreen(c: KioskConfig) {
         val cr = ctx.contentResolver
         // escurecer por inatividade exige a tela sempre ligada (ela só fica a 1%, nunca apaga)
-        if (c.display.keepScreenOn || c.display.dimAfterSec > 0) {
+        if (c.screenAlwaysOn()) {
             saveOriginal(Settings.System.SCREEN_OFF_TIMEOUT, Settings.System.getString(cr, Settings.System.SCREEN_OFF_TIMEOUT))
             dpm.setSystemSetting(admin, Settings.System.SCREEN_OFF_TIMEOUT, Int.MAX_VALUE.toString())
         }
@@ -256,7 +256,7 @@ class KioskController private constructor(context: Context) {
 
     private fun restoreScreen(keep: KioskConfig?) {
         val restore = buildList {
-            if (keep?.display?.keepScreenOn != true && (keep?.display?.dimAfterSec ?: 0) <= 0) add(Settings.System.SCREEN_OFF_TIMEOUT)
+            if (keep?.screenAlwaysOn() != true) add(Settings.System.SCREEN_OFF_TIMEOUT)
             if (keep?.display?.brightness == null) {
                 add(Settings.System.SCREEN_BRIGHTNESS)
                 add(Settings.System.SCREEN_BRIGHTNESS_MODE)

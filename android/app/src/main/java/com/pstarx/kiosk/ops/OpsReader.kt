@@ -41,6 +41,9 @@ object OpsReader {
         private set
     /** Alguém bipando agora (ver OpsTracker.busy): o app adia a própria atualização. */
     @Volatile private var busyNow = false
+    /** Muda a cada mudança na tela de bipagem (uma leitura): a tela trata como uso, como um toque. */
+    @Volatile var scanActivity = 0L
+        private set
     fun isBusy() = running && busyNow
 
     /** Chamado (na thread principal) quando chega um leitor novo da API: a tela injeta de novo na página aberta. */
@@ -103,7 +106,14 @@ object OpsReader {
         fun report(json: String) {
             val at = System.currentTimeMillis()
             if (!running || json.length > 48_000 || !pageIsSsw()) return
-            logic.execute { safely { Snapshot.parse(json)?.let { emit(tracker.onSnapshot(clock.now(at), it)) } } }
+            logic.execute {
+                safely {
+                    Snapshot.parse(json)?.let {
+                        if (it.screen == "bipagem") scanActivity++
+                        emit(tracker.onSnapshot(clock.now(at), it))
+                    }
+                }
+            }
         }
 
         @JavascriptInterface

@@ -14,7 +14,7 @@ type Cfg = Record<string, Json>;
 type PinMode = "device" | "keep" | "set" | "none";
 
 const DEFAULTS: Cfg = {
-  kiosk: { enabled: true, mode: "apps", app: null, apps: [], relaunchDelaySec: 3, web: { url: "", reloadOnErrorSec: 15, inactivityReturnSec: 0, allowZoom: true, reloadButton: false, idleLogoutMin: 2 } },
+  kiosk: { enabled: true, mode: "apps", app: null, apps: [], relaunchDelaySec: 3, web: { url: "", reloadOnErrorSec: 15, inactivityReturnSec: 0, allowZoom: true, reloadButton: false, idleLogoutMin: 1, idleLogoutScanMin: 3 } },
   display: {
     keepScreenOn: true,
     brightness: null,
@@ -120,6 +120,7 @@ const FIELD_LABEL: Record<string, string> = {
   "kiosk.web.reloadOnErrorSec": "Recarregar após erro",
   "kiosk.web.inactivityReturnSec": "Voltar à página inicial",
   "kiosk.web.idleLogoutMin": "Desconectar operador parado",
+  "kiosk.web.idleLogoutScanMin": "Desconectar operador parado na bipagem",
   "kiosk.web.allowZoom": "Zoom",
   "kiosk.web.reloadButton": "Botão de recarregar",
   "display.keepScreenOn": "Manter a tela ligada",
@@ -322,8 +323,12 @@ export function ConfigEditor({
                   <input type="number" min={0} max={86400} value={k.web.inactivityReturnSec} onChange={(e) => set("kiosk.web.inactivityReturnSec", Number(e.target.value))} />
                 </label>
                 <label>
-                  Desconectar operador parado no SSW (min, 0 = nunca)
-                  <input type="number" min={0} max={240} value={k.web.idleLogoutMin ?? 2} onChange={(e) => set("kiosk.web.idleLogoutMin", Number(e.target.value))} />
+                  Operador parado no SSW: aviso após (min, 0 = nunca)
+                  <input type="number" min={0} max={240} value={k.web.idleLogoutMin ?? 1} onChange={(e) => set("kiosk.web.idleLogoutMin", Number(e.target.value))} />
+                </label>
+                <label>
+                  Na tela de bipagem: aviso após (min, 0 = nunca)
+                  <input type="number" min={0} max={240} value={k.web.idleLogoutScanMin ?? 3} onChange={(e) => set("kiosk.web.idleLogoutScanMin", Number(e.target.value))} />
                 </label>
               </div>
               {check("kiosk.web.allowZoom", "Permitir zoom")}
@@ -349,7 +354,7 @@ export function ConfigEditor({
 
       {tab === "Tela" && (
         <div className="stack">
-          {check("display.keepScreenOn", "Manter a tela ligada", "durante o kiosk")}
+          {check("display.keepScreenOn", "Manter a tela ligada", k.mode === "web" ? "no modo site a tela fica sempre ligada (app 0.5.4+), para não perder a conexão" : "durante o kiosk")}
           <label>
             Escurecer após inatividade (s, 0 = não escurece)
             <input type="number" min={0} max={86400} value={d.dimAfterSec ?? 0} onChange={(e) => set("display.dimAfterSec", Number(e.target.value))} style={{ maxWidth: 200 }} />

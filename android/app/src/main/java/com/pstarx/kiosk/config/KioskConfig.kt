@@ -75,8 +75,10 @@ data class KioskConfig(
         val allowZoom: Boolean = true,
         /** Botão de recarregar a página na tela do kiosk (para o operador sair de um erro sem chamar ninguém). */
         val reloadButton: Boolean = false,
-        /** Operador logado no SSW parado esse tempo (min): aviso de 30 s e depois sai do SSW (0 = nunca). Nunca durante a bipagem. */
-        val idleLogoutMin: Int = 2,
+        /** Operador logado no SSW parado esse tempo (min), fora da bipagem: aviso de 30 s e depois sai do SSW (0 = nunca). */
+        val idleLogoutMin: Int = 1,
+        /** Mesmo aviso, na tela de bipagem (minutos sem tocar nem bipar; 0 = nunca na bipagem). */
+        val idleLogoutScanMin: Int = 3,
     )
 
     data class Display(
@@ -169,7 +171,8 @@ data class KioskConfig(
                         .put("inactivityReturnSec", kiosk.web.inactivityReturnSec)
                         .put("allowZoom", kiosk.web.allowZoom)
                         .put("reloadButton", kiosk.web.reloadButton)
-                        .put("idleLogoutMin", kiosk.web.idleLogoutMin),
+                        .put("idleLogoutMin", kiosk.web.idleLogoutMin)
+                        .put("idleLogoutScanMin", kiosk.web.idleLogoutScanMin),
                 ),
         )
         .put(
@@ -209,6 +212,12 @@ data class KioskConfig(
         )
 
     /** Resultado da leitura: a configuração (sempre válida) e o que foi corrigido. */
+    /**
+     * Tela sempre ligada (nunca apaga; pode só escurecer): pedida no perfil, exigida pelo escurecimento ou no modo
+     * site, em que o coletor fica no SSW o dia todo e não pode perder a conexão com a tela apagada.
+     */
+    fun screenAlwaysOn(): Boolean = display.keepScreenOn || display.dimAfterSec > 0 || (kiosk.enabled && kiosk.mode == Mode.WEB)
+
     data class Parsed(val config: KioskConfig, val warnings: List<String>)
 
     companion object {
@@ -246,6 +255,7 @@ data class KioskConfig(
                         allowZoom = r.bool(w, "kiosk.web.allowZoom", d.kiosk.web.allowZoom),
                         reloadButton = r.bool(w, "kiosk.web.reloadButton", d.kiosk.web.reloadButton),
                         idleLogoutMin = r.int(w, "kiosk.web.idleLogoutMin", d.kiosk.web.idleLogoutMin, 0..240),
+                        idleLogoutScanMin = r.int(w, "kiosk.web.idleLogoutScanMin", d.kiosk.web.idleLogoutScanMin, 0..240),
                     ),
                 ),
                 display = Display(

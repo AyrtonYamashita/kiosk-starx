@@ -77,6 +77,7 @@ class KioskActivity : Activity() {
     /** Operador parado no SSW: aviso de 30 s e saída (kiosk.web.idleLogoutMin). */
     private val idle = IdleLogout()
     private var idleOverlay: View? = null
+    private var seenScanActivity = 0L
     private var idleButton: Button? = null
     private val idleTick = object : Runnable {
         override fun run() {
@@ -191,9 +192,16 @@ class KioskActivity : Activity() {
     private fun tickIdle() {
         val now = SystemClock.elapsedRealtime()
         val url = pageUrl
-        val eligible = config.kiosk.mode == KioskConfig.Mode.WEB && webView != null &&
-            IdleLogout.loggedIn(url, OpsReader.isSswUrl(url)) && !IdleLogout.scanningUrl(url) && !OpsReader.isBusy()
-        when (idle.tick(now, config.kiosk.web.idleLogoutMin * 60_000L, eligible)) {
+        // leituras na bipagem contam como uso (o leitor de código nem sempre chega aqui como tecla)
+        val scans = OpsReader.scanActivity
+        if (scans != seenScanActivity) {
+            seenScanActivity = scans
+            idle.activity(now)
+        }
+        val eligible = config.kiosk.mode == KioskConfig.Mode.WEB && webView != null && IdleLogout.loggedIn(url, OpsReader.isSswUrl(url))
+        // na bipagem o prazo é maior (o colaborador pode estar movendo volumes sem tocar no coletor)
+        val limitMin = if (IdleLogout.scanningUrl(url)) config.kiosk.web.idleLogoutScanMin else config.kiosk.web.idleLogoutMin
+        when (idle.tick(now, limitMin * 60_000L, eligible)) {
             IdleLogout.Action.SHOW -> showIdle(now)
             IdleLogout.Action.UPDATE -> updateIdle(now)
             IdleLogout.Action.HIDE -> hideIdle()
@@ -347,7 +355,7 @@ class KioskActivity : Activity() {
 
     private fun applyWindow() {
         requestedOrientation = config.display.orientation.activityInfo
-        if (config.display.keepScreenOn || config.display.dimAfterSec > 0) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        if (config.screenAlwaysOn()) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }
 
