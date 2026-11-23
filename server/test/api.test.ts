@@ -48,6 +48,7 @@ const config: Config = {
     },
   trustProxy: false,
   logLevel: "silent",
+  timeZone: "America/Cuiaba",
 };
 
 let db: Db;

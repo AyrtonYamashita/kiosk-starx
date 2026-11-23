@@ -1,4 +1,6 @@
-/** Formatos da tela de operações (pt-BR, horário de Brasília). */
+/** Formatos da tela de operações (pt-BR, fuso da operação). */
+
+import { TZ } from "./format";
 
 export const OFFLINE_AFTER_MS = 45_000;
 
@@ -27,10 +29,10 @@ export function fmtAgo(iso: string | null, now: number): string {
 }
 
 export const fmtTime = (iso: string | null) =>
-  iso ? new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" }) : "—";
+  iso ? new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: TZ }) : "—";
 
 export const fmtClock = (iso: string | null) =>
-  iso ? new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: "America/Sao_Paulo" }) : "—";
+  iso ? new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: TZ }) : "—";
 
 export const SCREEN_LABEL: Record<string, string> = {
   bipagem: "bipando",

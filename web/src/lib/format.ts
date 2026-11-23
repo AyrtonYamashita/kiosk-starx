@@ -1,4 +1,5 @@
-const TZ = "America/Sao_Paulo";
+/** Fuso da operação (NEXT_PUBLIC_TIME_ZONE, padrão Cuiabá): todas as datas e horas do painel. */
+export const TZ = process.env.NEXT_PUBLIC_TIME_ZONE || "America/Cuiaba";
 
 export function dateTime(iso: string | null | undefined): string {
   if (!iso) return "—";

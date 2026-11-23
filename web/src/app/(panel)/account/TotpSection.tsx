@@ -3,8 +3,9 @@
 import { useActionToast } from "@/components/Toasts";
 import { useActionState, useState } from "react";
 import { confirmTotp, disableTotp, setupTotp } from "@/lib/actions";
+import { TZ } from "@/lib/format";
 
-const fmt = (iso: string) => new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+const fmt = (iso: string) => new Date(iso).toLocaleDateString("pt-BR", { timeZone: TZ });
 
 function Feedback({ state }: { state: { ok?: string; error?: string } | undefined }) {
   useActionToast(state);

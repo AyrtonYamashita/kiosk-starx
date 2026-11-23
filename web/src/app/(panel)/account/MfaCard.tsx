@@ -4,6 +4,7 @@ import { useConfirm } from "@/components/ConfirmDialog";
 import { useActionState } from "react";
 import { generateRecoveryCodes, revokeTrustedDevice } from "@/lib/actions";
 import type { MfaInfo } from "@/lib/api";
+import { TZ } from "@/lib/format";
 
 function device(ua: string | null): string {
   if (!ua) return "—";
@@ -12,7 +13,7 @@ function device(ua: string | null): string {
   return os ? `${b} · ${os}` : b;
 }
 
-const fmt = (iso: string) => new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+const fmt = (iso: string) => new Date(iso).toLocaleDateString("pt-BR", { timeZone: TZ });
 
 /** Códigos de recuperação: quantos restam e o botão para gerar novos (mostrados uma vez só). */
 export function RecoveryCodes({ left }: { left: number }) {

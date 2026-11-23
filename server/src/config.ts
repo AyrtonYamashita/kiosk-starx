@@ -59,6 +59,8 @@ export interface Config {
   };
   /** Atrás do Caddy: usa X-Forwarded-For para o IP do aparelho. */
   trustProxy: boolean;
+  /** Fuso da operação (IANA): dias do histórico e "hoje" das cargas. */
+  timeZone: string;
   logLevel: string;
 }
 
@@ -91,6 +93,18 @@ function minutes(name: string, fallback: number): number {
   const n = Number(raw);
   if (!Number.isInteger(n) || n < 1) throw new Error(`${name} precisa ser um número inteiro de minutos (1 ou mais)`);
   return n;
+}
+
+/** Fuso da operação (TIME_ZONE, padrão Cuiabá): nome IANA válido, sem caracteres que não caibam num literal SQL. */
+function timeZone(): string {
+  const tz = process.env.TIME_ZONE || "America/Cuiaba";
+  if (!/^[A-Za-z_]+(\/[A-Za-z0-9_+-]+)*$/.test(tz)) throw new Error(`TIME_ZONE inválido: ${tz}`);
+  try {
+    new Intl.DateTimeFormat("pt-BR", { timeZone: tz });
+  } catch {
+    throw new Error(`TIME_ZONE desconhecido: ${tz}`);
+  }
+  return tz;
 }
 
 export function loadConfig(): Config {
@@ -138,5 +152,6 @@ export function loadConfig(): Config {
     },
     trustProxy: (process.env.TRUST_PROXY ?? "true") === "true",
     logLevel: process.env.LOG_LEVEL ?? "info",
+    timeZone: timeZone(),
   };
 }

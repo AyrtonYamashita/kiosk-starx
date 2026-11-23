@@ -11,6 +11,8 @@ import type { Waker } from "../wake.js";
 /** Painel (sessão normal): cards, detalhe de um coletor e ingresso para a conexão ao vivo. */
 export async function opsAdminRoutes(app: FastifyInstance, opts: { db: Db; config: Config; live: OpsLive; waker: Waker }) {
   const { db, config, live, waker } = opts;
+  // fuso da operação (validado no config): o dia começa à meia-noite local, não de Brasília nem UTC
+  const TZ = config.timeZone;
 
   /** Consulta por código de barras: em que carga, coletor, colaborador e hora foi bipado (código inteiro ou começo). */
   app.get("/v1/admin/ops/scans", async (req, reply) => {
@@ -52,7 +54,7 @@ export async function opsAdminRoutes(app: FastifyInstance, opts: { db: Db; confi
   /**
    * Histórico de cargas: da mais nova para a mais antiga, 50 por página (continua com `before`, o cursor da última).
    * Filtros: placa (começo ou parte, sem diferenciar maiúsculas), usuário do SSW, função, situação e período (dias,
-   * horário de Brasília).
+   * no fuso da operação, TIME_ZONE).
    */
   const OpsListQuery = z.object({
     plate: z.string().trim().max(20).optional(),
@@ -81,10 +83,10 @@ export async function opsAdminRoutes(app: FastifyInstance, opts: { db: Db; confi
     if (f.fn) add("o.fn = ?", f.fn);
     if (f.status === "open") where.push("o.ended_at IS NULL");
     else if (f.status) add("o.end_reason = ?", f.status);
-    // dia de Brasília: a data vira timestamp sem fuso e só então é lida como horário de Brasília (date AT TIME ZONE
-    // usaria o fuso da sessão do banco, UTC, e deslocava o dia em 3 h)
-    if (f.from) add("o.started_at >= (?::date::timestamp AT TIME ZONE 'America/Sao_Paulo')", f.from);
-    if (f.to) add("o.started_at < ((?::date + 1)::timestamp AT TIME ZONE 'America/Sao_Paulo')", f.to);
+    // dia local: a data vira timestamp sem fuso e só então é lida no fuso da operação (date AT TIME ZONE
+    // usaria o fuso da sessão do banco, UTC, e deslocava o dia)
+    if (f.from) add(`o.started_at >= (?::date::timestamp AT TIME ZONE '${TZ}')`, f.from);
+    if (f.to) add(`o.started_at < ((?::date + 1)::timestamp AT TIME ZONE '${TZ}')`, f.to);
     if (f.before) {
       const [ms, id] = f.before.split("_");
       args.push(new Date(Number(ms)), id);
@@ -208,7 +210,7 @@ export async function opsAdminRoutes(app: FastifyInstance, opts: { db: Db; confi
         `SELECT id, fn, plate, ssw_user, started_at, ended_at, end_reason, total_qty, read_qty, total_value, scans,
                 extract(epoch FROM COALESCE(ended_at, now()) - started_at)::int AS duration_sec
          FROM ops_operations
-         WHERE device_id = $1 AND started_at >= (date_trunc('day', now() AT TIME ZONE 'America/Sao_Paulo') AT TIME ZONE 'America/Sao_Paulo')
+         WHERE device_id = $1 AND started_at >= (date_trunc('day', now() AT TIME ZONE '${TZ}') AT TIME ZONE '${TZ}')
          ORDER BY started_at DESC LIMIT 100`,
         [id],
       )
@@ -235,7 +237,7 @@ export async function opsAdminRoutes(app: FastifyInstance, opts: { db: Db; confi
         (
           await db.query(
             `SELECT COALESCE(sum(extract(epoch FROM COALESCE(ended_at, now()) - started_at)), 0)::int AS s FROM ops_operations
-             WHERE ssw_user = $1 AND fn = $2 AND started_at >= (date_trunc('day', now() AT TIME ZONE 'America/Sao_Paulo') AT TIME ZONE 'America/Sao_Paulo')`,
+             WHERE ssw_user = $1 AND fn = $2 AND started_at >= (date_trunc('day', now() AT TIME ZONE '${TZ}') AT TIME ZONE '${TZ}')`,
             [op.ssw_user, op.fn],
           )
         ).rows[0].s,

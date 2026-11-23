@@ -9,8 +9,9 @@ import { registerPasskeyFinish, registerPasskeyOptions, removePasskey } from "@/
 import type { MfaInfo } from "@/lib/api";
 import { createCredential, passkeyError, suggestedName } from "@/lib/passkey-client";
 import { useClientValue } from "@/lib/client";
+import { TZ } from "@/lib/format";
 
-const fmt = (iso: string) => new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+const fmt = (iso: string) => new Date(iso).toLocaleDateString("pt-BR", { timeZone: TZ });
 
 /** Passkeys na Conta: lista, adicionar (senha atual + biometria) e remover. */
 export function PasskeysSection({ passkeys }: { passkeys: MfaInfo["passkeys"] }) {

@@ -162,7 +162,7 @@ describe("histórico de cargas", () => {
     expect((await t.api("GET", "/v1/admin/ops/operations?plate=his1")).json.operations.map((o: { plate: string }) => o.plate)).toEqual(["HIS1A00"]);
     expect((await t.api("GET", "/v1/admin/ops/operations?user=joana&status=interrupted")).json.operations).toHaveLength(1);
     expect((await t.api("GET", "/v1/admin/ops/operations?status=xyz")).status).toBe(400);
-    const today = new Date().toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" });
+    const today = new Date().toLocaleDateString("sv-SE", { timeZone: "America/Cuiaba" });
     expect((await t.api("GET", `/v1/admin/ops/operations?user=joana&from=${today}&to=${today}`)).json.operations).toHaveLength(3);
     const first = all.operations[0];
     const page2 = (await t.api("GET", `/v1/admin/ops/operations?user=joana&before=${new Date(first.startedAt).getTime()}_${first.id}`)).json;
@@ -170,10 +170,10 @@ describe("histórico de cargas", () => {
   });
 });
 
-describe("histórico de cargas: dia de Brasília", () => {
-  it("carga às 23h30 de Brasília entra no próprio dia (não no seguinte)", async () => {
+describe("histórico de cargas: dia no fuso da operação (Cuiabá)", () => {
+  it("carga às 23h30 de Cuiabá entra no próprio dia (não no seguinte, como seria em Brasília)", async () => {
     await t.db.query(
-      "INSERT INTO ops_operations (device_id, fn, plate, ssw_user, started_at) VALUES ($1, 'coleta', 'NOITE11', 'turno.noite', '2026-11-10 23:30:00-03')",
+      "INSERT INTO ops_operations (device_id, fn, plate, ssw_user, started_at) VALUES ($1, 'coleta', 'NOITE11', 'turno.noite', '2026-11-10 23:30:00-04')",
       [deviceId],
     );
     const on = (d: string) => t.api("GET", `/v1/admin/ops/operations?user=turno.noite&from=${d}&to=${d}`);

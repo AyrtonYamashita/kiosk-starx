@@ -63,6 +63,7 @@ export async function setupApi(opts: { config?: Partial<Config> } = {}) {
     },
     trustProxy: false,
     logLevel: "silent",
+    timeZone: "America/Cuiaba",
   };
   const db: Db = createPool(DATABASE_URL, schema);
   await migrate(db, schema);
