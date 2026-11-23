@@ -354,7 +354,7 @@ export function ConfigEditor({
 
       {tab === "Tela" && (
         <div className="stack">
-          {check("display.keepScreenOn", "Manter a tela ligada", k.mode === "web" ? "no modo site a tela fica sempre ligada (app 0.5.4+), para não perder a conexão" : "durante o kiosk")}
+          {check("display.keepScreenOn", "Manter a tela ligada", k.mode === "web" ? "no modo site a tela fica sempre ligada (app 0.5.5+), para não perder a conexão" : "durante o kiosk")}
           <label>
             Escurecer após inatividade (s, 0 = não escurece)
             <input type="number" min={0} max={86400} value={d.dimAfterSec ?? 0} onChange={(e) => set("display.dimAfterSec", Number(e.target.value))} style={{ maxWidth: 200 }} />
