@@ -8,6 +8,7 @@ import type { Config } from "../src/config.js";
 import { createPool, migrate, type Db } from "../src/db.js";
 import { ensureAdmin } from "../src/routes/admin.js";
 import type { MailMessage } from "../src/mfa.js";
+import type { PushSender } from "../src/push.js";
 
 const DATABASE_URL = process.env.TEST_DATABASE_URL ?? "postgres://kiosk:kiosk@127.0.0.1:5434/kiosk";
 
@@ -22,7 +23,7 @@ export const info = (serial: string) => ({
 /** E-mails "enviados" nos testes (nada sai de verdade). */
 export type SentMail = MailMessage;
 
-export async function setupApi(opts: { config?: Partial<Config> } = {}) {
+export async function setupApi(opts: { config?: Partial<Config>; pushSender?: PushSender } = {}) {
   const sent: SentMail[] = [];
   const schema = `test_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
   const apkDir = fs.mkdtempSync(path.join(os.tmpdir(), "kiosk-apks-"));
@@ -64,14 +65,22 @@ export async function setupApi(opts: { config?: Partial<Config> } = {}) {
     trustProxy: false,
     logLevel: "silent",
     timeZone: "America/Cuiaba",
+    vapidSubject: "https://kiosk.test",
   };
   const db: Db = createPool(DATABASE_URL, schema);
   await migrate(db, schema);
   await ensureAdmin(db, config, { info: () => undefined });
   Object.assign(config, opts.config ?? {});
-  const app: FastifyInstance = await buildApp(config, db, undefined, async (m) => {
-    sent.push(m);
-  });
+  const app: FastifyInstance = await buildApp(
+    config,
+    db,
+    undefined,
+    async (m) => {
+      sent.push(m);
+    },
+    undefined,
+    opts.pushSender,
+  );
   const ctx = {
     db,
     app,

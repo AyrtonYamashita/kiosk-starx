@@ -16,6 +16,8 @@ import { opsDeviceRoutes } from "./routes/ops.js";
 import { OpsLive } from "./opsLive.js";
 import { opsStreamRoutes } from "./routes/opsAdmin.js";
 import { logMailer, resendMailer, type Mailer } from "./mfa.js";
+import { Push, type PushSender } from "./push.js";
+import { notifyOps } from "./opsPush.js";
 
 function safeEqual(a: string, b: string): boolean {
   const x = Buffer.from(a);
@@ -23,7 +25,7 @@ function safeEqual(a: string, b: string): boolean {
   return x.length === y.length && crypto.timingSafeEqual(x, y);
 }
 
-export async function buildApp(config: Config, db: Db, waker = new Waker(), mailer?: Mailer, bus = new OpsBus()) {
+export async function buildApp(config: Config, db: Db, waker = new Waker(), mailer?: Mailer, bus = new OpsBus(), pushSender?: PushSender) {
   const app = Fastify({
     logger: { level: config.logLevel, redact: ["req.headers.authorization", "req.headers.cookie"] },
     trustProxy: config.trustProxy,
@@ -71,17 +73,21 @@ export async function buildApp(config: Config, db: Db, waker = new Waker(), mail
 
   fs.mkdirSync(config.appsDir, { recursive: true });
   await app.register(deviceRoutes, { db, config, waker });
-  await app.register(opsDeviceRoutes, { db, bus });
+  const push = new Push(db, config, pushSender, app.log);
+  await app.register(opsDeviceRoutes, { db, bus, push });
   const live = new OpsLive(db, bus);
   app.addHook("onClose", async () => live.close());
   // carga aberta de coletor sem sinal por 2 h: a API encerra (o app não consegue)
-  const stopStale = scheduleStaleOps(db, config.opsSignalLostMin, (ids) => ids.forEach((id) => bus.changed(id)), app.log);
+  const stopStale = scheduleStaleOps(db, config.opsSignalLostMin, (devices, operations) => {
+    devices.forEach((id) => bus.changed(id));
+    void notifyOps(db, push, [], operations);
+  }, app.log);
   app.addHook("onClose", async () => stopStale());
   await app.register(opsStreamRoutes, { db, config, live });
   await app.register(deviceAppRoutes, { db, config });
   await app.register(deviceScreenshotRoutes, { db });
   await app.register(uploadRoutes, { db, config });
   const mail = mailer ?? (config.resendApiKey ? resendMailer(config.resendApiKey, config.mailFrom) : logMailer(app.log));
-  await app.register(adminRoutes, { db, config, waker, mailer: mail, live });
+  await app.register(adminRoutes, { db, config, waker, mailer: mail, live, push });
   return app;
 }

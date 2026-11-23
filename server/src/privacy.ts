@@ -171,6 +171,9 @@ export async function exportAdmin(db: Db, adminId: string) {
   const totp = (await db.query("SELECT created_at FROM admin_totp WHERE admin_id = $1", [adminId])).rows[0] ?? null;
   const recovery = Number((await db.query("SELECT count(*) FROM recovery_codes WHERE admin_id = $1 AND used_at IS NULL", [adminId])).rows[0].count);
   const events = (await db.query("SELECT event, created_at, ip, user_agent, details FROM auth_events WHERE admin_id = $1 ORDER BY created_at", [adminId])).rows;
+  // aparelhos com notificação no celular (o endereço de push não sai: é só um identificador técnico do navegador)
+  const push = (await db.query("SELECT user_agent, created_at, last_sent_at FROM push_subscriptions WHERE admin_id = $1 ORDER BY created_at", [adminId])).rows;
+  const pushEvents = (await db.query("SELECT events FROM push_prefs WHERE admin_id = $1", [adminId])).rows[0]?.events ?? null;
   return {
     gerado_em: new Date().toISOString(),
     conta: { usuario: a.username, email: a.email, papel: a.role, criada_em: a.created_at, desativada_em: a.disabled_at, senha_alterada_em: a.password_changed_at },
@@ -180,5 +183,6 @@ export async function exportAdmin(db: Db, adminId: string) {
     app_autenticador: totp ? { ativo_desde: totp.created_at } : null,
     codigos_de_recuperacao_disponiveis: recovery,
     trilha_de_acesso_e_acoes: events,
+    notificacoes_no_celular: { aparelhos: push, eventos_escolhidos: pushEvents },
   };
 }

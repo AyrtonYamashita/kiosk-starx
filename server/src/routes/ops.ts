@@ -2,12 +2,14 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { Db } from "../db.js";
 import { applyBatch, OPS_MAX_BODY, OPS_MAX_SKEW_MS, OPS_READER_ON_SQL, OpsBatch, type OpsBus, signatureOk } from "../ops.js";
+import { notifyOps } from "../opsPush.js";
+import type { Push } from "../push.js";
 
 /**
  * Recebimento dos eventos do leitor do SSW (fase 2.2): POST /v1/device/events.
  * Sem token no cabeçalho: o lote é assinado com HMAC (chave = SHA-256 do token do aparelho).
  */
-export async function opsDeviceRoutes(app: FastifyInstance, opts: { db: Db; bus: OpsBus }) {
+export async function opsDeviceRoutes(app: FastifyInstance, opts: { db: Db; bus: OpsBus; push?: Push }) {
   const { db, bus } = opts;
 
   // corpo como texto: a assinatura vale sobre os bytes exatos que chegaram
@@ -72,10 +74,12 @@ export async function opsDeviceRoutes(app: FastifyInstance, opts: { db: Db; bus:
           await c.query("ROLLBACK");
           return reply.code(409).send({ error: "stale", message: "lote antigo ou repetido", serverTime });
         }
-        const r = await applyBatch(c, deviceId, body.data.events);
+        const { started, ended, ...r } = await applyBatch(c, deviceId, body.data.events);
         await c.query("UPDATE devices SET ops_last_ts = $2 WHERE id = $1", [deviceId, ts]);
         await c.query("COMMIT");
         if (r.accepted) bus.changed(deviceId);
+        // notificações no celular: em segundo plano (o coletor não espera o envio)
+        if (opts.push && (started.length || ended.length)) void notifyOps(db, opts.push, started, ended);
         return { ...r, serverTime };
       } catch (e) {
         await c.query("ROLLBACK").catch(() => undefined);

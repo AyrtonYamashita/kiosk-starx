@@ -59,6 +59,13 @@ export interface Config {
   };
   /** Atrás do Caddy: usa X-Forwarded-For para o IP do aparelho. */
   trustProxy: boolean;
+  /**
+   * Notificações no celular (Web Push): par de chaves VAPID (`npx web-push generate-vapid-keys`). A privada fica só
+   * no .env do servidor. Sem as duas, as notificações ficam desligadas. O subject identifica quem envia (https: ou mailto:).
+   */
+  vapidPublicKey?: string;
+  vapidPrivateKey?: string;
+  vapidSubject: string;
   /** Fuso da operação (IANA): dias do histórico e "hoje" das cargas. */
   timeZone: string;
   logLevel: string;
@@ -153,5 +160,8 @@ export function loadConfig(): Config {
     trustProxy: (process.env.TRUST_PROXY ?? "true") === "true",
     logLevel: process.env.LOG_LEVEL ?? "info",
     timeZone: timeZone(),
+    vapidPublicKey: process.env.VAPID_PUBLIC_KEY || undefined,
+    vapidPrivateKey: process.env.VAPID_PRIVATE_KEY || undefined,
+    vapidSubject: process.env.VAPID_SUBJECT ?? "https://kiosk.pstarx.com",
   };
 }

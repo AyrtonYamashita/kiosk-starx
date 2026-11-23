@@ -126,6 +126,12 @@ interface State {
 
 const ts = (ms: number) => new Date(ms);
 
+/** Cargas abertas e encerradas por um lote (para as notificações, enviadas depois do COMMIT). */
+export interface OpsNotes {
+  started: string[];
+  ended: string[];
+}
+
 async function openOp(c: Client, deviceId: string): Promise<Open | null> {
   return (
     (
@@ -149,16 +155,18 @@ async function reopenLost(c: Client, deviceId: string, fn: string, plate: string
   return r.rows[0] ?? null;
 }
 
-async function closeOp(c: Client, opId: string, at: number, reason: string) {
-  await c.query("UPDATE ops_operations SET ended_at = GREATEST($2, started_at), end_reason = $3, updated_at = now() WHERE id = $1 AND ended_at IS NULL", [
+async function closeOp(c: Client, opId: string, at: number, reason: string, notes: OpsNotes) {
+  const r = await c.query("UPDATE ops_operations SET ended_at = GREATEST($2, started_at), end_reason = $3, updated_at = now() WHERE id = $1 AND ended_at IS NULL", [
     opId,
     ts(at),
     reason,
   ]);
+  if (r.rowCount) notes.ended.push(opId);
 }
 
 async function startOp(
   c: Client,
+  notes: OpsNotes,
   deviceId: string,
   st: State,
   e: { at: number; fn: string; plate: string; realPlate?: string | null; units?: string[]; total: { qty: number; kg: number; value: number }; read?: { qty: number; kg: number; value: number } },
@@ -170,11 +178,12 @@ async function startOp(
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING id`,
     [deviceId, e.fn, e.plate, e.realPlate ?? null, e.units ?? [], st.ssw_user, st.domain, st.branch, ts(e.at), e.total.qty, e.total.kg, e.total.value, read.qty, read.kg, read.value],
   );
+  notes.started.push(r.rows[0].id);
   return r.rows[0].id;
 }
 
 /** Aplica um evento ao estado do coletor e às operações. Devolve a operação a que o evento pertence. */
-async function applyEvent(c: Client, deviceId: string, st: State, e: OpsEvent): Promise<string | null> {
+async function applyEvent(c: Client, notes: OpsNotes, deviceId: string, st: State, e: OpsEvent): Promise<string | null> {
   if (!st.last_event_at || st.last_event_at.getTime() < e.at) st.last_event_at = ts(e.at);
   switch (e.type) {
     case "session": {
@@ -184,7 +193,7 @@ async function applyEvent(c: Client, deviceId: string, st: State, e: OpsEvent): 
       // saiu do SSW com uma descarga aberta: ela termina aqui
       if (!e.user) {
         const open = await openOp(c, deviceId);
-        if (open) await closeOp(c, open.id, e.at, "left");
+        if (open) await closeOp(c, open.id, e.at, "left", notes);
         st.operation_id = null;
         st.screen = "login";
       }
@@ -203,17 +212,17 @@ async function applyEvent(c: Client, deviceId: string, st: State, e: OpsEvent): 
         st.operation_id = open.id;
         return open.id;
       }
-      if (open) await closeOp(c, open.id, e.at, "replaced");
-      st.operation_id = await startOp(c, deviceId, st, e);
+      if (open) await closeOp(c, open.id, e.at, "replaced", notes);
+      st.operation_id = await startOp(c, notes, deviceId, st, e);
       return st.operation_id;
     }
     case "progress": {
       let open = (await openOp(c, deviceId)) ?? (await reopenLost(c, deviceId, e.fn, e.plate));
       if (!open || open.fn !== e.fn || open.plate !== e.plate) {
         // o início se perdeu (ex.: app reiniciado no meio): abre a operação a partir do progresso
-        if (open) await closeOp(c, open.id, e.at, "replaced");
+        if (open) await closeOp(c, open.id, e.at, "replaced", notes);
         const total = e.total ?? e.read;
-        const id = await startOp(c, deviceId, st, { ...e, total, read: e.read });
+        const id = await startOp(c, notes, deviceId, st, { ...e, total, read: e.read });
         st.operation_id = id;
         st.screen = "bipagem";
         return id;
@@ -240,7 +249,7 @@ async function applyEvent(c: Client, deviceId: string, st: State, e: OpsEvent): 
     }
     case "op_end": {
       const open = await openOp(c, deviceId);
-      if (open) await closeOp(c, open.id, e.at, e.reason);
+      if (open) await closeOp(c, open.id, e.at, e.reason, notes);
       st.operation_id = null;
       st.screen = "placa";
       return open?.id ?? null;
@@ -273,8 +282,9 @@ export async function applyBatch(c: Client, deviceId: string, events: OpsEvent[]
     .rows[0];
   const st: State = row ?? { ssw_user: null, domain: null, branch: null, screen: null, operation_id: null, last_event_at: null, last_heartbeat_at: null };
 
+  const notes: OpsNotes = { started: [], ended: [] };
   for (const e of fresh) {
-    const opId = await applyEvent(c, deviceId, st, e);
+    const opId = await applyEvent(c, notes, deviceId, st, e);
     const scan = (e.type === "op_start" || e.type === "progress") && e.extra?.scan;
     if (scan) {
       // o mesmo código chega de novo em retratos seguintes: o id do leitor evita repetir
@@ -296,7 +306,7 @@ export async function applyBatch(c: Client, deviceId: string, events: OpsEvent[]
       [deviceId, st.ssw_user, st.domain, st.branch, st.screen, st.operation_id, st.last_event_at, st.last_heartbeat_at],
     );
   }
-  return { accepted: fresh.length, duplicates: events.length - fresh.length };
+  return { accepted: fresh.length, duplicates: events.length - fresh.length, ...notes };
 }
 
 /**

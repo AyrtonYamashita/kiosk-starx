@@ -13,6 +13,8 @@ import { mfaAccountRoutes, mfaDeps, mfaPublicRoutes, revokeTrust } from "./mfa.j
 import { passkeyAccountRoutes, passkeyPublicRoutes } from "./passkeys.js";
 import { opsAdminRoutes } from "./opsAdmin.js";
 import { privacyRoutes } from "./privacy.js";
+import { pushRoutes } from "./push.js";
+import type { Push } from "../push.js";
 import { OPS_READER_ON_SQL } from "../ops.js";
 import type { OpsLive } from "../opsLive.js";
 import type { Mailer } from "../mfa.js";
@@ -73,7 +75,7 @@ export function onlineWindowSec(config: Config) {
   return config.checkinIntervalSec * 3;
 }
 
-export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: Config; waker: Waker; mailer: Mailer; live: OpsLive }) {
+export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: Config; waker: Waker; mailer: Mailer; live: OpsLive; push: Push }) {
   const { db, config, waker } = opts;
   const { beginMfa } = mfaDeps(db, config, opts.mailer);
   await app.register(mfaPublicRoutes, { db, config, mailer: opts.mailer });
@@ -199,6 +201,7 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
     await priv.register(passkeyAccountRoutes, { db, config });
     await priv.register(opsAdminRoutes, { db, config, live: opts.live, waker });
     await priv.register(privacyRoutes, { db, config });
+    await priv.register(pushRoutes, { db, push: opts.push });
 
     priv.post("/v1/admin/password", async (req, reply) => {
       const body = ChangePassword.safeParse(req.body);

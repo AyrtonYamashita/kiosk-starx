@@ -49,6 +49,7 @@ const config: Config = {
   trustProxy: false,
   logLevel: "silent",
   timeZone: "America/Cuiaba",
+  vapidSubject: "https://kiosk.test",
 };
 
 let db: Db;

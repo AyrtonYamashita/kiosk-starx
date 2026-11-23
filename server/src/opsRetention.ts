@@ -174,10 +174,11 @@ export function scheduleOpsRetention(
 /**
  * Cargas abertas de coletores sem sinal há `afterMin` minutos (desligado, sem bateria, fora da rede): o app não
  * consegue encerrá-las, então a API encerra como "signal_lost" no horário da última bipagem. Se o coletor voltar na
- * mesma placa, a carga é reaberta (ops.ts). Devolve os coletores afetados (para avisar as telas ao vivo).
+ * mesma placa, a carga é reaberta (ops.ts). Devolve os coletores afetados (para avisar as telas ao vivo) e as cargas
+ * encerradas (para as notificações).
  */
-export async function closeStaleOps(db: Db, afterMin: number): Promise<string[]> {
-  const r = await db.query<{ device_id: string }>(
+export async function closeStaleOps(db: Db, afterMin: number): Promise<{ devices: string[]; operations: string[] }> {
+  const r = await db.query<{ device_id: string; id: string }>(
     `WITH stale AS (
        SELECT o.id, o.device_id, COALESCE(o.last_scan_at, o.started_at) AS at
        FROM ops_operations o JOIN ops_device_state s ON s.device_id = o.device_id
@@ -186,30 +187,30 @@ export async function closeStaleOps(db: Db, afterMin: number): Promise<string[]>
        FOR UPDATE OF o SKIP LOCKED)
      UPDATE ops_operations o SET ended_at = GREATEST(stale.at, o.started_at), end_reason = 'signal_lost', updated_at = now()
      FROM stale WHERE o.id = stale.id
-     RETURNING o.device_id`,
+     RETURNING o.device_id, o.id`,
     [afterMin],
   );
   const ids = [...new Set(r.rows.map((x) => x.device_id))];
   if (ids.length) {
     await db.query("UPDATE ops_device_state SET operation_id = NULL, updated_at = now() WHERE device_id = ANY($1) AND operation_id IS NOT NULL", [ids]);
   }
-  return ids;
+  return { devices: ids, operations: r.rows.map((x) => x.id) };
 }
 
 /** Confere a cada 5 min (e 1 min depois de subir). Devolve a função que para. */
 export function scheduleStaleOps(
   db: Db,
   afterMin: number,
-  onClosed: (deviceIds: string[]) => void,
+  onClosed: (deviceIds: string[], operationIds: string[]) => void,
   log: { info: (obj: object, msg: string) => void; error: (obj: object, msg: string) => void },
   everyMs = 5 * 60_000,
 ): () => void {
   const run = async () => {
     try {
-      const ids = await closeStaleOps(db, afterMin);
-      if (ids.length) {
-        log.info({ devices: ids.length, afterMin }, "cargas encerradas por falta de sinal");
-        onClosed(ids);
+      const { devices, operations } = await closeStaleOps(db, afterMin);
+      if (devices.length) {
+        log.info({ devices: devices.length, afterMin }, "cargas encerradas por falta de sinal");
+        onClosed(devices, operations);
       }
     } catch (err) {
       log.error({ err }, "falha ao encerrar cargas sem sinal");

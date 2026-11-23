@@ -124,13 +124,13 @@ describe("carga de coletor sem sinal", () => {
     ]);
     const op = (await t.db.query("SELECT id FROM ops_operations WHERE plate = 'SIN1A23'")).rows[0].id as string;
     // ainda com sinal: nada muda
-    expect(await closeStaleOps(t.db, 120)).not.toContain(deviceId);
+    expect((await closeStaleOps(t.db, 120)).devices).not.toContain(deviceId);
     // sem sinal há 3 h
     await t.db.query(
       "UPDATE ops_device_state SET last_event_at = now() - interval '3 hours', last_heartbeat_at = now() - interval '3 hours' WHERE device_id = $1",
       [deviceId],
     );
-    expect(await closeStaleOps(t.db, 120)).toContain(deviceId);
+    expect((await closeStaleOps(t.db, 120)).devices).toContain(deviceId);
     const closed = (await t.db.query("SELECT end_reason, ended_at, last_scan_at FROM ops_operations WHERE id = $1", [op])).rows[0];
     expect(closed.end_reason).toBe("signal_lost");
     expect(closed.ended_at.getTime()).toBe(closed.last_scan_at.getTime());
