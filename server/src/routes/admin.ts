@@ -23,7 +23,7 @@ import type { Waker } from "../wake.js";
 
 declare module "fastify" {
   interface FastifyRequest {
-    admin?: { id: string; username: string; email: string | null; role: "admin" | "operator"; sessionId: string };
+    admin?: { id: string; username: string; email: string | null; role: "admin" | "operator"; sessionId: string; tenantId: string | null; platform: boolean };
   }
 }
 
@@ -90,7 +90,7 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
       `UPDATE sessions s SET last_used_at = now() FROM admins a
        WHERE s.token_hash = $1 AND s.stage = 'full' AND s.expires_at > now() AND s.last_used_at > now() - make_interval(hours => $2)
          AND a.id = s.admin_id AND a.disabled_at IS NULL
-       RETURNING s.id AS session_id, a.id, a.username, a.email, a.role`,
+       RETURNING s.id AS session_id, s.tenant_id, a.id, a.username, a.email, a.role, a.platform`,
       [tokenHash, config.sessionIdleHours],
     );
     if (!r.rows[0]) {
@@ -100,7 +100,8 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
       return reply.code(401).send({ error: "unauthorized" });
     }
     const a = r.rows[0];
-    req.admin = { id: a.id, username: a.username, email: a.email, role: a.role, sessionId: a.session_id };
+    // empresa: sempre a da sessão (copiada do usuário no login), nunca de cabeçalho, URL ou corpo. Vazia = plataforma.
+    req.admin = { id: a.id, username: a.username, email: a.email, role: a.role, sessionId: a.session_id, tenantId: a.tenant_id, platform: a.platform === true };
   }
 
   // ---------------------------------------------------------------- sessão
@@ -189,12 +190,17 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
       return { ok: true };
     });
 
-    priv.get("/v1/admin/me", async (req) => ({
-      id: req.admin!.id,
-      username: req.admin!.username,
-      email: req.admin!.email,
-      role: req.admin!.role,
-    }));
+    priv.get("/v1/admin/me", async (req) => {
+      const t = req.admin!.tenantId ? (await db.query("SELECT id, name, slug FROM tenants WHERE id = $1", [req.admin!.tenantId])).rows[0] : null;
+      return {
+        id: req.admin!.id,
+        username: req.admin!.username,
+        email: req.admin!.email,
+        role: req.admin!.role,
+        platform: req.admin!.platform,
+        tenant: t ? { id: t.id, name: t.name, slug: t.slug } : null,
+      };
+    });
 
     await priv.register(securityRoutes, { db, config });
     await priv.register(mfaAccountRoutes, { db, config });
@@ -454,6 +460,7 @@ const DUMMY_HASH_PROMISE = () => (dummyHash ??= hashPassword(newToken()));
 export async function ensureAdmin(db: Db, config: Config, log: { info: (msg: string) => void }) {
   const count = Number((await db.query("SELECT count(*) FROM admins")).rows[0].count);
   if (count > 0 || !config.adminUsername || !config.adminPassword) return;
+  // instalação nova: admin da primeira empresa (usuário da plataforma se marca à parte; veja docs/multiempresa.md)
   await db.query("INSERT INTO admins (username, password_hash) VALUES ($1, $2)", [config.adminUsername, await hashPassword(config.adminPassword)]);
   log.info(`administrador inicial "${config.adminUsername}" criado (troque a senha e remova ADMIN_PASSWORD do .env)`);
 }

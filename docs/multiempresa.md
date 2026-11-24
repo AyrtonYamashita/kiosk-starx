@@ -1,7 +1,7 @@
-# Várias empresas no mesmo painel (Fase 3 — desenho)
+# Várias empresas no mesmo painel (Fase 3)
 
-Só desenho: nada disto está implementado. As tabelas criadas desde a Fase 1 já têm `tenant_id` (vazio).
-Respostas do dono do produto em 2026-11-18 no fim; o desenho abaixo já as considera.
+**Situação:** 3.1 (base) feita em 2026-11-24 (migração `016_tenants.sql`, testes em `server/test/tenants.test.ts`).
+3.2 a 3.4 ainda não começaram. Respostas do dono do produto em 2026-11-18 no fim; o desenho abaixo já as considera.
 
 ## Objetivo
 
@@ -80,8 +80,9 @@ essa regra o código de uma empresa poderia "tomar" o coletor de outra.
 
 ## Como seria a implementação (quando for a hora)
 
-1. **3.1 Base, sem mudar comportamento:** tabela `tenants`, empresa "PStarX" criada com todos os dados atuais,
-   `tenant_id` obrigatório e chaves únicas por empresa. O seu usuário vira plataforma e também admin da PStarX.
+1. **3.1 Base, sem mudar comportamento:** tabela `tenants`, empresa "Alt Brasil" (a primeira cliente; a PStarX é a
+   plataforma, não uma empresa) criada com todos os dados atuais, `tenant_id` obrigatório e chaves únicas por empresa.
+   O usuário da PStarX vira plataforma (sem empresa).
 2. **3.2 Filtro na aplicação:** empresa na sessão e no coletor, e todas as consultas filtradas. Bateria de testes com
    duas empresas: para cada rota, a empresa B recebe 404 nos ids da A, as listas só trazem o que é dela, e o SSE e os
    eventos do coletor também ficam separados.
@@ -90,6 +91,38 @@ essa regra o código de uma empresa poderia "tomar" o coletor de outra.
 4. **3.4 Painel da plataforma:** criar e suspender empresa, convidar o primeiro admin, "entrar como" com auditoria.
 
 Cada parte é publicada e validada antes da próxima, como nas fases anteriores.
+
+## 3.1 como foi feita (2026-11-24)
+
+- **Plataforma:** marcador `admins.platform`, sem empresa (`tenant_id` vazio). O banco exige as duas coisas juntas:
+  usuário de empresa tem empresa, e o da plataforma não tem. Sessões, passkeys etc. do usuário da plataforma também
+  ficam sem empresa. A migração marca `ayrtonyamashita@pstarx.com`; o admin da Alt Brasil é
+  `ticba@altbrasil.com.br`. Numa instalação nova, o `ensureAdmin` cria um admin comum da primeira empresa. Para
+  marcar outro usuário da plataforma, por enquanto só por SQL (a 3.4 traz a tela).
+- **Primeira empresa:** numa instalação em uso (já com usuários), a migração cria "Alt Brasil" (`altbrasil`) com
+  todos os dados. Numa instalação nova, cria "Empresa principal" (`principal`), para renomear depois.
+- **Gatilhos de preenchimento:** quem grava sem `tenant_id` recebe a empresa do pai (usuário pelo `admin_id`, coletor
+  pelo `device_id`, coletor novo pelo código de cadastro, anonimização por quem pediu). Nas tabelas de topo, vale
+  `app.tenant_id` (para a 3.3) ou, **só enquanto existir uma empresa**, a única. Com duas empresas e nada informado, a
+  gravação falha (NOT NULL) em vez de adivinhar.
+- **FKs compostas** `(tenant_id, id)`: comando, carga, evento, sessão etc. só apontam para coletor/usuário da mesma
+  empresa; coletor e código de cadastro só usam perfil/código da mesma empresa. O banco recusa a mistura.
+- Ficaram sem empresa obrigatória: `auth_events` e `webauthn_challenges` sem usuário (conta inexistente, login sem
+  senha), `auth_lockouts` e `upload_tokens`.
+- `ops_settings` agora tem uma linha por empresa (chave `tenant_id`), criada por gatilho junto com a empresa.
+- A sessão já leva a empresa: `req.admin.tenantId`/`platform`, e `/v1/admin/me` devolve `tenant` e `platform`.
+
+**Pendências que a 3.2 resolve** (inofensivas com uma empresa só):
+
+- todas as consultas e gravações filtrando/passando `tenant_id` (hoje filtram por id/nome sem a empresa);
+- login por **nome de usuário** fica ambíguo com o mesmo nome em duas empresas (só o e-mail é único): entrar pelo
+  nome só quando ele for único no sistema, senão pedir o e-mail; o bloqueio por conta também usa o nome;
+- `OPS_READER_ON_SQL` e as rotas de ajustes leem `ops_settings LIMIT 1`;
+- reaplicação das anonimizações (`privacy.ts`) compara o hash de todas as empresas;
+- cadastro do coletor: `mergeBySerial` e a busca por serial só dentro da empresa, mais a regra de "transferido";
+- tirar o atalho "única empresa" de `tenant_fallback()`;
+- usuário da plataforma (sem empresa): hoje ainda vê tudo, como antes. Na 3.2 ele passa a não ver nada de empresa
+  até a 3.4 ("entrar como"), e a lista de usuários da Alt Brasil deixa de mostrá-lo.
 
 ## Respostas (2026-11-18)
 

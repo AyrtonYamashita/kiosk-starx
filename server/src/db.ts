@@ -25,7 +25,7 @@ export function createPool(databaseUrl: string, schema: string): Db {
 }
 
 /** Aplica as migrações pendentes, em ordem, cada uma numa transação. Seguro com várias instâncias (advisory lock). */
-export async function migrate(db: Db, schema: string): Promise<string[]> {
+export async function migrate(db: Db, schema: string, opts: { until?: string } = {}): Promise<string[]> {
   const client = await db.connect();
   const applied: string[] = [];
   try {
@@ -37,6 +37,8 @@ export async function migrate(db: Db, schema: string): Promise<string[]> {
     const files = fs.readdirSync(dir).filter((f) => /^\d+_.+\.sql$/.test(f)).sort();
     for (const file of files) {
       if (done.has(file)) continue;
+      // testes de atualização: para antes de uma migração (ex.: dados criados no formato antigo)
+      if (opts.until && file >= opts.until) break;
       const sql = fs.readFileSync(path.join(dir, file), "utf8");
       await client.query("BEGIN");
       try {

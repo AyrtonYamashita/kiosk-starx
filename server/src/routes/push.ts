@@ -42,7 +42,7 @@ export async function pushRoutes(app: FastifyInstance, opts: { db: Db; push: Pus
     // o mesmo navegador inscrito por outro usuário passa a ser deste (quem está logado nele agora)
     await db.query(
       `INSERT INTO push_subscriptions (admin_id, endpoint, p256dh, auth, user_agent) VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (endpoint) DO UPDATE SET admin_id = EXCLUDED.admin_id, p256dh = EXCLUDED.p256dh, auth = EXCLUDED.auth,
+       ON CONFLICT (endpoint) DO UPDATE SET admin_id = EXCLUDED.admin_id, tenant_id = EXCLUDED.tenant_id, p256dh = EXCLUDED.p256dh, auth = EXCLUDED.auth,
          user_agent = EXCLUDED.user_agent, failures = 0`,
       [req.admin!.id, b.data.endpoint, b.data.keys.p256dh, b.data.keys.auth, (req.headers["user-agent"] ?? "").slice(0, 300) || null],
     );

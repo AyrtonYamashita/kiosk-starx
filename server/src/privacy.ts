@@ -114,7 +114,7 @@ export async function anonymizeSubject(db: Db, secret: string, sswUser: string, 
     await c.query("BEGIN");
     const r = await scrub(c, sswUser);
     await c.query(
-      "INSERT INTO privacy_erasures (kind, subject_hash, created_by) VALUES ('ssw_user', $1, $2) ON CONFLICT (kind, subject_hash) DO NOTHING",
+      "INSERT INTO privacy_erasures (kind, subject_hash, created_by) VALUES ('ssw_user', $1, $2) ON CONFLICT (tenant_id, kind, subject_hash) DO NOTHING",
       [subjectHash(secret, sswUser), adminId],
     );
     await c.query("COMMIT");
