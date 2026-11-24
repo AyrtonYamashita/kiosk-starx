@@ -180,6 +180,60 @@ export default async function CargasPage({ searchParams }: { searchParams: Promi
               </tbody>
             </table>
           </div>
+          {/* celular e tablet (abaixo de 1024 px): um card por carga no lugar da tabela, sem rolagem lateral */}
+          <ol className="cargas-cards" aria-label="Cargas">
+            {data.operations.map((o) => {
+              const pct = o.totalQty > 0 ? Math.min(100, (o.readQty / o.totalQty) * 100) : 0;
+              return (
+                <li key={o.id} className="carga-card">
+                  <div className="carga-card-head">
+                    <Link href={`/operations/${o.device.id}?op=${o.id}`} className="carga-card-title">
+                      <span className="ops-plate mono">{o.realPlate || o.plate}</span>
+                      <span>{o.fnLabel}</span>
+                    </Link>
+                    <Status o={o} />
+                  </div>
+                  <div className="muted small">
+                    <span className="mono">{dateTime(o.startedAt)}</span>
+                    {o.realPlate && o.realPlate !== o.plate && <span className="mono"> · placa no SSW {o.plate}</span>}
+                    {o.units.length > 0 && <span> · {o.units.join(" · ")}</span>}
+                  </div>
+                  <div className="carga-card-qty">
+                    <span className="mono">
+                      {fmtQty(o.readQty)}/{fmtQty(o.totalQty)}
+                    </span>
+                    <span className="muted small">volumes</span>
+                    <div className="ops-bar" aria-hidden>
+                      <span style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                  <dl className="ops-facts">
+                    <div>
+                      <dt>Colaborador</dt>
+                      <dd>{o.user ? <span className="mono">{o.user}</span> : <span className="muted">—</span>}</dd>
+                    </div>
+                    <div>
+                      <dt>Coletor</dt>
+                      <dd>
+                        <Link href={`/devices/${o.device.id}`} className="mono">
+                          {o.device.name}
+                        </Link>
+                        {o.branch && <div className="muted small">{o.branch}</div>}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Valor</dt>
+                      <dd className="mono">{fmtMoney(o.totalValue)}</dd>
+                    </div>
+                    <div>
+                      <dt>Duração</dt>
+                      <dd className="mono">{fmtDuration(o.durationSec)}</dd>
+                    </div>
+                  </dl>
+                </li>
+              );
+            })}
+          </ol>
           <div className="list-foot">
             <span className="muted small">
               {data.operations.length} {data.operations.length === 1 ? "carga" : "cargas"}

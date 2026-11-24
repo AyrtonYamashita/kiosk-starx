@@ -525,6 +525,18 @@ label.dev-check { min-height: 32px; gap: 8px; font-size: 12.5px; }
 .cargas-link { font-weight: 500; white-space: nowrap; }
 .cargas-bar { width: 72px; height: 4px; margin: 4px 0 0 auto; }
 .cargas-table td { vertical-align: middle; }
+/* Cargas no celular e tablet: cards no lugar da tabela (a tabela rolava de lado); no desktop só a tabela */
+.cargas-cards { display: none; margin: 0; padding: 0; list-style: none; }
+@media (max-width: 1023.98px) {
+  .cargas-table { display: none; }
+  .cargas-cards { display: block; }
+}
+.carga-card { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border-bottom: 1px solid var(--rule); }
+.carga-card:last-child { border-bottom: none; }
+.carga-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.carga-card-title { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 44px; min-width: 0; color: var(--ink); font-weight: 600; }
+.carga-card-qty { display: flex; align-items: center; gap: 8px; }
+.carga-card-qty .ops-bar { flex: 1; min-width: 60px; }
 .num { display: inline-flex; align-items: baseline; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .good { color: var(--good-deep); }
 .bad { color: var(--bad-deep); }
