@@ -790,7 +790,19 @@ label.check-hit { display: contents; }
   Links soltos (tabelas, menus, botões) continuam sem sublinhado.
 */
 :is(p, li:not(.carga-card), .muted, .alert, .policy-body) a:not(.button, .link-button) { text-decoration: underline; text-underline-offset: 2px; }
+/*
+  Transição de página (View Transitions): só o conteúdo da página anima. Barra de abas, barra do topo (celular) e
+  menu lateral (desktop) ganham captura própria, desenhada por cima e parada; sem isso a página deslizava por cima
+  deles e parecia que a barra animava junto. Nome único: cada um só existe numa largura.
+*/
+.tabbar { view-transition-name: starx-tabbar; }
+.topbar { view-transition-name: starx-topbar; }
+.sidebar { view-transition-name: starx-sidebar; }
 } /* fim da camada components */
+
+::view-transition-group(starx-tabbar), ::view-transition-group(starx-topbar), ::view-transition-group(starx-sidebar) { z-index: 3; animation: none; }
+::view-transition-old(starx-tabbar), ::view-transition-old(starx-topbar), ::view-transition-old(starx-sidebar) { display: none; }
+::view-transition-new(starx-tabbar), ::view-transition-new(starx-topbar), ::view-transition-new(starx-sidebar) { animation: none; }
 
 /* Ajustes do maplibre: o CSS dele fica fora das camadas, então estes também (e com seletor mais específico). */
 .device-map .maplibregl-ctrl-bottom-left { left: calc(50vw + 128px); transform: translateX(-50%); }
