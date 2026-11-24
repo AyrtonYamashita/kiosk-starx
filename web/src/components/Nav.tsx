@@ -83,6 +83,20 @@ export function TopBar() {
   );
 }
 
+/**
+ * Fecha a folha com a animação de saída: põe a classe "closing" (CSS anima 180 ms) e só então chama close() do
+ * <dialog>, que sozinho some na hora. Com movimento reduzido o CSS zera a animação; a espera é a mesma.
+ */
+const CLOSE_MS = 180;
+function closeAnimated(d: HTMLDialogElement | null) {
+  if (!d || !d.open || d.classList.contains("closing")) return;
+  d.classList.add("closing");
+  window.setTimeout(() => {
+    d.classList.remove("closing");
+    if (d.open) d.close();
+  }, CLOSE_MS);
+}
+
 /** Abas fixas da barra inferior; o resto do menu fica na folha "Mais". */
 const TAB_HREFS = ["/operations", "/cargas", "/"];
 
@@ -100,9 +114,9 @@ export function TabBar({ role }: { role: "admin" | "operator" }) {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
 
-  // fecha ao navegar e quando a tela passa para o layout de desktop (onde a barra some)
+  // fecha ao navegar (com animação) e quando a tela passa para o layout de desktop (na hora: a barra some)
   useEffect(() => {
-    sheetRef.current?.close();
+    closeAnimated(sheetRef.current);
   }, [path]);
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 1024px)");
@@ -120,7 +134,7 @@ export function TabBar({ role }: { role: "admin" | "operator" }) {
       setOpen(true);
     }
   };
-  const hide = () => sheetRef.current?.close();
+  const hide = () => closeAnimated(sheetRef.current);
 
   return (
     <>
@@ -151,6 +165,11 @@ export function TabBar({ role }: { role: "admin" | "operator" }) {
         id="more-sheet"
         className="more-sheet"
         aria-labelledby="more-sheet-title"
+        onCancel={(e) => {
+          // Esc / voltar do Android: fecha com a mesma animação dos outros jeitos
+          e.preventDefault();
+          hide();
+        }}
         onClose={() => {
           setOpen(false);
           triggerRef.current?.focus();
