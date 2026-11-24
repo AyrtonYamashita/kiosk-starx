@@ -221,12 +221,13 @@ dl.kv dd { margin: 0; word-break: break-word; }
 
 input, textarea, select {
   font: inherit; font-size: 12.5px; color: var(--ink); background: var(--surface);
-  border: 1px solid var(--line); border-radius: var(--radius-field); padding: 0 10px; width: 100%; height: var(--control);
+  border: 1px solid var(--field-line); border-radius: var(--radius-field); padding: 0 10px; width: 100%; height: var(--control);
   transition: border-color .12s ease-out;
 }
 textarea { min-height: 120px; height: auto; padding: 8px 10px; line-height: 18px; font-family: var(--font-mono); font-size: 11.5px; }
 input::placeholder, textarea::placeholder { color: var(--soft); }
-input:focus, textarea:focus, select:focus { outline: none; border-color: var(--blue); }
+/* foco: borda azul + 1 px a mais por fora (anel de 2 px), para não depender só da troca de cor da borda de 1 px */
+input:focus, textarea:focus, select:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 1px var(--blue); }
 input[type='checkbox'], input[type='radio'] { width: auto; height: auto; accent-color: var(--blue); }
 input[type='file'] { padding: 4px; height: auto; font-size: 12px; color: var(--mid); }
 input[type='file']::file-selector-button {
@@ -240,7 +241,7 @@ label.check-label input { width: auto; }
 /* Toggle (Switch da Animate UI): trilho com cantos de 4 px; o polegar só muda de lado no CSS, a mola anima */
 button.toggle {
   flex: none; display: inline-flex; align-items: center; justify-content: flex-start;
-  width: 34px; height: 20px; min-height: 0; padding: 2px; border: 1px solid var(--line); border-radius: var(--radius-chip);
+  width: 34px; height: 20px; min-height: 0; padding: 2px; border: 1px solid var(--field-line); border-radius: var(--radius-chip);
   background: var(--subtle); transition: background-color .15s ease-out, border-color .15s ease-out;
 }
 button.toggle:hover { background: var(--subtle); border-color: var(--mid); }

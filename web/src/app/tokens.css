@@ -16,8 +16,9 @@
   --line: #E2E8F0;
   --rule: #EDF1F6;
   --muted: #CBD5E1;   /* só decorativo */
+  --field-line: #7A8AA0; /* borda de campo e de toggle: ≥ 3:1 contra o campo, o card e o subtle (a --line, 1,2:1, é só divisória) */
   --faint: #94A3B8;   /* só decorativo, nunca texto */
-  --soft: #5B6B80;    /* rótulos: 5,4:1 sobre branco */
+  --soft: #516074;    /* rótulos: 6,4:1 sobre branco; ≥ 4,5:1 também no vidro da página do aparelho (era #5B6B80: 4,36:1 ali) */
   --mid: #334155;
   --ink: #0A1A2F;
   --on-ink: #FFFFFF;
@@ -25,7 +26,7 @@
   /* marca (azul de ação) */
   --blue: #1560D4;
   --on-blue: #FFFFFF;
-  --blue-deep: #0F4DB0;   /* texto e links em azul */
+  --blue-deep: #0C4399;   /* texto e links em azul; mesmo matiz da marca, ≥ 4,5:1 até sobre as bolhas do fundo (era #0F4DB0: 4,17:1) */
   --blue-press: #0F4DB0;
   --blue-soft: #5B9BF5;
   --blue-tint: #EEF4FD;
@@ -80,6 +81,7 @@
   --line: #1E3350;
   --rule: #182B45;
   --muted: #2A4466;
+  --field-line: #5F7592;
   --faint: #5F7592;
   --soft: #93A4BA;
   --mid: #B3C2D6;
