@@ -18,7 +18,7 @@ export function AppsTable({ apps }: { apps: DeviceDetail["apps"] }) {
   return (
     <>
       <div className="row">
-        <input placeholder="Buscar app ou pacote" value={query} onChange={(e) => setQuery(e.target.value)} style={{ maxWidth: 320 }} />
+        <input placeholder="Buscar app ou pacote" aria-label="Buscar app ou pacote" value={query} onChange={(e) => setQuery(e.target.value)} style={{ maxWidth: 320 }} />
         <label className="check-label">
           <Toggle checked={showSystem} onCheckedChange={setShowSystem} /> mostrar apps do sistema
         </label>

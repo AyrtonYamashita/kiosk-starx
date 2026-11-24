@@ -511,6 +511,7 @@ function AppsList({ apps, labelOf, onChange }: { apps: string[]; labelOf: (p: st
         <input
           list="catalog-apps"
           placeholder="pacote do app (a lista sugere os apps vistos nos aparelhos)"
+          aria-label="Pacote do app a adicionar"
           value={adding}
           onChange={(e) => setAdding(e.target.value)}
           onKeyDown={(e) => {
