@@ -19,6 +19,14 @@ export function lockKey(kind: LockKind, raw: string): string {
   return kind === "account" ? raw.trim().toLowerCase().slice(0, 200) : raw.slice(0, 64);
 }
 
+/**
+ * Chave de bloqueio de uma conta conhecida (erros do segundo fator). Pelo e-mail, que é único no sistema todo: o nome
+ * de usuário pode se repetir entre empresas, e o erro de uma não pode bloquear a conta de mesmo nome da outra.
+ */
+export function adminLockKey(a: { username: string; email: string | null }): string {
+  return lockKey("account", a.email ?? a.username);
+}
+
 /** Segundos até liberar (0 = liberado). */
 export async function lockedFor(db: Db, kind: LockKind, key: string): Promise<number> {
   const r = await db.query("SELECT extract(epoch FROM locked_until - now())::int AS sec FROM auth_lockouts WHERE kind = $1 AND key = $2 AND locked_until > now()", [

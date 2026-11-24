@@ -17,9 +17,9 @@ function size(n: number) {
 
 /**
  * App do kiosk: versão publicada (vai no QR e na atualização automática), versão enviada aguardando publicação
- * e quantos aparelhos estão em cada versão.
+ * e quantos aparelhos estão em cada versão. Enviar e publicar: só a plataforma (`canPublish`); a empresa só acompanha.
  */
-export function KioskRelease({ data }: { data: KR }) {
+export function KioskRelease({ data, canPublish = false }: { data: KR; canPublish?: boolean }) {
   const ask = useConfirm();
   const [pubState, publish, publishing] = useActionState(publishKiosk, undefined);
   const [disState, discard, discarding] = useActionState(discardKiosk, undefined);
@@ -75,7 +75,7 @@ export function KioskRelease({ data }: { data: KR }) {
         </dd>
       </dl>
 
-      {pending && (
+      {pending && canPublish && (
         <div className="card stack" style={{ background: "var(--blue-tint)", borderColor: "var(--blue-edge)" }}>
           <div className="row">
             <strong>
@@ -114,6 +114,7 @@ export function KioskRelease({ data }: { data: KR }) {
       )}
       {state?.error && <div className="alert error">{state.error}</div>}
 
+      {canPublish && (
       <details>
         <summary className="small">Enviar versão nova do app do kiosk</summary>
         <div className="stack" style={{ marginTop: 12 }}>
@@ -124,6 +125,7 @@ export function KioskRelease({ data }: { data: KR }) {
           </span>
         </div>
       </details>
+      )}
     </div>
   );
 }

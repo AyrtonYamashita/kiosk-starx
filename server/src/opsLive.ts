@@ -69,7 +69,7 @@ export function opMetrics(o: {
 }
 
 const CARD_SQL = `
-  SELECT d.id AS device_id, d.name AS device_name, s.ssw_user, s.domain, s.branch, s.screen,
+  SELECT d.id AS device_id, d.tenant_id, d.name AS device_name, s.ssw_user, s.domain, s.branch, s.screen,
          GREATEST(s.last_event_at, s.last_heartbeat_at) AS last_seen_at,
          o.id AS op_id, o.fn, o.plate, o.real_plate, o.units, o.started_at, o.total_qty, o.total_kg, o.total_value,
          o.read_qty, o.read_kg, o.read_value, o.scans, o.last_scan_at, o.scan_interval_sum_ms, o.scan_interval_count
@@ -104,12 +104,19 @@ function toCard(r: any): OpsCard {
   };
 }
 
-export async function allCards(db: Db): Promise<OpsCard[]> {
-  return (await db.query(`${CARD_SQL} ORDER BY d.name`)).rows.map(toCard);
+/** Cards dos coletores da empresa. */
+export async function allCards(db: Db, tenantId: string): Promise<OpsCard[]> {
+  return (await db.query(`${CARD_SQL} WHERE d.tenant_id = $1 ORDER BY d.name`, [tenantId])).rows.map(toCard);
 }
 
-export async function deviceCard(db: Db, deviceId: string): Promise<OpsCard | null> {
+/** Card de um coletor (com a empresa dele, para a tela ao vivo só mandar às telas daquela empresa). */
+export async function deviceCardWithTenant(db: Db, deviceId: string): Promise<{ card: OpsCard; tenantId: string } | null> {
   const r = (await db.query(`${CARD_SQL} WHERE s.device_id = $1`, [deviceId])).rows[0];
+  return r ? { card: toCard(r), tenantId: r.tenant_id } : null;
+}
+
+export async function deviceCard(db: Db, tenantId: string, deviceId: string): Promise<OpsCard | null> {
+  const r = (await db.query(`${CARD_SQL} WHERE s.device_id = $1 AND d.tenant_id = $2`, [deviceId, tenantId])).rows[0];
   return r ? toCard(r) : null;
 }
 
@@ -117,10 +124,13 @@ export async function deviceCard(db: Db, deviceId: string): Promise<OpsCard | nu
 
 const DEBOUNCE_MS = 150;
 
-/** Recebe "coletor X mudou", junta mudanças rápidas (150 ms) e emite o card novo uma vez para todas as telas. */
+/**
+ * Recebe "coletor X mudou", junta mudanças rápidas (150 ms) e emite o card novo uma vez. Cada evento leva a empresa
+ * do coletor: cada tela só recebe os da empresa dela.
+ */
 export class OpsLive extends EventEmitter {
   private pending = new Map<string, NodeJS.Timeout>();
-  private tickets = new Map<string, { adminId: string; sessionId: string; expiresAt: number }>();
+  private tickets = new Map<string, { adminId: string; sessionId: string; tenantId: string; expiresAt: number }>();
 
   constructor(
     private db: Db,
@@ -138,8 +148,8 @@ export class OpsLive extends EventEmitter {
       setTimeout(async () => {
         this.pending.delete(deviceId);
         try {
-          const card = await deviceCard(this.db, deviceId);
-          if (card) this.emit("card", card);
+          const r = await deviceCardWithTenant(this.db, deviceId);
+          if (r) this.emit("card", r.card, r.tenantId);
         } catch {
           /* banco fora: a próxima mudança tenta de novo */
         }
@@ -148,16 +158,16 @@ export class OpsLive extends EventEmitter {
   }
 
   /** Aparelho removido: as telas tiram o card. */
-  removed(deviceId: string) {
-    this.emit("removed", deviceId);
+  removed(deviceId: string, tenantId: string) {
+    this.emit("removed", deviceId, tenantId);
   }
 
-  issueTicket(adminId: string, sessionId: string): { ticket: string; expiresAt: string } {
+  issueTicket(adminId: string, sessionId: string, tenantId: string): { ticket: string; expiresAt: string } {
     const now = Date.now();
     for (const [k, v] of this.tickets) if (v.expiresAt < now) this.tickets.delete(k);
     const ticket = crypto.randomBytes(32).toString("base64url");
     const expiresAt = now + 60_000;
-    this.tickets.set(crypto.createHash("sha256").update(ticket).digest("hex"), { adminId, sessionId, expiresAt });
+    this.tickets.set(crypto.createHash("sha256").update(ticket).digest("hex"), { adminId, sessionId, tenantId, expiresAt });
     return { ticket, expiresAt: new Date(expiresAt).toISOString() };
   }
 

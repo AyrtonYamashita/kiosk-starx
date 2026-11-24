@@ -85,16 +85,16 @@ export class Push {
     return this.sender !== null && this.publicKey !== null;
   }
 
-  /** Para todos os usuários ativos que escolheram receber esse evento. Nunca lança (quem chama não espera). */
-  async notify(event: PushEvent, msg: PushMessage): Promise<void> {
+  /** Para os usuários ativos da empresa que escolheram receber esse evento. Nunca lança (quem chama não espera). */
+  async notify(tenantId: string, event: PushEvent, msg: PushMessage): Promise<void> {
     if (!this.enabled) return;
     try {
       const rows = await this.db.query<Row>(
         `SELECT s.id, s.endpoint, s.p256dh, s.auth FROM push_subscriptions s
          JOIN admins a ON a.id = s.admin_id AND a.disabled_at IS NULL
          LEFT JOIN push_prefs p ON p.admin_id = s.admin_id
-         WHERE $1 = ANY (COALESCE(p.events, $2::text[]))`,
-        [event, PUSH_EVENTS],
+         WHERE s.tenant_id = $3 AND $1 = ANY (COALESCE(p.events, $2::text[]))`,
+        [event, PUSH_EVENTS, tenantId],
       );
       await this.deliver(rows.rows, msg);
     } catch (e) {

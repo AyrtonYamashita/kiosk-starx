@@ -31,14 +31,19 @@ const LINKS: { href: string; label: string; short: string; icon: ComponentType<{
   { href: "/account", label: "Conta", short: "Conta", icon: UserRound, match: (p) => p.startsWith("/account") },
 ];
 
+/** Itens do menu para o papel; o usuário da plataforma (sem empresa) só vê Apps e Conta. */
+function linksFor(role: "admin" | "operator", platformOnly = false) {
+  return LINKS.filter((l) => (!l.adminOnly || role === "admin") && (!platformOnly || l.href === "/apps" || l.href === "/account"));
+}
+
 function initials(name: string) {
   return name.slice(0, 2).toUpperCase();
 }
 
 /** Menu lateral flutuante (desktop): marca, navegação e o bloco do usuário com "Sair". */
-export function Sidebar({ username, role }: { username: string; role: "admin" | "operator" }) {
+export function Sidebar({ username, role, platformOnly = false }: { username: string; role: "admin" | "operator"; platformOnly?: boolean }) {
   const path = usePathname();
-  const links = LINKS.filter((l) => !l.adminOnly || role === "admin");
+  const links = linksFor(role, platformOnly);
   return (
     <aside className="sidebar">
       <div className="brand">
@@ -60,7 +65,7 @@ export function Sidebar({ username, role }: { username: string; role: "admin" | 
           <span className="avatar">{initials(username)}</span>
           <span style={{ minWidth: 0 }}>
             <span className="name" style={{ display: "block", color: "var(--ink)" }}>{username}</span>
-            <span className="role">{role === "admin" ? "administrador" : "operador"}</span>
+            <span className="role">{platformOnly ? "plataforma" : role === "admin" ? "administrador" : "operador"}</span>
           </span>
         </Link>
         <form action={logout}>
@@ -91,9 +96,9 @@ const TAB_HREFS = ["/operations", "/cargas", "/"];
  * Barra de abas inferior (celular): 3 abas + "Mais". A folha "Mais" é um <dialog> modal (foco preso, Esc fecha,
  * o foco volta ao botão) com os demais itens do menu lateral e o "Sair".
  */
-export function TabBar({ role }: { role: "admin" | "operator" }) {
+export function TabBar({ role, platformOnly = false }: { role: "admin" | "operator"; platformOnly?: boolean }) {
   const path = usePathname();
-  const links = LINKS.filter((l) => !l.adminOnly || role === "admin");
+  const links = linksFor(role, platformOnly);
   const tabs = links.filter((l) => TAB_HREFS.includes(l.href));
   const more = links.filter((l) => !TAB_HREFS.includes(l.href));
   const moreActive = more.some((l) => l.match(path));

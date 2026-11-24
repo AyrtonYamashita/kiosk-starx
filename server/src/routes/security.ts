@@ -5,6 +5,7 @@ import type { Config } from "../config.js";
 import { hashPassword } from "../crypto.js";
 import { revokeTrust } from "./mfa.js";
 import type { Db } from "../db.js";
+import { requireTenant, tenantOf } from "../tenant.js";
 
 /** Só o papel admin: usuários, desbloqueios, auditoria e sessões dos outros. */
 async function requireRoleAdmin(req: FastifyRequest, reply: FastifyReply) {
@@ -47,15 +48,15 @@ export async function securityRoutes(app: FastifyInstance, opts: { db: Db; confi
 
   // ---------------------------------------------------------------- sessões ativas
 
-  /** As minhas sessões; admin com ?all=1 vê as de todos. */
+  /** As minhas sessões; admin com ?all=1 vê as de todos da empresa (a plataforma, as da plataforma). */
   app.get("/v1/admin/sessions", async (req) => {
     const all = (req.query as { all?: string }).all === "1" && req.admin!.role === "admin";
     const r = await db.query(
       `SELECT s.id, s.created_at, s.last_used_at, s.expires_at, s.ip, s.user_agent, a.username
        FROM sessions s JOIN admins a ON a.id = s.admin_id
-       WHERE ${liveSession} ${all ? "" : "AND s.admin_id = $1"}
+       WHERE ${liveSession} AND ${all ? "a.tenant_id IS NOT DISTINCT FROM $1" : "s.admin_id = $1"}
        ORDER BY s.last_used_at DESC`,
-      all ? [] : [req.admin!.id],
+      [all ? req.admin!.tenantId : req.admin!.id],
     );
     return {
       idleHours: config.sessionIdleHours,
@@ -78,25 +79,30 @@ export async function securityRoutes(app: FastifyInstance, opts: { db: Db; confi
     if (!z.uuid().safeParse(id).success) return reply.code(404).send({ error: "not_found" });
     const r =
       req.admin!.role === "admin"
-        ? await db.query("DELETE FROM sessions WHERE id = $1 RETURNING admin_id", [id])
+        ? await db.query(
+            "DELETE FROM sessions s USING admins a WHERE s.id = $1 AND a.id = s.admin_id AND a.tenant_id IS NOT DISTINCT FROM $2 RETURNING s.admin_id",
+            [id, req.admin!.tenantId],
+          )
         : await db.query("DELETE FROM sessions WHERE id = $1 AND admin_id = $2 RETURNING admin_id", [id, req.admin!.id]);
     if (!r.rowCount) return reply.code(404).send({ error: "not_found" });
     await audit(db, req, "session_revoked", { adminId: req.admin!.id, details: { sessionId: id, owner: r.rows[0].admin_id } });
     return { ok: true };
   });
 
-  // ---------------------------------------------------------------- só admin
+  // ---------------------------------------------------------------- só admin da empresa
   app.register(async (adm) => {
     adm.addHook("preHandler", requireRoleAdmin);
+    adm.addHook("preHandler", requireTenant);
 
-    adm.get("/v1/admin/users", async () => {
+    adm.get("/v1/admin/users", async (req) => {
       const r = await db.query(
         `SELECT a.*,
                 (SELECT count(*) FROM sessions s WHERE s.admin_id = a.id AND ${liveSession}) AS active_sessions,
                 (SELECT max(created_at) FROM auth_events e WHERE e.admin_id = a.id AND e.event = 'login_success') AS last_login_at,
                 (SELECT l.locked_until FROM auth_lockouts l WHERE l.kind = 'account' AND l.locked_until > now()
                    AND (l.key = lower(a.username) OR l.key = lower(a.email)) ORDER BY l.locked_until DESC LIMIT 1) AS locked_until
-         FROM admins a ORDER BY a.disabled_at IS NOT NULL, lower(a.username)`,
+         FROM admins a WHERE a.tenant_id = $1 ORDER BY a.disabled_at IS NOT NULL, lower(a.username)`,
+        [tenantOf(req)],
       );
       return { users: r.rows.map(userJson) };
     });
@@ -106,8 +112,8 @@ export async function securityRoutes(app: FastifyInstance, opts: { db: Db; confi
       if (!body.success) return reply.code(400).send({ error: "invalid_body", message: firstIssue(body.error) });
       try {
         const r = await db.query(
-          "INSERT INTO admins (username, email, role, password_hash, password_changed_at) VALUES ($1, $2, $3, $4, now()) RETURNING *",
-          [body.data.username, body.data.email, body.data.role, await hashPassword(body.data.password)],
+          "INSERT INTO admins (tenant_id, username, email, role, password_hash, password_changed_at) VALUES ($5, $1, $2, $3, $4, now()) RETURNING *",
+          [body.data.username, body.data.email, body.data.role, await hashPassword(body.data.password), tenantOf(req)],
         );
         await audit(db, req, "user_created", { adminId: req.admin!.id, details: { userId: r.rows[0].id, username: body.data.username, role: body.data.role } });
         return userJson(r.rows[0]);
@@ -127,11 +133,11 @@ export async function securityRoutes(app: FastifyInstance, opts: { db: Db; confi
       if (self && (b.disabled === true || b.role === "operator")) {
         return reply.code(400).send({ error: "self", message: "você não pode desativar nem rebaixar a própria conta" });
       }
-      const cur = (await db.query("SELECT * FROM admins WHERE id = $1", [id])).rows[0];
+      const cur = (await db.query("SELECT * FROM admins WHERE id = $1 AND tenant_id = $2", [id, tenantOf(req)])).rows[0];
       if (!cur) return reply.code(404).send({ error: "not_found" });
-      // sempre sobra ao menos um admin ativo
+      // sempre sobra ao menos um admin ativo na empresa
       if ((b.role === "operator" || b.disabled === true) && cur.role === "admin" && !cur.disabled_at) {
-        const admins = Number((await db.query("SELECT count(*) FROM admins WHERE role = 'admin' AND disabled_at IS NULL")).rows[0].count);
+        const admins = Number((await db.query("SELECT count(*) FROM admins WHERE tenant_id = $1 AND role = 'admin' AND disabled_at IS NULL", [tenantOf(req)])).rows[0].count);
         if (admins <= 1) return reply.code(400).send({ error: "last_admin", message: "precisa sobrar pelo menos um administrador ativo" });
       }
       try {
@@ -140,8 +146,8 @@ export async function securityRoutes(app: FastifyInstance, opts: { db: Db; confi
              disabled_at = CASE WHEN $4::boolean IS NULL THEN disabled_at WHEN $4 THEN COALESCE(disabled_at, now()) ELSE NULL END,
              password_hash = COALESCE($5, password_hash),
              password_changed_at = CASE WHEN $5::text IS NULL THEN password_changed_at ELSE now() END
-           WHERE id = $1 RETURNING *`,
-          [id, b.email ?? null, b.role ?? null, b.disabled ?? null, b.password ? await hashPassword(b.password) : null],
+           WHERE id = $1 AND tenant_id = $6 RETURNING *`,
+          [id, b.email ?? null, b.role ?? null, b.disabled ?? null, b.password ? await hashPassword(b.password) : null, tenantOf(req)],
         );
         // desativar, trocar papel ou senha: a pessoa precisa entrar de novo
         if (b.disabled === true || b.role || b.password) await db.query("DELETE FROM sessions WHERE admin_id = $1", [id]);
@@ -156,16 +162,28 @@ export async function securityRoutes(app: FastifyInstance, opts: { db: Db; confi
       }
     });
 
-    /** Bloqueios ativos (IP e conta). */
-    adm.get("/v1/admin/security/lockouts", async () => {
-      const r = await db.query("SELECT kind, key, level, locked_until FROM auth_lockouts WHERE locked_until > now() ORDER BY locked_until DESC");
+    /**
+     * Bloqueios ativos que a empresa vê (os bloqueios são globais, por IP e por identificador digitado): contas pelo
+     * nome ou e-mail de um usuário dela; IPs de onde alguém dela tentou entrar nas últimas 24 h.
+     */
+    const lockVisible = `(
+      (l.kind = 'account' AND EXISTS (SELECT 1 FROM admins a WHERE a.tenant_id = $1 AND (l.key = lower(a.username) OR l.key = lower(a.email))))
+      OR (l.kind = 'ip' AND EXISTS (SELECT 1 FROM auth_events e WHERE e.tenant_id = $1 AND e.ip = l.key AND e.created_at > now() - interval '24 hours'))
+    )`;
+
+    adm.get("/v1/admin/security/lockouts", async (req) => {
+      const r = await db.query(`SELECT kind, key, level, locked_until FROM auth_lockouts l WHERE locked_until > now() AND ${lockVisible} ORDER BY locked_until DESC`, [
+        tenantOf(req),
+      ]);
       return { lockouts: r.rows.map((l) => ({ kind: l.kind, key: l.key, level: l.level, lockedUntil: l.locked_until })) };
     });
 
-    /** Desbloqueio manual. */
+    /** Desbloqueio manual (só do que a empresa vê). */
     adm.post("/v1/admin/security/unlock", async (req, reply) => {
       const body = Unlock.safeParse(req.body);
       if (!body.success) return reply.code(400).send({ error: "invalid_body" });
+      const visible = await db.query(`SELECT 1 FROM auth_lockouts l WHERE l.kind = $2 AND l.key = $3 AND ${lockVisible}`, [tenantOf(req), body.data.kind, body.data.key]);
+      if (!visible.rowCount) return reply.code(404).send({ error: "not_found" });
       await clearLock(db, body.data.kind as LockKind, body.data.key);
       await audit(db, req, "unlock", { adminId: req.admin!.id, identifier: body.data.kind === "account" ? body.data.key : null, details: body.data });
       return { ok: true };
@@ -179,9 +197,13 @@ export async function securityRoutes(app: FastifyInstance, opts: { db: Db; confi
       const r = await db.query(
         `SELECT e.id, e.event, e.identifier, e.ip, e.user_agent, e.details, e.created_at, a.username
          FROM auth_events e LEFT JOIN admins a ON a.id = e.admin_id
-         ${byUser ? "WHERE e.admin_id = $2" : ""}
+         WHERE (e.tenant_id = $2
+                -- sem empresa (ex.: login barrado pelo bloqueio antes de achar a conta), mas digitando um usuário dela
+                OR (e.tenant_id IS NULL AND e.identifier IS NOT NULL AND EXISTS (
+                      SELECT 1 FROM admins x WHERE x.tenant_id = $2 AND (lower(e.identifier) = lower(x.username) OR lower(e.identifier) = lower(x.email)))))
+               ${byUser ? "AND e.admin_id = $3" : ""}
          ORDER BY e.created_at DESC LIMIT $1`,
-        byUser ? [limit, byUser] : [limit],
+        byUser ? [limit, tenantOf(req), byUser] : [limit, tenantOf(req)],
       );
       return {
         events: r.rows.map((e) => ({

@@ -4,6 +4,7 @@ import type { Push, PushEvent, PushMessage } from "./push.js";
 
 interface Row {
   id: string;
+  tenant_id: string;
   device_id: string;
   device_name: string;
   fn: string;
@@ -62,7 +63,7 @@ export async function notifyOps(db: Db, push: Push, started: string[], ended: st
   try {
     const rows = (
       await db.query<Row>(
-        `SELECT o.id, o.device_id, d.name AS device_name, o.fn, o.plate, o.real_plate, o.ssw_user, o.read_qty, o.total_qty,
+        `SELECT o.id, o.tenant_id, o.device_id, d.name AS device_name, o.fn, o.plate, o.real_plate, o.ssw_user, o.read_qty, o.total_qty,
                 o.ended_at, o.end_reason
          FROM ops_operations o JOIN devices d ON d.id = o.device_id WHERE o.id = ANY ($1::uuid[])`,
         [ids],
@@ -75,13 +76,13 @@ export async function notifyOps(db: Db, push: Push, started: string[], ended: st
       const o = byId.get(id);
       if (!o || endedSet.has(id)) continue;
       const { event, msg } = opsMessage(o, "start");
-      jobs.push(push.notify(event, msg));
+      jobs.push(push.notify(o.tenant_id, event, msg));
     }
     for (const id of new Set(ended)) {
       const o = byId.get(id);
       if (!o?.ended_at) continue; // reaberta nesse meio tempo
       const { event, msg } = opsMessage(o, "end");
-      jobs.push(push.notify(event, msg));
+      jobs.push(push.notify(o.tenant_id, event, msg));
     }
     await Promise.all(jobs);
   } catch {

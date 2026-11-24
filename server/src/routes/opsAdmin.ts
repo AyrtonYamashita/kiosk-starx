@@ -7,8 +7,9 @@ import { loadCurve, scansFromCurve } from "../opsRetention.js";
 import { OPS_READER_ON_SQL } from "../ops.js";
 import { audit } from "../auth.js";
 import type { Waker } from "../wake.js";
+import { tenantOf } from "../tenant.js";
 
-/** Painel (sessão normal): cards, detalhe de um coletor e ingresso para a conexão ao vivo. */
+/** Painel (sessão normal, escopo de empresa): cards, detalhe de um coletor e ingresso para a conexão ao vivo. */
 export async function opsAdminRoutes(app: FastifyInstance, opts: { db: Db; config: Config; live: OpsLive; waker: Waker }) {
   const { db, config, live, waker } = opts;
   // fuso da operação (validado no config): o dia começa à meia-noite local, não de Brasília nem UTC
@@ -23,9 +24,9 @@ export async function opsAdminRoutes(app: FastifyInstance, opts: { db: Db; confi
       `SELECT s.at, s.code, s.kind, s.read_qty, d.id AS device_id, d.name AS device_name,
               o.id AS op_id, o.fn, o.plate, o.ssw_user, o.branch, o.started_at, o.ended_at, o.end_reason
        FROM ops_scans s JOIN devices d ON d.id = s.device_id LEFT JOIN ops_operations o ON o.id = s.operation_id
-       WHERE s.code = $1 OR s.code LIKE $2
+       WHERE s.tenant_id = $3 AND (s.code = $1 OR s.code LIKE $2)
        ORDER BY (s.code = $1) DESC, s.at DESC LIMIT 100`,
-      [code, prefix],
+      [code, prefix, tenantOf(req)],
     );
     return {
       results: r.rows.map((x) => ({
@@ -69,8 +70,8 @@ export async function opsAdminRoutes(app: FastifyInstance, opts: { db: Db; confi
     const q = OpsListQuery.safeParse(req.query);
     if (!q.success) return reply.code(400).send({ error: "invalid_query" });
     const f = q.data;
-    const where: string[] = [];
-    const args: unknown[] = [];
+    const args: unknown[] = [tenantOf(req)];
+    const where: string[] = ["o.tenant_id = $1"];
     const add = (sql: string, v: unknown) => {
       args.push(v);
       where.push(sql.replace("?", `$${args.length}`));
@@ -98,7 +99,7 @@ export async function opsAdminRoutes(app: FastifyInstance, opts: { db: Db; confi
               o.scan_interval_sum_ms, o.scan_interval_count,
               extract(epoch FROM COALESCE(o.ended_at, now()) - o.started_at)::int AS duration_sec
        FROM ops_operations o JOIN devices d ON d.id = o.device_id
-       ${where.length ? "WHERE " + where.join(" AND ") : ""}
+       WHERE ${where.join(" AND ")}
        ORDER BY o.started_at DESC, o.id DESC LIMIT 51`,
       args,
     );
@@ -106,7 +107,8 @@ export async function opsAdminRoutes(app: FastifyInstance, opts: { db: Db; confi
     const last = rows[rows.length - 1];
     const users = (
       await db.query<{ u: string }>(
-        "SELECT DISTINCT ssw_user AS u FROM ops_operations WHERE ssw_user IS NOT NULL AND started_at > now() - interval '180 days' ORDER BY 1 LIMIT 500",
+        "SELECT DISTINCT ssw_user AS u FROM ops_operations WHERE tenant_id = $1 AND ssw_user IS NOT NULL AND started_at > now() - interval '180 days' ORDER BY 1 LIMIT 500",
+        [tenantOf(req)],
       )
     ).rows.map((x) => x.u);
     return {
@@ -138,13 +140,14 @@ export async function opsAdminRoutes(app: FastifyInstance, opts: { db: Db; confi
   });
 
   /** Chave geral da leitura do SSW e quantos coletores leem agora. */
-  app.get("/v1/admin/ops/settings", async () => {
+  app.get("/v1/admin/ops/settings", async (req) => {
     const r = (
       await db.query(
-        `SELECT (SELECT reader_all FROM ops_settings LIMIT 1) AS reader_all, count(*)::int AS total,
+        `SELECT (SELECT reader_all FROM ops_settings WHERE tenant_id = $1) AS reader_all, count(*)::int AS total,
                 (count(*) FILTER (WHERE ${OPS_READER_ON_SQL}))::int AS reading,
                 (count(*) FILTER (WHERE d.ops_reader IS NOT NULL))::int AS custom
-         FROM devices d`,
+         FROM devices d WHERE d.tenant_id = $1`,
+        [tenantOf(req)],
       )
     ).rows[0];
     return { readerAll: r.reader_all === true, devices: { total: r.total, reading: r.reading, custom: r.custom } };
@@ -156,23 +159,24 @@ export async function opsAdminRoutes(app: FastifyInstance, opts: { db: Db; confi
     const body = z.object({ readerAll: z.boolean() }).safeParse(req.body);
     if (!body.success) return reply.code(400).send({ error: "invalid_body" });
     const r = await db.query(
-      `UPDATE ops_settings s SET reader_all = $1, updated_at = now() FROM (SELECT reader_all AS before FROM ops_settings FOR UPDATE) o
-       RETURNING o.before`,
-      [body.data.readerAll],
+      `UPDATE ops_settings s SET reader_all = $1, updated_at = now()
+       FROM (SELECT tenant_id, reader_all AS before FROM ops_settings WHERE tenant_id = $2 FOR UPDATE) o
+       WHERE s.tenant_id = o.tenant_id RETURNING o.before`,
+      [body.data.readerAll, tenantOf(req)],
     );
     if (r.rows[0]?.before !== body.data.readerAll) {
       await audit(db, req, body.data.readerAll ? "ops_reader_all_on" : "ops_reader_all_off", { adminId: req.admin!.id });
       // os coletores que seguem a chave geral ficam sabendo na hora
-      const ids = (await db.query<{ id: string }>("SELECT id FROM devices WHERE ops_reader IS NULL")).rows.map((d) => d.id);
+      const ids = (await db.query<{ id: string }>("SELECT id FROM devices WHERE tenant_id = $1 AND ops_reader IS NULL", [tenantOf(req)])).rows.map((d) => d.id);
       waker.wake(ids);
     }
     return { ok: true };
   });
 
-  app.get("/v1/admin/ops/cards", async () => ({ cards: await allCards(db), serverTime: Date.now() }));
+  app.get("/v1/admin/ops/cards", async (req) => ({ cards: await allCards(db, tenantOf(req)), serverTime: Date.now() }));
 
   app.post("/v1/admin/ops/stream-ticket", async (req) => ({
-    ...live.issueTicket(req.admin!.id, req.admin!.sessionId),
+    ...live.issueTicket(req.admin!.id, req.admin!.sessionId, tenantOf(req)),
     url: `${config.publicUrl}/v1/ops/stream`,
   }));
 
@@ -181,7 +185,8 @@ export async function opsAdminRoutes(app: FastifyInstance, opts: { db: Db; confi
     const { id } = req.params as { id: string };
     const { op: opParam } = req.query as { op?: string };
     if (!z.uuid().safeParse(id).success || (opParam && !z.uuid().safeParse(opParam).success)) return reply.code(404).send({ error: "not_found" });
-    const device = (await db.query("SELECT id, name FROM devices WHERE id = $1", [id])).rows[0];
+    const tenantId = tenantOf(req);
+    const device = (await db.query("SELECT id, name FROM devices WHERE id = $1 AND tenant_id = $2", [id, tenantId])).rows[0];
     if (!device) return reply.code(404).send({ error: "not_found" });
 
     const op = (
@@ -237,8 +242,8 @@ export async function opsAdminRoutes(app: FastifyInstance, opts: { db: Db; confi
         (
           await db.query(
             `SELECT COALESCE(sum(extract(epoch FROM COALESCE(ended_at, now()) - started_at)), 0)::int AS s FROM ops_operations
-             WHERE ssw_user = $1 AND fn = $2 AND started_at >= (date_trunc('day', now() AT TIME ZONE '${TZ}') AT TIME ZONE '${TZ}')`,
-            [op.ssw_user, op.fn],
+             WHERE tenant_id = $3 AND ssw_user = $1 AND fn = $2 AND started_at >= (date_trunc('day', now() AT TIME ZONE '${TZ}') AT TIME ZONE '${TZ}')`,
+            [op.ssw_user, op.fn, tenantId],
           )
         ).rows[0].s,
       );
@@ -246,7 +251,7 @@ export async function opsAdminRoutes(app: FastifyInstance, opts: { db: Db; confi
 
     return {
       device,
-      card: await deviceCard(db, id),
+      card: await deviceCard(db, tenantId, id),
       operation: op
         ? {
             id: op.id,
@@ -277,6 +282,7 @@ export async function opsAdminRoutes(app: FastifyInstance, opts: { db: Db; confi
 }
 
 const MAX_STREAMS_PER_ADMIN = 10;
+const MAX_STREAMS_PER_TENANT = 100;
 const MAX_STREAMS = 300;
 const PING_MS = 15_000;
 const SESSION_CHECK_MS = 60_000;
@@ -285,6 +291,7 @@ const SESSION_CHECK_MS = 60_000;
 export async function opsStreamRoutes(app: FastifyInstance, opts: { db: Db; config: Config; live: OpsLive }) {
   const { db, config, live } = opts;
   const perAdmin = new Map<string, number>();
+  const perTenant = new Map<string, number>();
   let total = 0;
   const open = new Set<import("node:http").ServerResponse>();
   // ao desligar a API: fecha as conexões abertas (senão o desligamento espera por elas)
@@ -307,7 +314,7 @@ export async function opsStreamRoutes(app: FastifyInstance, opts: { db: Db; conf
         )
       ).rowCount;
     if (!(await sessionOk())) return reply.code(401).headers(cors).send({ error: "unauthorized" });
-    if (total >= MAX_STREAMS || (perAdmin.get(t.adminId) ?? 0) >= MAX_STREAMS_PER_ADMIN) {
+    if (total >= MAX_STREAMS || (perAdmin.get(t.adminId) ?? 0) >= MAX_STREAMS_PER_ADMIN || (perTenant.get(t.tenantId) ?? 0) >= MAX_STREAMS_PER_TENANT) {
       return reply.code(429).headers(cors).send({ error: "too_many_streams", message: "muitas telas abertas" });
     }
 
@@ -323,13 +330,19 @@ export async function opsStreamRoutes(app: FastifyInstance, opts: { db: Db; conf
     total++;
     open.add(res);
     perAdmin.set(t.adminId, (perAdmin.get(t.adminId) ?? 0) + 1);
+    perTenant.set(t.tenantId, (perTenant.get(t.tenantId) ?? 0) + 1);
     const send = (event: string, data: unknown) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
     // o navegador reconecta em 2 s se cair (com ingresso novo, pedido pela tela)
     res.write("retry: 2000\n\n");
-    send("snapshot", { cards: await allCards(db), serverTime: Date.now() });
+    send("snapshot", { cards: await allCards(db, t.tenantId), serverTime: Date.now() });
 
-    const onCard = (card: unknown) => send("card", card);
-    const onRemoved = (deviceId: string) => send("removed", { deviceId });
+    // só os coletores da empresa do ingresso
+    const onCard = (card: unknown, tenantId: string) => {
+      if (tenantId === t.tenantId) send("card", card);
+    };
+    const onRemoved = (deviceId: string, tenantId: string) => {
+      if (tenantId === t.tenantId) send("removed", { deviceId });
+    };
     live.on("card", onCard);
     live.on("removed", onRemoved);
     const ping = setInterval(() => send("ping", { serverTime: Date.now() }), PING_MS);
@@ -360,6 +373,9 @@ export async function opsStreamRoutes(app: FastifyInstance, opts: { db: Db; conf
       const left = (perAdmin.get(t.adminId) ?? 1) - 1;
       if (left > 0) perAdmin.set(t.adminId, left);
       else perAdmin.delete(t.adminId);
+      const leftT = (perTenant.get(t.tenantId) ?? 1) - 1;
+      if (leftT > 0) perTenant.set(t.tenantId, leftT);
+      else perTenant.delete(t.tenantId);
     };
     res.on("close", cleanup);
     res.on("error", cleanup);

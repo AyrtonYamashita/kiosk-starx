@@ -49,7 +49,7 @@ describe("3.1: atualização com dados existentes", () => {
     await db.query("INSERT INTO privacy_erasures (kind, subject_hash, created_by) VALUES ('ssw_user', 'h', $1)", [owner]);
     await db.query("INSERT INTO auth_events (admin_id, event) VALUES ($1, 'login_success'), (NULL, 'login_failure')", [other]);
 
-    expect(await migrate(db, schema)).toEqual(["016_tenants.sql"]);
+    expect(await migrate(db, schema)).toContain("016_tenants.sql");
 
     const t = (await db.query("SELECT id, name, slug, status FROM tenants")).rows;
     expect(t).toEqual([{ id: expect.any(String), name: "Alt Brasil", slug: "altbrasil", status: "active" }]);

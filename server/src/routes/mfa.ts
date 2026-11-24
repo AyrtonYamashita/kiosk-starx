@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
-import { audit, lockedFor, lockKey, recordFailure } from "../auth.js";
+import { adminLockKey, audit, lockedFor, recordFailure } from "../auth.js";
 import type { Config } from "../config.js";
 import { newToken, sha256, verifyPassword } from "../crypto.js";
 import type { Db } from "../db.js";
@@ -156,7 +156,7 @@ export async function mfaPublicRoutes(app: FastifyInstance, opts: { db: Db; conf
     if (!s) return reply.code(401).send({ error: "unauthorized", message: "a etapa de confirmação expirou: entre de novo" });
     const body = Verify.safeParse(req.body);
     if (!body.success) return reply.code(400).send({ error: "invalid_body", message: "informe o código" });
-    const accountKey = lockKey("account", s.username);
+    const accountKey = adminLockKey(s);
     const blocked = await lockedFor(db, "account", accountKey);
     if (blocked) return retry(reply, blocked, `Muitas tentativas. Tente de novo em ${blocked < 60 ? `${blocked} s` : `${Math.ceil(blocked / 60)} min`}.`);
 
@@ -343,7 +343,10 @@ export async function mfaAccountRoutes(app: FastifyInstance, opts: { db: Db; con
     if (req.admin!.role !== "admin") return reply.code(403).send({ error: "forbidden", message: "só administradores" });
     const { id } = req.params as { id: string };
     if (!z.uuid().safeParse(id).success) return reply.code(404).send({ error: "not_found" });
-    if (!(await db.query("SELECT 1 FROM admins WHERE id = $1", [id])).rowCount) return reply.code(404).send({ error: "not_found" });
+    // só usuários da mesma empresa (a plataforma, só os da plataforma)
+    if (!(await db.query("SELECT 1 FROM admins WHERE id = $1 AND tenant_id IS NOT DISTINCT FROM $2", [id, req.admin!.tenantId])).rowCount) {
+      return reply.code(404).send({ error: "not_found" });
+    }
     await db.query("DELETE FROM recovery_codes WHERE admin_id = $1", [id]);
     await db.query("DELETE FROM trusted_devices WHERE admin_id = $1", [id]);
     await db.query("DELETE FROM admin_totp WHERE admin_id = $1", [id]);
@@ -361,7 +364,7 @@ export async function revokeTrust(db: Db, adminId: string) {
 
 /** Confere a senha atual (ativar/desativar app ou passkey). Erro conta no bloqueio da conta, como no login. */
 export async function checkCurrentPassword(db: Db, req: FastifyRequest, reply: FastifyReply, password: unknown): Promise<boolean> {
-  const key = lockKey("account", req.admin!.username);
+  const key = adminLockKey(req.admin!);
   const blocked = await lockedFor(db, "account", key);
   if (blocked) {
     retry(reply, blocked, `Muitas tentativas. Tente de novo em ${blocked < 60 ? `${blocked} s` : `${Math.ceil(blocked / 60)} min`}.`);

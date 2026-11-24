@@ -13,16 +13,16 @@ export function subjectHash(secret: string, sswUser: string): string {
   return crypto.createHmac("sha256", `privacy-erasure:${secret}`).update(sswUser).digest("hex");
 }
 
-/** Busca colaboradores pelo começo do usuário do SSW (ou todos, sem `q`), com um resumo de cada um. */
-export async function searchSubjects(db: Db, q: string) {
+/** Busca colaboradores da empresa pelo começo do usuário do SSW (ou todos, sem `q`), com um resumo de cada um. */
+export async function searchSubjects(db: Db, tenantId: string, q: string) {
   const like = q.replace(/[\\%_]/g, (c) => "\\" + c) + "%";
   const r = await db.query(
     `SELECT o.ssw_user AS user, count(*)::int AS operations, min(o.started_at) AS first_at, max(o.started_at) AS last_at,
             COALESCE(sum(o.scans), 0)::int AS scans
      FROM ops_operations o
-     WHERE o.ssw_user IS NOT NULL AND o.ssw_user ILIKE $1
+     WHERE o.tenant_id = $2 AND o.ssw_user IS NOT NULL AND o.ssw_user ILIKE $1
      GROUP BY o.ssw_user ORDER BY max(o.started_at) DESC LIMIT 50`,
-    [like],
+    [like, tenantId],
   );
   return r.rows.map((x) => ({ user: x.user, operations: x.operations, firstAt: x.first_at, lastAt: x.last_at, scans: x.scans }));
 }
@@ -45,16 +45,19 @@ const DESCRIPTION = {
   direitos: "Confirmação, acesso, correção, anonimização, bloqueio, eliminação, portabilidade, informação sobre compartilhamento e oposição (LGPD, Art. 18), pelo canal de privacidade da empresa",
 };
 
-/** Tudo o que existe sobre um colaborador (só registros dele; nenhum dado de colegas). */
-export async function exportSubject(db: Db, sswUser: string) {
+/**
+ * Tudo o que a empresa tem sobre um colaborador (só registros dele; nenhum dado de colegas). O mesmo usuário do SSW
+ * em outra empresa é outra pessoa para este fim: cada empresa responde pelos dados dela.
+ */
+export async function exportSubject(db: Db, tenantId: string, sswUser: string) {
   const ops = (
     await db.query(
       `SELECT o.id, o.fn, o.plate, o.real_plate, o.units, o.domain, o.branch, o.started_at, o.ended_at, o.end_reason,
               o.total_qty, o.total_kg, o.total_value, o.read_qty, o.read_kg, o.read_value, o.scans,
               o.scan_interval_sum_ms, o.scan_interval_count, d.name AS device
        FROM ops_operations o JOIN devices d ON d.id = o.device_id
-       WHERE o.ssw_user = $1 ORDER BY o.started_at`,
-      [sswUser],
+       WHERE o.tenant_id = $2 AND o.ssw_user = $1 ORDER BY o.started_at`,
+      [sswUser, tenantId],
     )
   ).rows;
   const ids = ops.map((o) => o.id);
@@ -69,15 +72,16 @@ export async function exportSubject(db: Db, sswUser: string) {
   const events = (
     await db.query(
       `SELECT type, at, data FROM ops_events
-       WHERE operation_id = ANY($1::uuid[]) OR (type IN ('session', 'heartbeat') AND data->>'user' = $2)
+       WHERE tenant_id = $3 AND (operation_id = ANY($1::uuid[]) OR (type IN ('session', 'heartbeat') AND data->>'user' = $2))
        ORDER BY at`,
-      [ids, sswUser],
+      [ids, sswUser, tenantId],
     )
   ).rows;
   const current = (
-    await db.query("SELECT d.name AS device, s.screen, s.last_event_at FROM ops_device_state s JOIN devices d ON d.id = s.device_id WHERE s.ssw_user = $1", [
-      sswUser,
-    ])
+    await db.query(
+      "SELECT d.name AS device, s.screen, s.last_event_at FROM ops_device_state s JOIN devices d ON d.id = s.device_id WHERE s.tenant_id = $2 AND s.ssw_user = $1",
+      [sswUser, tenantId],
+    )
   ).rows;
 
   return {
@@ -107,15 +111,15 @@ export async function exportSubject(db: Db, sswUser: string) {
   };
 }
 
-/** Remove o usuário do SSW de todos os registros (as cargas ficam, sem identificação). Devolve o que mudou. */
-export async function anonymizeSubject(db: Db, secret: string, sswUser: string, adminId: string | null) {
+/** Remove o usuário do SSW de todos os registros da empresa (as cargas ficam, sem identificação). Devolve o que mudou. */
+export async function anonymizeSubject(db: Db, secret: string, tenantId: string, sswUser: string, adminId: string | null) {
   const c = await db.connect();
   try {
     await c.query("BEGIN");
-    const r = await scrub(c, sswUser);
+    const r = await scrub(c, tenantId, sswUser);
     await c.query(
-      "INSERT INTO privacy_erasures (kind, subject_hash, created_by) VALUES ('ssw_user', $1, $2) ON CONFLICT (tenant_id, kind, subject_hash) DO NOTHING",
-      [subjectHash(secret, sswUser), adminId],
+      "INSERT INTO privacy_erasures (tenant_id, kind, subject_hash, created_by) VALUES ($3, 'ssw_user', $1, $2) ON CONFLICT (tenant_id, kind, subject_hash) DO NOTHING",
+      [subjectHash(secret, sswUser), adminId, tenantId],
     );
     await c.query("COMMIT");
     return r;
@@ -128,36 +132,39 @@ export async function anonymizeSubject(db: Db, secret: string, sswUser: string, 
 }
 
 type Q = { query: Db["query"] };
-async function scrub(c: Q, sswUser: string) {
-  const n = async (sql: string) => (await c.query(sql, [sswUser])).rowCount ?? 0;
+async function scrub(c: Q, tenantId: string, sswUser: string) {
+  const n = async (sql: string) => (await c.query(sql, [sswUser, tenantId])).rowCount ?? 0;
   return {
-    operations: await n("UPDATE ops_operations SET ssw_user = NULL, updated_at = now() WHERE ssw_user = $1"),
-    current: await n("UPDATE ops_device_state SET ssw_user = NULL, updated_at = now() WHERE ssw_user = $1"),
-    events: await n("UPDATE ops_events SET data = data - 'user' WHERE type IN ('session', 'heartbeat') AND data->>'user' = $1"),
+    operations: await n("UPDATE ops_operations SET ssw_user = NULL, updated_at = now() WHERE tenant_id = $2 AND ssw_user = $1"),
+    current: await n("UPDATE ops_device_state SET ssw_user = NULL, updated_at = now() WHERE tenant_id = $2 AND ssw_user = $1"),
+    events: await n("UPDATE ops_events SET data = data - 'user' WHERE tenant_id = $2 AND type IN ('session', 'heartbeat') AND data->>'user' = $1"),
   };
 }
 
 /**
- * Depois de restaurar um backup anterior a uma anonimização, os identificadores voltam: esta rotina reaplica
- * (compara o HMAC de cada usuário ainda presente com a lista de anonimizados). Devolve quantos foram reaplicados.
+ * Depois de restaurar um backup anterior a uma anonimização, os identificadores voltam: esta rotina reaplica, empresa
+ * por empresa (compara o HMAC de cada usuário ainda presente com a lista de anonimizados dela). Devolve quantos
+ * foram reaplicados.
  */
 export async function reapplyErasures(db: Db, secret: string): Promise<number> {
-  const erased = new Set(
-    (await db.query<{ h: string }>("SELECT subject_hash AS h FROM privacy_erasures WHERE kind = 'ssw_user'")).rows.map((x) => x.h),
-  );
-  if (!erased.size) return 0;
-  const users = (
-    await db.query<{ u: string }>(
-      `SELECT ssw_user AS u FROM ops_operations WHERE ssw_user IS NOT NULL
-       UNION SELECT ssw_user FROM ops_device_state WHERE ssw_user IS NOT NULL
-       UNION SELECT data->>'user' FROM ops_events WHERE type IN ('session', 'heartbeat') AND data->>'user' IS NOT NULL`,
-    )
-  ).rows.map((x) => x.u);
+  const rows = (await db.query<{ t: string; h: string }>("SELECT tenant_id AS t, subject_hash AS h FROM privacy_erasures WHERE kind = 'ssw_user'")).rows;
+  const byTenant = new Map<string, Set<string>>();
+  for (const r of rows) byTenant.set(r.t, (byTenant.get(r.t) ?? new Set()).add(r.h));
   let n = 0;
-  for (const u of users) {
-    if (!erased.has(subjectHash(secret, u))) continue;
-    await scrub(db, u);
-    n++;
+  for (const [tenantId, erased] of byTenant) {
+    const users = (
+      await db.query<{ u: string }>(
+        `SELECT ssw_user AS u FROM ops_operations WHERE tenant_id = $1 AND ssw_user IS NOT NULL
+         UNION SELECT ssw_user FROM ops_device_state WHERE tenant_id = $1 AND ssw_user IS NOT NULL
+         UNION SELECT data->>'user' FROM ops_events WHERE tenant_id = $1 AND type IN ('session', 'heartbeat') AND data->>'user' IS NOT NULL`,
+        [tenantId],
+      )
+    ).rows.map((x) => x.u);
+    for (const u of users) {
+      if (!erased.has(subjectHash(secret, u))) continue;
+      await scrub(db, tenantId, u);
+      n++;
+    }
   }
   return n;
 }

@@ -74,7 +74,8 @@ describe("prazos de guarda (LGPD)", () => {
     const mk = async (u: string, disabled: string | null) =>
       (
         await t.db.query(
-          `INSERT INTO admins (username, email, password_hash, role, disabled_at) VALUES ($1, $2, 'hash', 'operator', ${disabled ?? "NULL"}) RETURNING id`,
+          `INSERT INTO admins (tenant_id, username, email, password_hash, role, disabled_at)
+           VALUES ((SELECT id FROM tenants LIMIT 1), $1, $2, 'hash', 'operator', ${disabled ?? "NULL"}) RETURNING id`,
           [u, `${u}@exemplo.com`],
         )
       ).rows[0].id as string;

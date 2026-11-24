@@ -5,7 +5,7 @@ import { hashPassword, needsRehash, newEnrollmentCode, newToken, sha256, verifyP
 import type { Db } from "../db.js";
 import { redactConfig } from "../kioskConfig.js";
 import { provisioningPayload, readRelease } from "../release.js";
-import { appRepoRoutes } from "./apps.js";
+import { appRepoRoutes, kioskReleaseRoutes } from "./apps.js";
 import { commandRoutes } from "./commands.js";
 import { configStatus, profileRoutes } from "./profiles.js";
 import { securityRoutes } from "./security.js";
@@ -18,7 +18,8 @@ import type { Push } from "../push.js";
 import { OPS_READER_ON_SQL } from "../ops.js";
 import type { OpsLive } from "../opsLive.js";
 import type { Mailer } from "../mfa.js";
-import { audit, clearLock, lockedFor, lockKey, recordFailure } from "../auth.js";
+import { adminLockKey, audit, clearLock, lockedFor, lockKey, recordFailure } from "../auth.js";
+import { requireTenant, tenantOf } from "../tenant.js";
 import type { Waker } from "../wake.js";
 
 declare module "fastify" {
@@ -120,21 +121,36 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
       return tooMany(reply, blocked);
     }
 
-    const admin = (
-      await db.query("SELECT id, username, email, password_hash, disabled_at FROM admins WHERE username = $1 OR lower(email) = lower($1) ORDER BY username = $1 DESC LIMIT 1", [
-        identifier,
-      ])
-    ).rows[0];
-    // conta bloqueada pelo segundo fator (erros de código contam no usuário, qualquer que seja o identificador digitado)
-    if (admin) {
-      const mfaLock = await lockedFor(db, "account", lockKey("account", admin.username));
-      if (mfaLock > 0) {
-        await audit(db, req, "login_blocked", { adminId: admin.id, identifier, details: { retryAfterSec: mfaLock } });
-        return tooMany(reply, mfaLock);
-      }
+    // O e-mail é único no sistema todo; o nome de usuário, só dentro da empresa. Nome repetido em mais de uma empresa:
+    // vale a conta cuja senha confere (o login não pergunta a empresa).
+    const cols = "id, username, email, password_hash, disabled_at";
+    let candidates = (await db.query(`SELECT ${cols} FROM admins WHERE lower(email) = lower($1)`, [identifier])).rows;
+    if (!candidates.length) candidates = (await db.query(`SELECT ${cols} FROM admins WHERE username = $1 ORDER BY created_at LIMIT 5`, [identifier])).rows;
+    // conta bloqueada pelo segundo fator (erros de código contam na conta, qualquer que seja o identificador digitado)
+    const mfaBlocked = async (a: { id: string; username: string; email: string | null }) => {
+      const sec = await lockedFor(db, "account", adminLockKey(a));
+      if (sec > 0) await audit(db, req, "login_blocked", { adminId: a.id, identifier, details: { retryAfterSec: sec } });
+      return sec;
+    };
+    if (candidates.length === 1) {
+      const sec = await mfaBlocked(candidates[0]);
+      if (sec > 0) return tooMany(reply, sec);
     }
     // conta inexistente gasta o mesmo tempo (hash falso): a resposta não revela quais contas existem
-    const passwordOk = admin ? await verifyPassword(body.data.password, admin.password_hash) : await verifyPassword(body.data.password, await DUMMY_HASH_PROMISE()).then(() => false);
+    let admin = candidates.length === 1 ? candidates[0] : undefined;
+    let passwordOk = false;
+    if (!candidates.length) await verifyPassword(body.data.password, await DUMMY_HASH_PROMISE());
+    for (const c of candidates) {
+      if (await verifyPassword(body.data.password, c.password_hash)) {
+        admin = c;
+        passwordOk = true;
+        break;
+      }
+    }
+    if (passwordOk && candidates.length > 1) {
+      const sec = await mfaBlocked(admin!);
+      if (sec > 0) return tooMany(reply, sec);
+    }
     const ok = passwordOk && !admin.disabled_at;
     if (!ok) {
       const reason = !admin ? "unknown_account" : admin.disabled_at ? "disabled" : "bad_password";
@@ -180,10 +196,6 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
   app.register(async (priv) => {
     priv.addHook("preHandler", requireAdmin);
 
-    await priv.register(profileRoutes, { db, waker });
-    await priv.register(commandRoutes, { db, waker });
-    await priv.register(appRepoRoutes, { db, config });
-
     priv.post("/v1/admin/logout", async (req) => {
       await db.query("DELETE FROM sessions WHERE id = $1", [req.admin!.sessionId]);
       await audit(db, req, "logout", { adminId: req.admin!.id });
@@ -202,12 +214,13 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
       };
     });
 
+    // conta e segurança: valem também para o usuário da plataforma (as rotas de empresa conferem por dentro)
     await priv.register(securityRoutes, { db, config });
     await priv.register(mfaAccountRoutes, { db, config });
     await priv.register(passkeyAccountRoutes, { db, config });
-    await priv.register(opsAdminRoutes, { db, config, live: opts.live, waker });
     await priv.register(privacyRoutes, { db, config });
     await priv.register(pushRoutes, { db, push: opts.push });
+    await priv.register(kioskReleaseRoutes, { db, config });
 
     priv.post("/v1/admin/password", async (req, reply) => {
       const body = ChangePassword.safeParse(req.body);
@@ -222,9 +235,17 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
       return { ok: true };
     });
 
+    // ---------------------------------------------------------------- dados da empresa (só com empresa na sessão)
+    await priv.register(async (ten) => {
+    ten.addHook("preHandler", requireTenant);
+    await ten.register(profileRoutes, { db, waker });
+    await ten.register(commandRoutes, { db, waker });
+    await ten.register(appRepoRoutes, { db, config });
+    await ten.register(opsAdminRoutes, { db, config, live: opts.live, waker });
+
     // ---------------------------------------------------------------- aparelhos
 
-    priv.get("/v1/admin/devices", async () => {
+    ten.get("/v1/admin/devices", async (req) => {
       const r = await db.query(
         `SELECT d.id, d.name, d.serial, d.manufacturer, d.model, d.android_version, d.app_version, d.enrolled_at, d.last_seen_at, d.last_ip,
                 d.info->'battery' AS battery, d.info->'network' AS network, d.info->'app' AS app, d.config_revision, d.config_source,
@@ -232,9 +253,10 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
                 d.config->'kiosk'->>'mode' AS kiosk_mode, (d.config->'kiosk'->>'enabled')::boolean AS kiosk_enabled,
                 d.last_seen_at > now() - make_interval(secs => $1) AS online,
                 d.profile_id, p.name AS profile_name, p.config AS profile_config, d.config_overrides, d.config_nonce, d.applied_hash, d.failed_hash,
-                d.ops_reader, ${OPS_READER_ON_SQL} AS ops_reader_on, s.ssw_user
-         FROM devices d LEFT JOIN profiles p ON p.id = d.profile_id LEFT JOIN ops_device_state s ON s.device_id = d.id ORDER BY d.name`,
-        [onlineWindowSec(config)],
+                d.ops_reader, ${OPS_READER_ON_SQL} AS ops_reader_on, s.ssw_user, d.transferred_at
+         FROM devices d LEFT JOIN profiles p ON p.id = d.profile_id LEFT JOIN ops_device_state s ON s.device_id = d.id
+         WHERE d.tenant_id = $2 ORDER BY d.name`,
+        [onlineWindowSec(config), tenantOf(req)],
       );
       return {
         onlineWindowSec: onlineWindowSec(config),
@@ -274,21 +296,23 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
           profileName: d.profile_name,
           hasOverrides: !!d.config_overrides,
           configStatus: configStatus(d).status,
+          // cadastrado depois com o código de outra empresa: o token daqui não vale mais
+          transferredAt: d.transferred_at,
         })),
       };
     });
 
-    priv.get("/v1/admin/devices/:id", async (req, reply) => {
+    ten.get("/v1/admin/devices/:id", async (req, reply) => {
       const { id } = req.params as { id: string };
       if (!z.uuid().safeParse(id).success) return reply.code(404).send({ error: "not_found" });
       const r = await db.query(
         `SELECT d.*, e.name AS enrollment_name, d.last_seen_at > now() - make_interval(secs => $2) AS online,
                 p.name AS profile_name, p.config AS profile_config, p.managed_apps,
                 (SELECT ssw_user FROM ops_device_state s WHERE s.device_id = d.id) AS ssw_user,
-                ${OPS_READER_ON_SQL} AS ops_reader_on, (SELECT reader_all FROM ops_settings LIMIT 1) AS ops_reader_all
+                ${OPS_READER_ON_SQL} AS ops_reader_on, (SELECT reader_all FROM ops_settings os WHERE os.tenant_id = d.tenant_id) AS ops_reader_all
          FROM devices d LEFT JOIN enrollment_codes e ON e.id = d.enrollment_code_id LEFT JOIN profiles p ON p.id = d.profile_id
-         WHERE d.id = $1`,
-        [id, onlineWindowSec(config)],
+         WHERE d.id = $1 AND d.tenant_id = $3`,
+        [id, onlineWindowSec(config), tenantOf(req)],
       );
       const d = r.rows[0];
       if (!d) return reply.code(404).send({ error: "not_found" });
@@ -329,10 +353,11 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
         opsReaderChoice: d.ops_reader ?? null,
         opsReaderAll: d.ops_reader_all === true,
         sswUser: d.ssw_user ?? null,
+        transferredAt: d.transferred_at,
       };
     });
 
-    priv.patch("/v1/admin/devices/:id", async (req, reply) => {
+    ten.patch("/v1/admin/devices/:id", async (req, reply) => {
       const { id } = req.params as { id: string };
       const body = DevicePatch.safeParse(req.body);
       if (!body.success || !z.uuid().safeParse(id).success) return reply.code(400).send({ error: "invalid_body" });
@@ -342,9 +367,9 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
                                           WHEN $2 = '' THEN COALESCE(NULLIF(concat_ws(' ', d.model, right(d.serial, 4)), ''), 'Aparelho')
                                           ELSE $2 END,
                               ops_reader = CASE WHEN $4 THEN $3::boolean ELSE d.ops_reader END
-         FROM (SELECT id, ops_reader AS before FROM devices WHERE id = $1 FOR UPDATE) o
+         FROM (SELECT id, ops_reader AS before FROM devices WHERE id = $1 AND tenant_id = $5 FOR UPDATE) o
          WHERE d.id = o.id RETURNING o.before`,
-        [id, name ?? null, opsReader ?? null, opsReader !== undefined],
+        [id, name ?? null, opsReader ?? null, opsReader !== undefined, tenantOf(req)],
       );
       if (!r.rowCount) return reply.code(404).send({ error: "not_found" });
       if (opsReader !== undefined && opsReader !== r.rows[0].before) {
@@ -357,21 +382,22 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
     });
 
     /** Remove do painel. O token deixa de valer: o aparelho mostra "removido do painel" até ser cadastrado de novo. */
-    priv.delete("/v1/admin/devices/:id", async (req, reply) => {
+    ten.delete("/v1/admin/devices/:id", async (req, reply) => {
       const { id } = req.params as { id: string };
       if (!z.uuid().safeParse(id).success) return reply.code(404).send({ error: "not_found" });
-      const r = await db.query("DELETE FROM devices WHERE id = $1", [id]);
+      const r = await db.query("DELETE FROM devices WHERE id = $1 AND tenant_id = $2", [id, tenantOf(req)]);
       if (!r.rowCount) return reply.code(404).send({ error: "not_found" });
-      opts.live.removed(id);
+      opts.live.removed(id, tenantOf(req));
       return { ok: true };
     });
 
     // ---------------------------------------------------------------- códigos de cadastro
 
-    priv.get("/v1/admin/enrollments", async () => {
+    ten.get("/v1/admin/enrollments", async (req) => {
       const r = await db.query(
         `SELECT e.*, (SELECT count(*)::int FROM devices d WHERE d.enrollment_code_id = e.id) AS devices, p.name AS profile_name
-         FROM enrollment_codes e LEFT JOIN profiles p ON p.id = e.profile_id ORDER BY e.created_at DESC`,
+         FROM enrollment_codes e LEFT JOIN profiles p ON p.id = e.profile_id WHERE e.tenant_id = $1 ORDER BY e.created_at DESC`,
+        [tenantOf(req)],
       );
       return {
         release: readRelease(config.apkDir),
@@ -379,36 +405,37 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
       };
     });
 
-    priv.post("/v1/admin/enrollments", async (req, reply) => {
+    ten.post("/v1/admin/enrollments", async (req, reply) => {
       const body = CreateCode.safeParse(req.body);
       if (!body.success) return reply.code(400).send({ error: "invalid_body", details: body.error.issues });
       const b = body.data;
-      if (b.profileId && !(await db.query("SELECT 1 FROM profiles WHERE id = $1", [b.profileId])).rowCount) {
+      const tenantId = tenantOf(req);
+      if (b.profileId && !(await db.query("SELECT 1 FROM profiles WHERE id = $1 AND tenant_id = $2", [b.profileId, tenantId])).rowCount) {
         return reply.code(400).send({ error: "invalid_profile", message: "perfil não existe" });
       }
       const expires = b.expiresInDays ? new Date(Date.now() + b.expiresInDays * 86_400_000) : null;
       const r = await db.query(
-        `INSERT INTO enrollment_codes (code, name, max_uses, expires_at, initial_config, profile_id) VALUES ($1, $2, $3, $4, $5, $6)
+        `INSERT INTO enrollment_codes (tenant_id, code, name, max_uses, expires_at, initial_config, profile_id) VALUES ($7, $1, $2, $3, $4, $5, $6)
          RETURNING *, 0 AS devices, (SELECT name FROM profiles WHERE id = $6) AS profile_name`,
-        [newEnrollmentCode(), b.name, b.maxUses ?? null, expires, b.initialConfig ?? null, b.profileId ?? null],
+        [newEnrollmentCode(), b.name, b.maxUses ?? null, expires, b.initialConfig ?? null, b.profileId ?? null, tenantId],
       );
       return codeJson(r.rows[0]);
     });
 
-    priv.delete("/v1/admin/enrollments/:id", async (req, reply) => {
+    ten.delete("/v1/admin/enrollments/:id", async (req, reply) => {
       const { id } = req.params as { id: string };
       if (!z.uuid().safeParse(id).success) return reply.code(404).send({ error: "not_found" });
-      const r = await db.query("UPDATE enrollment_codes SET revoked_at = now() WHERE id = $1 AND revoked_at IS NULL", [id]);
+      const r = await db.query("UPDATE enrollment_codes SET revoked_at = now() WHERE id = $1 AND tenant_id = $2 AND revoked_at IS NULL", [id, tenantOf(req)]);
       if (!r.rowCount) return reply.code(404).send({ error: "not_found" });
       return { ok: true };
     });
 
     /** Conteúdo do QR de provisionamento (o painel desenha o QR). O Wi-Fi vai só no QR, não fica gravado. */
-    priv.post("/v1/admin/enrollments/:id/qr", async (req, reply) => {
+    ten.post("/v1/admin/enrollments/:id/qr", async (req, reply) => {
       const { id } = req.params as { id: string };
       const body = Qr.safeParse(req.body ?? {});
       if (!body.success || !z.uuid().safeParse(id).success) return reply.code(400).send({ error: "invalid_body" });
-      const e = (await db.query("SELECT * FROM enrollment_codes WHERE id = $1", [id])).rows[0];
+      const e = (await db.query("SELECT * FROM enrollment_codes WHERE id = $1 AND tenant_id = $2", [id, tenantOf(req)])).rows[0];
       if (!e) return reply.code(404).send({ error: "not_found" });
       const release = readRelease(config.apkDir);
       if (!release) return reply.code(409).send({ error: "no_release", message: "nenhum APK publicado no servidor (veja deploy/README.md)" });
@@ -421,6 +448,7 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
         }),
         release,
       };
+    });
     });
   });
 
@@ -461,6 +489,9 @@ export async function ensureAdmin(db: Db, config: Config, log: { info: (msg: str
   const count = Number((await db.query("SELECT count(*) FROM admins")).rows[0].count);
   if (count > 0 || !config.adminUsername || !config.adminPassword) return;
   // instalação nova: admin da primeira empresa (usuário da plataforma se marca à parte; veja docs/multiempresa.md)
-  await db.query("INSERT INTO admins (username, password_hash) VALUES ($1, $2)", [config.adminUsername, await hashPassword(config.adminPassword)]);
+  await db.query("INSERT INTO admins (tenant_id, username, password_hash) VALUES ((SELECT id FROM tenants ORDER BY created_at LIMIT 1), $1, $2)", [
+    config.adminUsername,
+    await hashPassword(config.adminPassword),
+  ]);
   log.info(`administrador inicial "${config.adminUsername}" criado (troque a senha e remova ADMIN_PASSWORD do .env)`);
 }

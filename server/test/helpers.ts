@@ -116,6 +116,30 @@ export async function setupApi(opts: { config?: Partial<Config>; pushSender?: Pu
   return ctx;
 }
 
+type Ctx = Awaited<ReturnType<typeof setupApi>>;
+
+/** Entra com um usuário (sem 2FA nos testes que usam isto) e devolve o token. */
+async function loginAs(t: Ctx, username: string, password: string): Promise<string> {
+  const r = await t.api("POST", "/v1/admin/login", { username, password }, "");
+  expect(r.status).toBe(200);
+  return r.json.token;
+}
+
+/** Usuário da plataforma (sem empresa), com a mesma senha do admin dos testes. */
+export async function platformLogin(t: Ctx, username = "plataforma"): Promise<string> {
+  const hash = (await t.db.query("SELECT password_hash FROM admins WHERE username = 'admin' AND tenant_id IS NOT NULL LIMIT 1")).rows[0].password_hash;
+  await t.db.query("INSERT INTO admins (username, email, password_hash, platform) VALUES ($1, $2, $3, true) ON CONFLICT DO NOTHING", [username, `${username}@pstarx.com`, hash]);
+  return loginAs(t, username, "senha-de-teste-123");
+}
+
+/** Outra empresa com um admin próprio (mesmo nome "admin" da primeira, e-mail diferente). Devolve a empresa e o token. */
+export async function addTenant(t: Ctx, slug: string): Promise<{ tenantId: string; token: string }> {
+  const tenantId = (await t.db.query("INSERT INTO tenants (name, slug) VALUES ($1, $2) RETURNING id", [`Empresa ${slug}`, slug])).rows[0].id;
+  const hash = (await t.db.query("SELECT password_hash FROM admins WHERE username = 'admin' AND tenant_id IS NOT NULL LIMIT 1")).rows[0].password_hash;
+  await t.db.query("INSERT INTO admins (tenant_id, username, email, password_hash) VALUES ($1, 'admin', $2, $3)", [tenantId, `admin@${slug}.com`, hash]);
+  return { tenantId, token: await loginAs(t, `admin@${slug}.com`, "senha-de-teste-123") };
+}
+
 /** Código de 8 caracteres de um e-mail de acesso ("ABCD-2345"). */
 export function codeFrom(mail: SentMail | undefined): string {
   const m = mail?.text.match(/([A-Z0-9]{4}-[A-Z0-9]{4})/);

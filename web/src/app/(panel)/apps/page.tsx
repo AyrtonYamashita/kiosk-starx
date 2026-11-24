@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { api, type KioskRelease as KR, type RepoApp } from "@/lib/api";
+import { api, type KioskRelease as KR, type Me, type RepoApp } from "@/lib/api";
 import { bytes, dateTime } from "@/lib/format";
 import { DeleteApp, DeleteVersion, RenameApp } from "./AppForms";
 import { KioskRelease } from "./KioskRelease";
@@ -8,6 +8,23 @@ import { UploadApk } from "./UploadApk";
 export const dynamic = "force-dynamic";
 
 export default async function AppsPage() {
+  const me = await api<Me>("/v1/admin/me");
+  // usuário da plataforma: só o app do kiosk (o repositório de apps é de cada empresa)
+  if (!me.tenant) {
+    const kiosk = await api<KR>("/v1/admin/kiosk-release");
+    return (
+      <div className="stack">
+        <h1>App do kiosk</h1>
+        <p className="muted" style={{ margin: 0 }}>
+          Conta da plataforma: o mesmo app vale para todas as empresas. As telas das empresas chegam com o &quot;entrar como&quot;.
+        </p>
+        <section className="card stack">
+          <h2>App do kiosk (StarX Kiosk)</h2>
+          <KioskRelease data={kiosk} canPublish={me.platform} />
+        </section>
+      </div>
+    );
+  }
   const [{ apps, maxApkMb }, kiosk] = await Promise.all([
     api<{ apps: RepoApp[]; maxApkMb: number }>("/v1/admin/apps"),
     api<KR>("/v1/admin/kiosk-release"),
@@ -22,7 +39,7 @@ export default async function AppsPage() {
 
       <section className="card stack">
         <h2>App do kiosk (StarX Kiosk)</h2>
-        <KioskRelease data={kiosk} />
+        <KioskRelease data={kiosk} canPublish={me.platform} />
       </section>
 
       <section className="card stack">

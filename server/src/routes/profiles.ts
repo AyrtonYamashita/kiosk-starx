@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { Db } from "../db.js";
+import { tenantOf } from "../tenant.js";
 import { PackageName } from "./apps.js";
 import type { Waker } from "../wake.js";
 import { desiredConfig, prepareConfig, redactConfig, type StoredConfig } from "../kioskConfig.js";
@@ -40,7 +41,7 @@ export function configStatus(d: {
   return { status: d.config_source === "painel" ? "applied" : "modified", desiredHash: desired.hash };
 }
 
-/** Registrado dentro do escopo autenticado do painel (herda o preHandler de admin). */
+/** Registrado no escopo de empresa do painel: tudo filtrado pela empresa da sessão. */
 export async function profileRoutes(app: FastifyInstance, opts: { db: Db; waker: Waker }) {
   const { db, waker } = opts;
   /** Aparelhos de um perfil: recebem a configuração nova na hora. */
@@ -52,25 +53,31 @@ export async function profileRoutes(app: FastifyInstance, opts: { db: Db; waker:
     return z.uuid().safeParse(id).success ? id : null;
   };
 
-  app.get("/v1/admin/profiles", async () => {
+  app.get("/v1/admin/profiles", async (req) => {
     const r = await db.query(
-      `SELECT p.*, (SELECT count(*)::int FROM devices d WHERE d.profile_id = p.id) AS devices FROM profiles p ORDER BY p.name`,
+      `SELECT p.*, (SELECT count(*)::int FROM devices d WHERE d.profile_id = p.id) AS devices FROM profiles p WHERE p.tenant_id = $1 ORDER BY p.name`,
+      [tenantOf(req)],
     );
     return { profiles: r.rows.map(profileJson) };
   });
 
   app.get("/v1/admin/profiles/:id", async (req, reply) => {
     const id = uuidParam(req);
-    const p = id && (await db.query(`SELECT p.*, (SELECT count(*)::int FROM devices d WHERE d.profile_id = p.id) AS devices FROM profiles p WHERE id = $1`, [id])).rows[0];
+    const p =
+      id &&
+      (await db.query(`SELECT p.*, (SELECT count(*)::int FROM devices d WHERE d.profile_id = p.id) AS devices FROM profiles p WHERE id = $1 AND tenant_id = $2`, [id, tenantOf(req)]))
+        .rows[0];
     if (!p) return reply.code(404).send({ error: "not_found" });
     const devices = (await db.query("SELECT id, name, serial FROM devices WHERE profile_id = $1 ORDER BY name", [id])).rows;
     return { ...profileJson(p), deviceList: devices };
   });
 
   /** Pacotes que não estão no repositório (mensagem de erro) ou null se todos existem. */
-  async function missingApps(packages: string[] | undefined): Promise<string | null> {
+  async function missingApps(tenantId: string, packages: string[] | undefined): Promise<string | null> {
     if (!packages?.length) return null;
-    const found = new Set((await db.query("SELECT package_name FROM apps WHERE package_name = ANY($1::text[])", [packages])).rows.map((r) => r.package_name));
+    const found = new Set(
+      (await db.query("SELECT package_name FROM apps WHERE tenant_id = $2 AND package_name = ANY($1::text[])", [packages, tenantId])).rows.map((r) => r.package_name),
+    );
     const missing = packages.filter((p) => !found.has(p));
     return missing.length ? `apps fora do repositório: ${missing.join(", ")}` : null;
   }
@@ -80,14 +87,15 @@ export async function profileRoutes(app: FastifyInstance, opts: { db: Db; waker:
     if (!body.success) return reply.code(400).send({ error: "invalid_body", message: "nome obrigatório" });
     const v = prepareConfig(body.data.config, null);
     if (!v.ok) return reply.code(400).send({ error: "invalid_config", message: v.errors.join("; "), errors: v.errors });
-    const missing = await missingApps(body.data.managedApps);
+    const missing = await missingApps(tenantOf(req), body.data.managedApps);
     if (missing) return reply.code(400).send({ error: "invalid_apps", message: missing });
     try {
-      const r = await db.query("INSERT INTO profiles (name, description, config, managed_apps) VALUES ($1, $2, $3, $4) RETURNING *, 0 AS devices", [
+      const r = await db.query("INSERT INTO profiles (tenant_id, name, description, config, managed_apps) VALUES ($5, $1, $2, $3, $4) RETURNING *, 0 AS devices", [
         body.data.name,
         body.data.description,
         v.config,
         JSON.stringify([...new Set(body.data.managedApps ?? [])]),
+        tenantOf(req),
       ]);
       return profileJson(r.rows[0]);
     } catch (e) {
@@ -100,17 +108,17 @@ export async function profileRoutes(app: FastifyInstance, opts: { db: Db; waker:
     const id = uuidParam(req);
     const body = ProfileBody.safeParse(req.body);
     if (!id || !body.success) return reply.code(400).send({ error: "invalid_body", message: "nome obrigatório" });
-    const prev = (await db.query("SELECT config FROM profiles WHERE id = $1", [id])).rows[0];
+    const prev = (await db.query("SELECT config FROM profiles WHERE id = $1 AND tenant_id = $2", [id, tenantOf(req)])).rows[0];
     if (!prev) return reply.code(404).send({ error: "not_found" });
     const v = prepareConfig(body.data.config, prev.config);
     if (!v.ok) return reply.code(400).send({ error: "invalid_config", message: v.errors.join("; "), errors: v.errors });
-    const missing = await missingApps(body.data.managedApps);
+    const missing = await missingApps(tenantOf(req), body.data.managedApps);
     if (missing) return reply.code(400).send({ error: "invalid_apps", message: missing });
     try {
       const r = await db.query(
-        `UPDATE profiles SET name = $2, description = $3, config = $4, managed_apps = COALESCE($5, managed_apps), updated_at = now() WHERE id = $1
+        `UPDATE profiles SET name = $2, description = $3, config = $4, managed_apps = COALESCE($5, managed_apps), updated_at = now() WHERE id = $1 AND tenant_id = $6
          RETURNING *, (SELECT count(*)::int FROM devices d WHERE d.profile_id = $1) AS devices`,
-        [id, body.data.name, body.data.description, v.config, body.data.managedApps ? JSON.stringify([...new Set(body.data.managedApps)]) : null],
+        [id, body.data.name, body.data.description, v.config, body.data.managedApps ? JSON.stringify([...new Set(body.data.managedApps)]) : null, tenantOf(req)],
       );
       await wakeProfile(id);
       return profileJson(r.rows[0]);
@@ -123,7 +131,7 @@ export async function profileRoutes(app: FastifyInstance, opts: { db: Db; waker:
   /** Excluir: os aparelhos ficam sem perfil e mantêm a configuração que já têm. */
   app.delete("/v1/admin/profiles/:id", async (req, reply) => {
     const id = uuidParam(req);
-    const r = id ? await db.query("DELETE FROM profiles WHERE id = $1", [id]) : null;
+    const r = id ? await db.query("DELETE FROM profiles WHERE id = $1 AND tenant_id = $2", [id, tenantOf(req)]) : null;
     if (!r?.rowCount) return reply.code(404).send({ error: "not_found" });
     return { ok: true };
   });
@@ -134,7 +142,7 @@ export async function profileRoutes(app: FastifyInstance, opts: { db: Db; waker:
     const id = uuidParam(req);
     const body = DeviceConfigBody.safeParse(req.body);
     if (!id || !body.success) return reply.code(400).send({ error: "invalid_body" });
-    const prev = (await db.query("SELECT config_overrides FROM devices WHERE id = $1", [id])).rows[0];
+    const prev = (await db.query("SELECT config_overrides FROM devices WHERE id = $1 AND tenant_id = $2", [id, tenantOf(req)])).rows[0];
     if (!prev) return reply.code(404).send({ error: "not_found" });
     let overrides: StoredConfig | null = null;
     if (body.data.overrides && Object.keys(body.data.overrides as object).length > 0) {
@@ -142,10 +150,10 @@ export async function profileRoutes(app: FastifyInstance, opts: { db: Db; waker:
       if (!v.ok) return reply.code(400).send({ error: "invalid_config", message: v.errors.join("; "), errors: v.errors });
       overrides = v.config;
     }
-    if (body.data.profileId && !(await db.query("SELECT 1 FROM profiles WHERE id = $1", [body.data.profileId])).rowCount) {
+    if (body.data.profileId && !(await db.query("SELECT 1 FROM profiles WHERE id = $1 AND tenant_id = $2", [body.data.profileId, tenantOf(req)])).rowCount) {
       return reply.code(400).send({ error: "invalid_profile", message: "perfil não existe" });
     }
-    await db.query("UPDATE devices SET profile_id = $2, config_overrides = $3, failed_hash = NULL WHERE id = $1", [id, body.data.profileId, overrides]);
+    await db.query("UPDATE devices SET profile_id = $2, config_overrides = $3, failed_hash = NULL WHERE id = $1 AND tenant_id = $4", [id, body.data.profileId, overrides, tenantOf(req)]);
     waker.wake([id]);
     return { ok: true };
   });
@@ -153,7 +161,7 @@ export async function profileRoutes(app: FastifyInstance, opts: { db: Db; waker:
   /** Reaplicar: manda de novo a configuração do painel (desfaz mudanças feitas no aparelho). */
   app.post("/v1/admin/devices/:id/config/reapply", async (req, reply) => {
     const id = uuidParam(req);
-    const r = id ? await db.query("UPDATE devices SET config_nonce = config_nonce + 1, failed_hash = NULL WHERE id = $1", [id]) : null;
+    const r = id ? await db.query("UPDATE devices SET config_nonce = config_nonce + 1, failed_hash = NULL WHERE id = $1 AND tenant_id = $2", [id, tenantOf(req)]) : null;
     if (!r?.rowCount) return reply.code(404).send({ error: "not_found" });
     waker.wake([id!]);
     return { ok: true };
@@ -162,20 +170,27 @@ export async function profileRoutes(app: FastifyInstance, opts: { db: Db; waker:
   app.post("/v1/admin/devices/bulk/profile", async (req, reply) => {
     const body = BulkBody.safeParse(req.body);
     if (!body.success) return reply.code(400).send({ error: "invalid_body" });
-    if (body.data.profileId && !(await db.query("SELECT 1 FROM profiles WHERE id = $1", [body.data.profileId])).rowCount) {
+    if (body.data.profileId && !(await db.query("SELECT 1 FROM profiles WHERE id = $1 AND tenant_id = $2", [body.data.profileId, tenantOf(req)])).rowCount) {
       return reply.code(400).send({ error: "invalid_profile", message: "perfil não existe" });
     }
-    const r = await db.query("UPDATE devices SET profile_id = $2, failed_hash = NULL WHERE id = ANY($1::uuid[])", [body.data.deviceIds, body.data.profileId]);
-    waker.wake(body.data.deviceIds);
+    // ids de outra empresa são ignorados (só os desta empresa mudam e são avisados)
+    const r = await db.query("UPDATE devices SET profile_id = $2, failed_hash = NULL WHERE id = ANY($1::uuid[]) AND tenant_id = $3 RETURNING id", [
+      body.data.deviceIds,
+      body.data.profileId,
+      tenantOf(req),
+    ]);
+    waker.wake(r.rows.map((x) => x.id as string));
     return { ok: true, updated: r.rowCount };
   });
 
   /** Apps vistos nos aparelhos (para escolher os apps do kiosk no editor). */
-  app.get("/v1/admin/apps-catalog", async () => {
+  app.get("/v1/admin/apps-catalog", async (req) => {
     const r = await db.query(
       `SELECT a->>'packageName' AS package, max(a->>'label') AS label, count(*)::int AS devices, bool_or((a->>'system')::boolean) AS system
        FROM devices d, jsonb_array_elements(COALESCE(d.apps, '[]'::jsonb)) a
+       WHERE d.tenant_id = $1
        GROUP BY 1 ORDER BY 2`,
+      [tenantOf(req)],
     );
     return { apps: r.rows };
   });

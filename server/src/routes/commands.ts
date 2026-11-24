@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { Db } from "../db.js";
+import { tenantOf } from "../tenant.js";
 import { authDevice } from "../deviceAuth.js";
 import { findArtifact, PackageName } from "./apps.js";
 import type { Waker } from "../wake.js";
@@ -63,7 +64,7 @@ function commandJson(c: Record<string, any>) {
   };
 }
 
-/** Painel: criar, listar e cancelar comandos; ver capturas de tela. Dentro do escopo autenticado. */
+/** Painel: criar, listar e cancelar comandos; ver capturas de tela. Escopo de empresa (tudo filtrado por ela). */
 export async function commandRoutes(app: FastifyInstance, opts: { db: Db; waker: Waker }) {
   const { db, waker } = opts;
 
@@ -80,19 +81,20 @@ export async function commandRoutes(app: FastifyInstance, opts: { db: Db; waker:
       if (type === "uninstall_app" && pkg === KIOSK_PACKAGE) return reply.code(400).send({ error: "invalid_payload", message: "o app do kiosk não pode ser removido por comando" });
       if (type === "install_app") {
         // a versão é fixada na criação: o comando instala exatamente o que foi escolhido
-        const artifact = await findArtifact(db, pkg, (p.data as { versionCode?: number | null }).versionCode);
+        const artifact = await findArtifact(db, tenantOf(req), pkg, (p.data as { versionCode?: number | null }).versionCode);
         if (!artifact) return reply.code(400).send({ error: "invalid_payload", message: "app/versão não existe no repositório" });
         payload = { packageName: pkg, artifact };
       }
     }
 
-    const found = (await db.query("SELECT id FROM devices WHERE id = ANY($1::uuid[])", [deviceIds])).rows.map((r) => r.id as string);
+    // só coletores desta empresa (ids de outra são ignorados, como os inexistentes)
+    const found = (await db.query("SELECT id FROM devices WHERE id = ANY($1::uuid[]) AND tenant_id = $2", [deviceIds, tenantOf(req)])).rows.map((r) => r.id as string);
     if (found.length === 0) return reply.code(404).send({ error: "not_found", message: "nenhum aparelho encontrado" });
     const expiresMin = body.data.expiresInMin ?? DEFAULT_EXPIRY_MIN[type];
     const r = await db.query(
-      `INSERT INTO commands (device_id, type, payload, created_by, expires_at)
-       SELECT d, $2, $3, $4, now() + make_interval(mins => $5) FROM unnest($1::uuid[]) AS d RETURNING id`,
-      [found, type, payload, req.admin!.username, expiresMin],
+      `INSERT INTO commands (tenant_id, device_id, type, payload, created_by, expires_at)
+       SELECT $6, d, $2, $3, $4, now() + make_interval(mins => $5) FROM unnest($1::uuid[]) AS d RETURNING id`,
+      [found, type, payload, req.admin!.username, expiresMin, tenantOf(req)],
     );
     // aparelhos esperando no long polling recebem na hora (os outros, no próximo check-in)
     waker.wake(found);
@@ -103,6 +105,7 @@ export async function commandRoutes(app: FastifyInstance, opts: { db: Db; waker:
   app.get("/v1/admin/devices/:id/commands", async (req, reply) => {
     const { id } = req.params as { id: string };
     if (!z.uuid().safeParse(id).success) return reply.code(404).send({ error: "not_found" });
+    if (!(await db.query("SELECT 1 FROM devices WHERE id = $1 AND tenant_id = $2", [id, tenantOf(req)])).rowCount) return reply.code(404).send({ error: "not_found" });
     await expireOld(db, id);
     const r = await db.query("SELECT * FROM commands WHERE device_id = $1 ORDER BY created_at DESC LIMIT 30", [id]);
     const shots = await db.query("SELECT id, width, height, created_at FROM screenshots WHERE device_id = $1 ORDER BY created_at DESC LIMIT $2", [
@@ -119,7 +122,7 @@ export async function commandRoutes(app: FastifyInstance, opts: { db: Db; waker:
   app.post("/v1/admin/commands/:id/cancel", async (req, reply) => {
     const { id } = req.params as { id: string };
     if (!z.uuid().safeParse(id).success) return reply.code(404).send({ error: "not_found" });
-    const r = await db.query("UPDATE commands SET status = 'canceled', done_at = now() WHERE id = $1 AND status = 'pending'", [id]);
+    const r = await db.query("UPDATE commands SET status = 'canceled', done_at = now() WHERE id = $1 AND tenant_id = $2 AND status = 'pending'", [id, tenantOf(req)]);
     if (!r.rowCount) return reply.code(409).send({ error: "not_pending", message: "só dá para cancelar comandos ainda não entregues" });
     return { ok: true };
   });
@@ -127,7 +130,7 @@ export async function commandRoutes(app: FastifyInstance, opts: { db: Db; waker:
   app.get("/v1/admin/screenshots/:id", async (req, reply) => {
     const { id } = req.params as { id: string };
     if (!z.uuid().safeParse(id).success) return reply.code(404).send({ error: "not_found" });
-    const s = (await db.query("SELECT mime, data FROM screenshots WHERE id = $1", [id])).rows[0];
+    const s = (await db.query("SELECT mime, data FROM screenshots WHERE id = $1 AND tenant_id = $2", [id, tenantOf(req)])).rows[0];
     if (!s) return reply.code(404).send({ error: "not_found" });
     reply.header("content-type", s.mime);
     reply.header("cache-control", "private, max-age=86400");
@@ -186,9 +189,9 @@ export async function deviceScreenshotRoutes(app: FastifyInstance, opts: { db: D
     const commandId = q.commandId && z.uuid().safeParse(q.commandId).success ? q.commandId : null;
     const mime = req.headers["content-type"]?.startsWith("image/png") ? "image/png" : "image/jpeg";
     const r = await db.query(
-      `INSERT INTO screenshots (device_id, command_id, mime, width, height, data)
-       VALUES ($1, (SELECT id FROM commands WHERE id = $2 AND device_id = $1), $3, $4, $5, $6) RETURNING id`,
-      [device.id, commandId, mime, Number(q.width) || null, Number(q.height) || null, buf],
+      `INSERT INTO screenshots (tenant_id, device_id, command_id, mime, width, height, data)
+       VALUES ($7, $1, (SELECT id FROM commands WHERE id = $2 AND device_id = $1), $3, $4, $5, $6) RETURNING id`,
+      [device.id, commandId, mime, Number(q.width) || null, Number(q.height) || null, buf, device.tenant_id],
     );
     await db.query("UPDATE devices SET last_screenshot_at = now() WHERE id = $1", [device.id]);
     await db.query(

@@ -8,7 +8,7 @@ import {
 } from "@simplewebauthn/server";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
-import { audit, lockedFor, lockKey, recordFailure } from "../auth.js";
+import { adminLockKey, audit, lockedFor, lockKey, recordFailure } from "../auth.js";
 import type { Config } from "../config.js";
 import type { Db } from "../db.js";
 import { checkCurrentPassword, completeMfa, issueSession, partialSession } from "./mfa.js";
@@ -139,7 +139,7 @@ export async function passkeyPublicRoutes(app: FastifyInstance, opts: { db: Db; 
   app.post("/v1/auth/mfa/passkey/verify", { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } }, async (req, reply) => {
     const s = await partialSession(db, req);
     if (!s) return reply.code(401).send({ error: "unauthorized", message: "a etapa de confirmação expirou: entre de novo" });
-    const accountKey = lockKey("account", s.username);
+    const accountKey = adminLockKey(s);
     const blocked = await lockedFor(db, "account", accountKey);
     if (blocked) return retry(reply, blocked);
     const { challengeId, response, trustDevice } = (req.body ?? {}) as { challengeId?: unknown; response?: AuthenticationResponseJSON; trustDevice?: unknown };

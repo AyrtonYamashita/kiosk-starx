@@ -85,15 +85,16 @@ describe("notificações no celular", () => {
     expect((await t.api("GET", "/v1/admin/push")).json.events).toEqual(["done", "stopped"]);
 
     const before = sent.length;
-    await push.notify("start", { title: "joana iniciou Descarga", body: "ABC1D23", url: "/operations/x" });
+    const tenantId = (await t.db.query("SELECT tenant_id FROM admins WHERE username = 'admin'")).rows[0].tenant_id;
+    await push.notify(tenantId, "start", { title: "joana iniciou Descarga", body: "ABC1D23", url: "/operations/x" });
     expect(sent.length).toBe(before);
-    await push.notify("stopped", { title: "joana interrompeu Descarga", body: "ABC1D23", url: "/operations/x" });
+    await push.notify(tenantId, "stopped", { title: "joana interrompeu Descarga", body: "ABC1D23", url: "/operations/x" });
     expect(sent.length).toBe(before + 1);
     expect(sent.at(-1)!.payload).toMatchObject({ title: "joana interrompeu Descarga", url: "/operations/x" });
 
     // usuário desativado não recebe nada
     await t.db.query("UPDATE admins SET disabled_at = now() WHERE username = 'admin'");
-    await push.notify("stopped", { title: "x", body: "y", url: "/" });
+    await push.notify(tenantId, "stopped", { title: "x", body: "y", url: "/" });
     expect(sent.length).toBe(before + 1);
     await t.db.query("UPDATE admins SET disabled_at = NULL WHERE username = 'admin'");
     await t.api("PUT", "/v1/admin/push/events", { events: ["start", "done", "stopped"] });

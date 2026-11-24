@@ -61,6 +61,8 @@ export async function api<T>(path: string, init: { method?: string; body?: unkno
   if (res.status === 401) redirect("/login?expirada=1");
   const text = await res.text();
   const json = text ? JSON.parse(text) : null;
+  // usuário da plataforma (sem empresa) numa tela de empresa: vai para Apps (app do kiosk), a tela dele
+  if (res.status === 403 && json?.error === "no_tenant") redirect("/apps");
   if (!res.ok) throw new ApiError(res.status, json);
   return json as T;
 }
@@ -291,6 +293,9 @@ export interface Me {
   username: string;
   email: string | null;
   role: Role;
+  /** Usuário da plataforma (PStarX): cria as empresas e publica o app do kiosk. Não tem empresa. */
+  platform: boolean;
+  tenant: { id: string; name: string; slug: string } | null;
 }
 
 export interface SessionInfo {

@@ -84,6 +84,18 @@ function stripPin(config: Record<string, unknown>): Record<string, unknown> {
   return copy;
 }
 
+/**
+ * O coletor com este serial foi cadastrado em outra empresa: os registros dele nas demais ficam como transferidos e o
+ * token de lá deixa de valer (o histórico fica com a empresa antiga).
+ */
+async function transferOut(q: { query: Db["query"] }, tenantId: string, serial: string) {
+  await q.query(
+    `UPDATE devices SET transferred_at = now(), token_hash = 'transferido:' || id
+     WHERE serial = $1 AND tenant_id <> $2 AND transferred_at IS NULL`,
+    [serial, tenantId],
+  );
+}
+
 export async function deviceRoutes(app: FastifyInstance, opts: { db: Db; config: Config; waker: Waker }) {
   const { db, config, waker } = opts;
 
@@ -111,8 +123,8 @@ export async function deviceRoutes(app: FastifyInstance, opts: { db: Db; config:
    * Apps que o aparelho deve ter (versão mais nova do repositório) e o próprio app do kiosk, se houver versão
    * publicada mais nova. O aparelho instala o que estiver faltando ou mais velho; nunca rebaixa.
    */
-  async function managedArtifacts(packages: string[], appVersionCode: number | null): Promise<Artifact[]> {
-    const list = await latestArtifacts(db, packages.filter((p) => p !== KIOSK_PACKAGE));
+  async function managedArtifacts(tenantId: string, packages: string[], appVersionCode: number | null): Promise<Artifact[]> {
+    const list = await latestArtifacts(db, tenantId, packages.filter((p) => p !== KIOSK_PACKAGE));
     const release = config.autoUpdateApp ? readRelease(config.apkDir) : null;
     if (release && appVersionCode !== null && release.versionCode > appVersionCode) {
       list.push({
@@ -129,12 +141,20 @@ export async function deviceRoutes(app: FastifyInstance, opts: { db: Db; config:
 
   /**
    * O aparelho informou o serial pela primeira vez (ex.: cadastrado logo após o QR, antes de poder ler o serial).
-   * Se já existe outro registro com esse serial, é o mesmo aparelho cadastrado antes: herda o nome e o duplicado sai.
+   * Se já existe outro registro com esse serial na mesma empresa, é o mesmo aparelho cadastrado antes: herda o nome e o
+   * duplicado sai. Em outra empresa, o registro de lá fica como transferido.
    */
-  async function mergeBySerial(deviceId: string, serial: string, currentName: string, enrollmentCodeId: string | null): Promise<string> {
-    const old = (await db.query("SELECT id, name, profile_id, config_overrides FROM devices WHERE serial = $1 AND id <> $2 ORDER BY enrolled_at DESC LIMIT 1", [serial, deviceId])).rows[0];
+  async function mergeBySerial(tenantId: string, deviceId: string, serial: string, currentName: string, enrollmentCodeId: string | null): Promise<string> {
+    await transferOut(db, tenantId, serial);
+    const old = (
+      await db.query("SELECT id, name, profile_id, config_overrides FROM devices WHERE tenant_id = $3 AND serial = $1 AND id <> $2 ORDER BY enrolled_at DESC LIMIT 1", [
+        serial,
+        deviceId,
+        tenantId,
+      ])
+    ).rows[0];
     if (!old) return currentName;
-    await db.query("DELETE FROM devices WHERE serial = $1 AND id <> $2", [serial, deviceId]);
+    await db.query("DELETE FROM devices WHERE tenant_id = $3 AND serial = $1 AND id <> $2", [serial, deviceId, tenantId]);
     await db.query(
       `UPDATE devices SET name = $2, profile_id = COALESCE(profile_id, $3), config_overrides = COALESCE(config_overrides, $4) WHERE id = $1`,
       [deviceId, old.name, old.profile_id, old.config_overrides],
@@ -156,7 +176,7 @@ export async function deviceRoutes(app: FastifyInstance, opts: { db: Db; config:
       await client.query("BEGIN");
       const ec = (
         await client.query(
-          `SELECT id, name, profile_id FROM enrollment_codes
+          `SELECT id, tenant_id, name, profile_id FROM enrollment_codes
            WHERE code = $1 AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > now())
              AND (max_uses IS NULL OR uses < max_uses)
            FOR UPDATE`,
@@ -169,8 +189,11 @@ export async function deviceRoutes(app: FastifyInstance, opts: { db: Db; config:
       }
       const hw = hardwareFields(body.data.info);
       const token = newToken();
+      // o código define a empresa do coletor. O mesmo serial nesta empresa é o mesmo coletor (reaproveita o registro);
+      // em outra empresa, o registro de lá fica como transferido e o token antigo para de valer
+      if (hw.serial) await transferOut(client, ec.tenant_id, hw.serial);
       const existing = hw.serial
-        ? (await client.query("SELECT id, name FROM devices WHERE serial = $1 ORDER BY enrolled_at DESC LIMIT 1", [hw.serial])).rows[0]
+        ? (await client.query("SELECT id, name FROM devices WHERE tenant_id = $2 AND serial = $1 ORDER BY enrolled_at DESC LIMIT 1", [hw.serial, ec.tenant_id])).rows[0]
         : undefined;
       const defaultName = [hw.model, hw.serial ? hw.serial.slice(-4) : null].filter(Boolean).join(" ") || "Aparelho";
       let device: { id: string; name: string };
@@ -180,7 +203,7 @@ export async function deviceRoutes(app: FastifyInstance, opts: { db: Db; config:
             `UPDATE devices SET token_hash = $2, enrollment_code_id = $3, enrolled_at = now(), last_seen_at = now(), last_ip = $4,
                     manufacturer = $5, model = $6, android_version = $7, app_version = $8, info = $9, info_updated_at = now(),
                     apps = NULL, apps_hash = NULL, config = NULL, config_revision = NULL, applied_hash = NULL,
-                    profile_id = COALESCE($10, profile_id)
+                    profile_id = COALESCE($10, profile_id), transferred_at = NULL
              WHERE id = $1 RETURNING id, name`,
             [existing.id, sha256(token), ec.id, req.ip, hw.manufacturer, hw.model, hw.androidVersion, body.data.appVersion ?? null, body.data.info, ec.profile_id],
           )
@@ -188,10 +211,10 @@ export async function deviceRoutes(app: FastifyInstance, opts: { db: Db; config:
       } else {
         device = (
           await client.query(
-            `INSERT INTO devices (name, token_hash, enrollment_code_id, last_seen_at, last_ip, serial, manufacturer, model,
+            `INSERT INTO devices (tenant_id, name, token_hash, enrollment_code_id, last_seen_at, last_ip, serial, manufacturer, model,
                                   android_version, app_version, info, info_updated_at, profile_id)
-             VALUES ($1, $2, $3, now(), $4, $5, $6, $7, $8, $9, $10, now(), $11) RETURNING id, name`,
-            [defaultName, sha256(token), ec.id, req.ip, hw.serial, hw.manufacturer, hw.model, hw.androidVersion, body.data.appVersion ?? null, body.data.info, ec.profile_id],
+             VALUES ($12, $1, $2, $3, now(), $4, $5, $6, $7, $8, $9, $10, now(), $11) RETURNING id, name`,
+            [defaultName, sha256(token), ec.id, req.ip, hw.serial, hw.manufacturer, hw.model, hw.androidVersion, body.data.appVersion ?? null, body.data.info, ec.profile_id, ec.tenant_id],
           )
         ).rows[0];
       }
@@ -260,7 +283,7 @@ export async function deviceRoutes(app: FastifyInstance, opts: { db: Db; config:
       set("applied_hash", b.panelConfigHash);
     }
     let name = device.name;
-    if (hw.serial && !device.serial) name = await mergeBySerial(device.id, hw.serial, device.name, device.enrollment_code_id);
+    if (hw.serial && !device.serial) name = await mergeBySerial(device.tenant_id, device.id, hw.serial, device.name, device.enrollment_code_id);
     await db.query(`UPDATE devices SET ${sets.join(", ")} WHERE id = $1`, params);
     if (b.commandResults?.length) await recordResults(db, device.id, b.commandResults);
 
@@ -280,7 +303,7 @@ export async function deviceRoutes(app: FastifyInstance, opts: { db: Db; config:
       desired: sendDesired ? { hash: desired.hash, config: desired.config } : null,
       commands: await commandsForDevice(db, device.id),
       ackResults: (b.commandResults ?? []).map((r) => r.id),
-      apps: await managedArtifacts((row.managed_apps as string[] | null) ?? [], row.app_version_code),
+      apps: await managedArtifacts(device.tenant_id, (row.managed_apps as string[] | null) ?? [], row.app_version_code),
       serverTime: new Date().toISOString(),
       name,
       checkinIntervalSec: config.checkinIntervalSec,

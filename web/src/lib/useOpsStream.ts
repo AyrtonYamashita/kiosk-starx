@@ -116,12 +116,14 @@ class OpsStream {
 const Ctx = createContext<OpsStream | null>(null);
 
 /** Abre a conexão ao vivo uma vez, no layout do painel. */
-export function OpsStreamProvider({ children }: { children: React.ReactNode }) {
+/** `enabled` falso (usuário da plataforma, sem empresa): não abre a conexão ao vivo. */
+export function OpsStreamProvider({ children, enabled = true }: { children: React.ReactNode; enabled?: boolean }) {
   const [stream] = useState(() => new OpsStream());
   useEffect(() => {
+    if (!enabled) return;
     stream.start();
     return () => stream.stop();
-  }, [stream]);
+  }, [stream, enabled]);
   return createElement(Ctx.Provider, { value: stream }, children);
 }
 

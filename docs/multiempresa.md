@@ -1,7 +1,8 @@
 # Várias empresas no mesmo painel (Fase 3)
 
-**Situação:** 3.1 (base) feita em 2026-11-24 (migração `016_tenants.sql`, testes em `server/test/tenants.test.ts`).
-3.2 a 3.4 ainda não começaram. Respostas do dono do produto em 2026-11-18 no fim; o desenho abaixo já as considera.
+**Situação:** 3.1 (base) e 3.2 (filtro na aplicação) feitas em 2026-11-24 (migrações `016_tenants.sql` e
+`017_tenant_scope.sql`; testes em `server/test/tenants.test.ts` e `server/test/isolation.test.ts`). 3.3 e 3.4 ainda
+não começaram. Respostas do dono do produto em 2026-11-18 no fim; o desenho abaixo já as considera.
 
 ## Objetivo
 
@@ -112,17 +113,33 @@ Cada parte é publicada e validada antes da próxima, como nas fases anteriores.
 - `ops_settings` agora tem uma linha por empresa (chave `tenant_id`), criada por gatilho junto com a empresa.
 - A sessão já leva a empresa: `req.admin.tenantId`/`platform`, e `/v1/admin/me` devolve `tenant` e `platform`.
 
-**Pendências que a 3.2 resolve** (inofensivas com uma empresa só):
+## 3.2 como foi feita (2026-11-24)
 
-- todas as consultas e gravações filtrando/passando `tenant_id` (hoje filtram por id/nome sem a empresa);
-- login por **nome de usuário** fica ambíguo com o mesmo nome em duas empresas (só o e-mail é único): entrar pelo
-  nome só quando ele for único no sistema, senão pedir o e-mail; o bloqueio por conta também usa o nome;
-- `OPS_READER_ON_SQL` e as rotas de ajustes leem `ops_settings LIMIT 1`;
-- reaplicação das anonimizações (`privacy.ts`) compara o hash de todas as empresas;
-- cadastro do coletor: `mergeBySerial` e a busca por serial só dentro da empresa, mais a regra de "transferido";
-- tirar o atalho "única empresa" de `tenant_fallback()`;
-- usuário da plataforma (sem empresa): hoje ainda vê tudo, como antes. Na 3.2 ele passa a não ver nada de empresa
-  até a 3.4 ("entrar como"), e a lista de usuários da Alt Brasil deixa de mostrá-lo.
+- **Escopos na API:** as rotas do painel se dividem em *conta* (sessão, senha, 2FA, passkeys, notificações, exportar
+  os próprios dados, app do kiosk) e *empresa* (`requireTenant` em `src/tenant.ts`: aparelhos, perfis, códigos,
+  comandos, apps, acompanhamento, cargas, usuários, segurança, LGPD dos colaboradores). Toda consulta e gravação de
+  empresa filtra/passa `tenant_id` (sempre o da sessão, via `tenantOf(req)`). Id de outra empresa: 404.
+- **Coletor:** leva a empresa do código de cadastro (`authDevice` devolve `tenant_id`); download de APK só do
+  repositório da empresa dele. O mesmo serial em outra empresa: o registro antigo fica com `transferred_at`, o token
+  de lá para de valer e o histórico fica com a empresa antiga; o coletor voltando com código da antiga reaproveita o
+  registro.
+- **Login:** e-mail é único no sistema; nome de usuário repetido entre empresas entra na conta cuja senha confere
+  (até 5 contas com o mesmo nome). O bloqueio do 2FA passou a ser pelo e-mail (`adminLockKey`), para o erro de uma
+  empresa não bloquear a conta de mesmo nome da outra.
+- **Bloqueios e auditoria:** os bloqueios continuam globais (IP e identificador digitado). A empresa vê e desbloqueia
+  só contas dela e IPs de onde alguém dela tentou entrar nas últimas 24 h. A auditoria mostra os eventos da empresa e
+  os sem empresa cujo identificador digitado é de um usuário dela.
+- **Ao vivo e notificações:** cada conexão ao vivo só recebe cards da empresa do ingresso (limite de 100 conexões por
+  empresa); cada carga notifica só os usuários da empresa dela.
+- **Repositório de apps por empresa:** o arquivo continua único por sha256 e só sai do disco quando nenhuma empresa
+  usa mais.
+- **App do kiosk:** só a plataforma envia, publica e descarta; a empresa vê a versão publicada e os coletores dela.
+- **Plataforma no painel:** sem empresa, vê só "App do kiosk" e "Conta"; telas de empresa levam para Apps. As telas
+  das empresas chegam com o "entrar como" da 3.4.
+- **Sem atalho:** `tenant_fallback()` só usa `app.tenant_id` (para a 3.3); gravação sem empresa falha.
+
+**Fica para depois:** empresa suspensa ainda entra e os coletores dela continuam (entra na 3.4, junto com a tela de
+empresas); prazos de retenção continuam globais.
 
 ## Respostas (2026-11-18)
 
