@@ -534,13 +534,19 @@ label.dev-check { min-height: 32px; gap: 8px; font-size: 12.5px; }
   .cargas-table { display: none; }
   .cargas-cards { display: block; }
 }
-.carga-card { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border-bottom: 1px solid var(--rule); }
+/* card enxuto: 3 linhas (placa e função | início, colaborador, coletor e valor | volumes e duração); o card inteiro
+   é o link para a carga (::after cobre tudo) e o link do coletor fica por cima dele */
+.carga-card { position: relative; display: flex; flex-direction: column; gap: 4px; padding: 10px 14px; border-bottom: 1px solid var(--rule); }
 .carga-card:last-child { border-bottom: none; }
-.carga-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
-.carga-card-title { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 44px; min-width: 0; color: var(--ink); font-weight: 600; }
-.carga-card-qty { display: flex; align-items: center; gap: 8px; }
-.carga-card-qty .ops-bar { flex: 1; min-width: 60px; }
-.carga-card .ops-facts dd { overflow-wrap: anywhere; } /* nome de coletor sem espaços (ex.: sdk_gphone64_x86_64) */
+.carga-card:active { background: var(--subtle); }
+.carga-line { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+a.carga-card-link { display: flex; align-items: center; gap: 8px; min-width: 0; color: var(--ink); font-weight: 600; }
+a.carga-card-link::after { content: ""; position: absolute; inset: 0; }
+.carga-fn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.carga-meta { flex: 1; min-width: 0; overflow-wrap: anywhere; } /* nome de coletor sem espaços (ex.: sdk_gphone64_x86_64) */
+a.carga-device { position: relative; z-index: 1; }
+.carga-right { flex: none; white-space: nowrap; }
+.carga-qty .ops-bar { flex: 1; min-width: 40px; height: 4px; }
 .num { display: inline-flex; align-items: baseline; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .good { color: var(--good-deep); }
 .bad { color: var(--bad-deep); }

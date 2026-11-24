@@ -189,50 +189,42 @@ export default async function CargasPage({ searchParams }: { searchParams: Promi
               const pct = o.totalQty > 0 ? Math.min(100, (o.readQty / o.totalQty) * 100) : 0;
               return (
                 <li key={o.id} className="carga-card">
-                  <div className="carga-card-head">
-                    <Link href={`/operations/${o.device.id}?op=${o.id}`} className="carga-card-title">
+                  <div className="carga-line">
+                    {/* o link cobre o card todo (::after); o do coletor fica por cima */}
+                    <Link href={`/operations/${o.device.id}?op=${o.id}`} className="carga-card-link">
                       <span className="ops-plate mono">{o.realPlate || o.plate}</span>
-                      <span>{o.fnLabel}</span>
+                      <span className="carga-fn">{o.fnLabel}</span>
                     </Link>
                     <Status o={o} />
                   </div>
-                  <div className="muted small">
-                    <span className="mono">{dateTime(o.startedAt)}</span>
-                    {o.realPlate && o.realPlate !== o.plate && <span className="mono"> · placa no SSW {o.plate}</span>}
-                    {o.units.length > 0 && <span> · {o.units.join(" · ")}</span>}
+                  <div className="carga-line muted small">
+                    <span className="carga-meta">
+                      <span className="mono">{dateTime(o.startedAt)}</span>
+                      {o.user && (
+                        <>
+                          {" · "}
+                          <span className="mono">{o.user}</span>
+                        </>
+                      )}
+                      {" · "}
+                      <Link href={`/devices/${o.device.id}`} className="mono carga-device">
+                        {o.device.name}
+                      </Link>
+                      {o.realPlate && o.realPlate !== o.plate && <span className="mono"> · placa no SSW {o.plate}</span>}
+                      {o.units.length > 0 && <span> · {o.units.join(" · ")}</span>}
+                      {o.branch && <span> · {o.branch}</span>}
+                    </span>
+                    <span className="mono carga-right">{fmtMoney(o.totalValue)}</span>
                   </div>
-                  <div className="carga-card-qty">
+                  <div className="carga-line carga-qty">
                     <span className="mono">
                       {fmtQty(o.readQty)}/{fmtQty(o.totalQty)}
                     </span>
-                    <span className="muted small">volumes</span>
                     <div className="ops-bar" aria-hidden>
                       <span style={{ width: `${pct}%` }} />
                     </div>
+                    <span className="mono muted small carga-right">{fmtDuration(o.durationSec)}</span>
                   </div>
-                  <dl className="ops-facts">
-                    <div>
-                      <dt>Colaborador</dt>
-                      <dd>{o.user ? <span className="mono">{o.user}</span> : <span className="muted">—</span>}</dd>
-                    </div>
-                    <div>
-                      <dt>Coletor</dt>
-                      <dd>
-                        <Link href={`/devices/${o.device.id}`} className="mono">
-                          {o.device.name}
-                        </Link>
-                        {o.branch && <div className="muted small">{o.branch}</div>}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>Valor</dt>
-                      <dd className="mono">{fmtMoney(o.totalValue)}</dd>
-                    </div>
-                    <div>
-                      <dt>Duração</dt>
-                      <dd className="mono">{fmtDuration(o.durationSec)}</dd>
-                    </div>
-                  </dl>
                 </li>
               );
             })}
