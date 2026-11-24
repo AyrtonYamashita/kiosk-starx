@@ -760,6 +760,10 @@ label.check-hit { display: contents; }
 :where(.main > .page) a:not(:where(.button, .link-button, .card, .ops-load, .nav-item)):not(:where(.card, .liquid-glass, .dev-filters, .ops-load, .alert, dialog, .toast) *) {
   color: var(--blue-deep);
 }
+/* campo direto sobre o fundo (ex.: nome do perfil novo): a borda --field-line cai para 1,9:1 na bolha; ali, --mid */
+:where(.main > .page) :is(input, select, textarea):not(:where(.card, .liquid-glass, .dev-filters, dialog, .toast) *) {
+  border-color: var(--mid);
+}
 
 /*
   Link dentro de frase: sublinhado. Só a cor não basta (WCAG 1.4.1): no escuro o azul fica a 2,4:1 do texto ao redor.

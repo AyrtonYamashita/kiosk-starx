@@ -16,7 +16,7 @@
   --line: #E2E8F0;
   --rule: #EDF1F6;
   --muted: #CBD5E1;   /* só decorativo */
-  --field-line: #7A8AA0; /* borda de campo e de toggle: ≥ 3:1 contra o campo, o card e o subtle (a --line, 1,2:1, é só divisória) */
+  --field-line: #718197; /* borda de campo e de toggle: ≥ 3:1 contra o campo, o card, o subtle e o vidro da página do aparelho (a --line, 1,2:1, é só divisória) */
   --faint: #94A3B8;   /* só decorativo, nunca texto */
   --soft: #516074;    /* rótulos: 6,4:1 sobre branco; ≥ 4,5:1 também no vidro da página do aparelho (era #5B6B80: 4,36:1 ali) */
   --mid: #334155;
