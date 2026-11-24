@@ -19,7 +19,7 @@ export function CreateUserForm() {
       <div className="grid">
         <label>
           Usuário (login)
-          <input name="username" required minLength={3} maxLength={64} placeholder="joao.silva" />
+          <input name="username" required minLength={3} maxLength={64} placeholder="joao.silva" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
         </label>
         <label>
           E-mail

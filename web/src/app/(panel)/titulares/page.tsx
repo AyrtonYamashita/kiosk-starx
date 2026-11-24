@@ -28,7 +28,7 @@ export default async function TitularesPage({ searchParams }: { searchParams: Pr
       <form className="card row" method="get" role="search" style={{ gap: 12, alignItems: "flex-end" }}>
         <label style={{ flex: "1 1 260px" }}>
           Usuário do SSW
-          <input name="q" defaultValue={q} placeholder="começo do usuário, ex.: joao" maxLength={64} autoComplete="off" />
+          <input name="q" defaultValue={q} placeholder="começo do usuário, ex.: joao" maxLength={64} autoComplete="off" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
         </label>
         <div className="cargas-actions">
           <button className="primary">Buscar</button>

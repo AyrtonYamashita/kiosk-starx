@@ -9,7 +9,7 @@ export function LoginForm() {
     <form action={action} className="stack">
       <label>
         Usuário ou e-mail
-        <input name="username" autoComplete="username" required autoFocus />
+        <input name="username" autoComplete="username" autoCapitalize="none" autoCorrect="off" spellCheck={false} required autoFocus />
       </label>
       <label>
         Senha
