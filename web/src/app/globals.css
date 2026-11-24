@@ -496,17 +496,21 @@ label.dev-check { min-height: 32px; gap: 8px; font-size: 12.5px; }
   logo acima da barra de abas, abre uma folha igual à do menu "Mais" (FilterSheet) com os filtros. No desktop a barra
   não existe e os filtros ficam no lugar de sempre (coluna em Aparelhos, card em Cargas).
 */
+/* telas bem estreitas (até 359 px): encurta rótulos para o cabeçalho caber numa linha */
+@media (max-width: 359.98px) { .hide-xs { display: none; } }
 .filter-bar { display: none; }
 .filters-desktop { display: contents; }
 @media (max-width: 1023.98px) {
   .dev-filters, .filters-desktop { display: none; }
+  /* faixa opaca colada na barra de abas: a lista rola por baixo sem aparecer em volta do botão */
   .filter-bar {
-    display: flex; position: fixed; z-index: 40; left: 16px; right: 16px;
-    bottom: calc(56px + 8px + env(safe-area-inset-bottom));
+    display: flex; position: fixed; z-index: 40; left: 0; right: 0;
+    bottom: calc(56px + env(safe-area-inset-bottom));
+    padding: 8px 16px; background: var(--surface); border-top: 1px solid var(--line);
   }
-  button.filter-bar-btn { flex: 1; gap: 8px; background: var(--surface); color: var(--ink); box-shadow: var(--shadow-float); }
-  /* a barra de filtros não cobre o fim da lista */
-  .main:has(.filter-bar) { padding-bottom: calc(72px + 52px + env(safe-area-inset-bottom)); }
+  button.filter-bar-btn { flex: 1; gap: 8px; background: var(--surface); color: var(--ink); }
+  /* a barra de filtros não cobre o fim da lista (abas 56 + faixa ~61 + respiro 16) */
+  .main:has(.filter-bar) { padding-bottom: calc(56px + 64px + 16px + env(safe-area-inset-bottom)); }
   .dev-filters-sheet { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; padding-bottom: 8px; }
   .dev-filters-sheet .dev-search, .dev-filters-sheet > .row { grid-column: 1 / -1; }
   .filter-sheet .cargas-filters { padding: 4px 0 8px; }

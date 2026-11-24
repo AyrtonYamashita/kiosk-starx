@@ -103,6 +103,7 @@ export async function setOpsReaderAll(_: FormState, form: FormData): Promise<For
     await api("/v1/admin/ops/settings", { method: "PUT", body: { readerAll: all } });
     revalidatePath("/operations");
     revalidatePath("/");
+    revalidatePath("/profiles");
     return { ok: all ? "Leitura ligada em todos os coletores (menos os desligados um a um)." : "Leitura só nos coletores ligados um a um." };
   } catch (e) {
     return { error: message(e) };

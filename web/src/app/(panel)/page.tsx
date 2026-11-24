@@ -1,18 +1,15 @@
 import Link from "next/link";
 import { AutoRefresh } from "@/components/AutoRefresh";
-import { api, type DeviceSummary, type Me, type OpsSettings, type Profile, type RepoApp } from "@/lib/api";
+import { api, type DeviceSummary, type Profile, type RepoApp } from "@/lib/api";
 import { DevicesTable } from "./DevicesTable";
-import { ReaderAll } from "./ReaderAll";
 
 export const dynamic = "force-dynamic";
 
 export default async function DevicesPage() {
-  const [{ devices }, { profiles }, { apps: repo }, settings, me] = await Promise.all([
+  const [{ devices }, { profiles }, { apps: repo }] = await Promise.all([
     api<{ devices: DeviceSummary[]; onlineWindowSec: number }>("/v1/admin/devices"),
     api<{ profiles: Profile[] }>("/v1/admin/profiles"),
     api<{ apps: RepoApp[] }>("/v1/admin/apps"),
-    api<OpsSettings>("/v1/admin/ops/settings"),
-    api<Me>("/v1/admin/me"),
   ]);
   return (
     <div className="stack wide fit-page">
@@ -20,9 +17,9 @@ export default async function DevicesPage() {
       <div className="row">
         <h1 style={{ margin: 0 }}>Aparelhos</h1>
         <span className="spacer" />
-        <ReaderAll settings={settings} canEdit={me.role === "admin"} />
-        <Link href="/enroll" className="button">
-          + Cadastrar aparelho
+        {/* em telas bem estreitas o rótulo encurta para caber na linha do título (o nome acessível segue completo) */}
+        <Link href="/enroll" className="button" aria-label="Cadastrar aparelho">
+          + Cadastrar<span className="hide-xs"> aparelho</span>
         </Link>
       </div>
 
