@@ -244,17 +244,25 @@ const EFFECTS: Record<
     };
   },
   flow: (back) => {
-    const from = back ? -30 : 30;
+    // Painel: no celular (barra de abas, abaixo de 1024 px) a página entra na vertical — avançar sobe de baixo,
+    // voltar desce de cima — com 64 px fixos (30% da altura de uma página longa seria um salto enorme). No desktop
+    // segue na horizontal, 30% da largura.
+    const vertical =
+      typeof window !== 'undefined' &&
+      window.matchMedia('(max-width: 1023.98px)').matches;
+    const from = vertical ? (back ? -64 : 64) : back ? -30 : 30;
+    const move = (v: number) =>
+      vertical ? `translateY(${v}px)` : `translateX(${v}%)`;
     return {
       enter: {
         opacity: [0, 1],
-        transform: [`translateX(${from}%)`, 'none'],
+        transform: [move(from), 'none'],
         filter: ['blur(12px)', 'blur(0px)'],
         transition: { duration: 0.35, ease: ease.out },
       },
       exit: {
         opacity: [1, 0],
-        transform: ['none', `translateX(${-from}%)`],
+        transform: ['none', move(-from)],
         filter: ['blur(0px)', 'blur(12px)'],
         transition: { duration: 0.25, ease: ease.leave },
       },
