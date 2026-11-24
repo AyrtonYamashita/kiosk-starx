@@ -300,6 +300,10 @@ export function DevicesTable({
                         <div className="muted small">
                           {modelOf(d)} · {d.serial ?? "sem serial"}
                         </div>
+                        {/* em tela de toque não há hover: o que o title do ponto mostra vira texto */}
+                        <div className="touch-only muted small" suppressHydrationWarning>
+                          {d.online ? "online" : "offline"} · último contato {ago(d.lastSeenAt)}
+                        </div>
                         <div className="show-sm dev-mobile">
                           {d.loggedUser && <span className="mono">{d.loggedUser}</span>}
                           <Battery b={d.battery} online={d.online} />
@@ -344,6 +348,7 @@ export function DevicesTable({
                             <span className="badge danger" title={hint}>
                               <span className="dot" /> {label}
                             </span>
+                            {hint && <div className="touch-only muted small">{hint}</div>}
                           </div>
                         )}
                       </td>
