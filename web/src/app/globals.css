@@ -513,6 +513,24 @@ label.dev-check { min-height: 32px; gap: 8px; font-size: 12.5px; }
 }
 .dev-main table :is(th, td) { padding-left: 10px; padding-right: 10px; }
 .dev-main table :is(th, td):first-child { padding-left: 14px; }
+/* célula do aparelho: informações à esquerda; no celular a bateria fica à direita, no meio da altura da linha */
+.dev-cell { display: flex; align-items: center; gap: 12px; }
+.dev-cell-main { flex: 1; min-width: 0; }
+.dev-cell-batt { flex: none; }
+.sel-icon { flex: none; color: var(--blue); }
+.dev-select-hint { margin: 0; padding: 10px 14px 0; }
+/*
+  Celular e tablet: sem caixa de seleção à vista (seleção por toque longo). A coluna da caixa sai da tela mas fica
+  no HTML para leitor de tela e teclado. Sem seleção de texto nem menu de contexto do sistema no toque longo.
+*/
+@media (max-width: 1023.98px) {
+  .dev-main table .sel-col {
+    position: absolute; width: 1px; height: 1px; padding: 0; border: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+  }
+  .dev-main table :is(th, td):nth-child(2) { padding-left: 14px; }
+  .dev-main tbody tr { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+  .dev-main tbody tr td { vertical-align: middle; }
+}
 .batt {
   position: relative; display: inline-flex; align-items: center; justify-content: center; width: 46px; height: 20px;
   border: 1.5px solid var(--mid); border-radius: 3px; overflow: visible; vertical-align: middle;
@@ -560,7 +578,6 @@ tr.selected td { background: var(--blue-tint); }
   .hide-sm { display: none; }
   .show-sm { display: flex; }
 }
-.dev-mobile { align-items: center; gap: 10px; margin-top: 4px; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }

@@ -4,8 +4,9 @@ import { useActionToast } from "@/components/Toasts";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { FilterSheet } from "@/components/FilterSheet";
 import Link from "next/link";
-import { useActionState, useMemo, useState } from "react";
-import { Search } from "lucide-react";
+import { useActionState, useMemo, useRef, useState } from "react";
+import { CircleCheck, Search } from "lucide-react";
+import { useMediaQuery } from "@/lib/client";
 import { bulkAssignProfile, sendCommand } from "@/lib/actions";
 import type { DeviceSummary, Profile } from "@/lib/api";
 import { ago, configStatusLabel, kioskModeLabel, networkLabel, uptime } from "@/lib/format";
@@ -91,6 +92,8 @@ type Group = "status" | "user" | "profile" | "model";
 type Filters = { q: string } & Record<Group, string[]>;
 const DEFAULTS: Filters = { q: "", status: ["online"], user: [], profile: [], model: [] };
 const NONE = "__none__";
+/** toque longo que seleciona um aparelho no celular */
+const LONG_PRESS_MS = 450;
 
 function keyOf(g: Group, d: DeviceSummary): string {
   if (g === "status") return d.online ? "online" : "offline";
@@ -180,6 +183,63 @@ export function DevicesTable({
       return n;
     });
 
+  /*
+    Celular e tablet (abaixo de 1024 px): sem caixa de seleção à vista. Tocar e segurar uma linha seleciona (ícone de
+    seleção no lugar do ponto de status, linha destacada); com algo selecionado, um toque simples marca/desmarca e
+    não abre o aparelho. A caixa continua no HTML (oculta só na tela) para leitor de tela e teclado.
+    No desktop: caixas como sempre.
+  */
+  const narrow = useMediaQuery("(max-width: 1023.98px)");
+  const press = useRef<{ timer: number; x: number; y: number } | null>(null);
+  const longPressed = useRef(false);
+  const cancelPress = () => {
+    if (press.current) window.clearTimeout(press.current.timer);
+    press.current = null;
+  };
+  const rowPress = (id: string) =>
+    narrow
+      ? {
+          onPointerDown: (e: React.PointerEvent) => {
+            longPressed.current = false;
+            if (e.button !== 0) return;
+            cancelPress();
+            const { clientX: x, clientY: y } = e;
+            press.current = {
+              x,
+              y,
+              timer: window.setTimeout(() => {
+                press.current = null;
+                longPressed.current = true;
+                toggle(id);
+                navigator.vibrate?.(12);
+              }, LONG_PRESS_MS),
+            };
+          },
+          // arrastar (rolar a lista) cancela
+          onPointerMove: (e: React.PointerEvent) => {
+            const p = press.current;
+            if (p && Math.hypot(e.clientX - p.x, e.clientY - p.y) > 10) cancelPress();
+          },
+          onPointerUp: cancelPress,
+          onPointerCancel: cancelPress,
+          onPointerLeave: cancelPress,
+          // sem o menu de contexto/prévia do link no toque longo
+          onContextMenu: (e: React.MouseEvent) => e.preventDefault(),
+          onClickCapture: (e: React.MouseEvent) => {
+            if (longPressed.current) {
+              // o clique que vem depois do toque longo não abre o aparelho
+              longPressed.current = false;
+              e.preventDefault();
+              e.stopPropagation();
+            } else if (selected.size > 0) {
+              e.preventDefault();
+              e.stopPropagation();
+              toggle(id);
+            }
+          },
+        }
+      : {};
+
   // os mesmos filtros (mesmo estado) na coluna do desktop e na folha de baixo do celular
   const filters = (
     <>
@@ -236,6 +296,11 @@ export function DevicesTable({
             <button className="primary" disabled={pending}>
               Aplicar
             </button>
+            {narrow && !all && (
+              <button type="button" className="link-button" onClick={() => setSelected(new Set(list.map((d) => d.id)))}>
+                selecionar todos ({list.length})
+              </button>
+            )}
             <button type="button" className="link-button" onClick={() => setSelected(new Set())}>
               limpar seleção
             </button>
@@ -254,11 +319,12 @@ export function DevicesTable({
         </div>
       ) : (
         <div className="card list-card">
+          {narrow && selected.size === 0 && <p className="dev-select-hint muted small">Toque e segure um aparelho para selecionar.</p>}
           <div className="list-scroll">
             <table>
               <thead>
                 <tr>
-                  <th style={{ width: 32 }}>
+                  <th className="sel-col" style={{ width: 32 }}>
                     <label className="check-hit">
                       <input
                         type="checkbox"
@@ -282,34 +348,43 @@ export function DevicesTable({
                   const [, label, hint] = configStatusLabel[d.configStatus];
                   const mode = d.kioskEnabled ? kioskModeLabel[d.kioskMode ?? ""] ?? d.kioskMode : d.kioskEnabled === false ? "Kiosk desligado" : "—";
                   return (
-                    <tr key={d.id}>
-                      <td>
+                    <tr key={d.id} className={narrow && selected.has(d.id) ? "selected" : undefined} {...rowPress(d.id)}>
+                      <td className="sel-col">
                         <label className="check-hit">
                           <input type="checkbox" aria-label={`Selecionar ${d.name}`} checked={selected.has(d.id)} onChange={() => toggle(d.id)} />
                         </label>
                       </td>
                       <td>
-                        <span className="dev-name">
-                          <span
-                            className={`dot ${d.online ? "good" : "off"}`}
-                            role="img"
-                            aria-label={d.online ? "online" : "offline"}
-                            title={`${d.online ? "online" : "offline"} · último contato ${ago(d.lastSeenAt)}`}
-                          />
-                          <Link href={`/devices/${d.id}`}>
-                            <strong>{d.name}</strong>
-                          </Link>
-                        </span>
-                        <div className="muted small">
-                          {modelOf(d)} · {d.serial ?? "sem serial"}
-                        </div>
-                        {/* em tela de toque não há hover: o que o title do ponto mostra vira texto */}
-                        <div className="touch-only muted small" suppressHydrationWarning>
-                          {d.online ? "online" : "offline"} · último contato {ago(d.lastSeenAt)}
-                        </div>
-                        <div className="show-sm dev-mobile">
-                          {d.loggedUser && <span className="mono">{d.loggedUser}</span>}
-                          <Battery b={d.battery} online={d.online} />
+                        {/* celular: informações à esquerda, bateria à direita no meio da linha */}
+                        <div className="dev-cell">
+                          <div className="dev-cell-main">
+                            <span className="dev-name">
+                              {narrow && selected.has(d.id) ? (
+                                <CircleCheck size={16} strokeWidth={2.25} className="sel-icon" role="img" aria-label="selecionado" />
+                              ) : (
+                                <span
+                                  className={`dot ${d.online ? "good" : "off"}`}
+                                  role="img"
+                                  aria-label={d.online ? "online" : "offline"}
+                                  title={`${d.online ? "online" : "offline"} · último contato ${ago(d.lastSeenAt)}`}
+                                />
+                              )}
+                              <Link href={`/devices/${d.id}`}>
+                                <strong>{d.name}</strong>
+                              </Link>
+                            </span>
+                            <div className="muted small">
+                              {modelOf(d)} · {d.serial ?? "sem serial"}
+                            </div>
+                            {/* em tela de toque não há hover: o que o title do ponto mostra vira texto */}
+                            <div className="touch-only muted small" suppressHydrationWarning>
+                              {d.online ? "online" : "offline"} · último contato {ago(d.lastSeenAt)}
+                            </div>
+                            {d.loggedUser && <div className="show-sm mono small">{d.loggedUser}</div>}
+                          </div>
+                          <div className="show-sm dev-cell-batt">
+                            <Battery b={d.battery} online={d.online} />
+                          </div>
                         </div>
                       </td>
                       <td className="hide-sm">{d.loggedUser ? <span className="mono">{d.loggedUser}</span> : <span className="muted small">—</span>}</td>
