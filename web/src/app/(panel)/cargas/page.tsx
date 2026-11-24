@@ -190,12 +190,12 @@ export default async function CargasPage({ searchParams }: { searchParams: Promi
               return (
                 <li key={o.id} className="carga-card">
                   <div className="carga-line">
-                    {/* o link cobre o card todo (::after); o do coletor fica por cima */}
+                    {/* placa e função | início, colaborador, coletor, unidades, duração | volumes e situação; o link cobre o card todo (::after), o do coletor fica por cima */}
                     <Link href={`/operations/${o.device.id}?op=${o.id}`} className="carga-card-link">
                       <span className="ops-plate mono">{o.realPlate || o.plate}</span>
                       <span className="carga-fn">{o.fnLabel}</span>
                     </Link>
-                    <Status o={o} />
+                    <span className="mono carga-right">{fmtMoney(o.totalValue)}</span>
                   </div>
                   <div className="carga-line muted small">
                     <span className="carga-meta">
@@ -213,8 +213,8 @@ export default async function CargasPage({ searchParams }: { searchParams: Promi
                       {o.realPlate && o.realPlate !== o.plate && <span className="mono"> · placa no SSW {o.plate}</span>}
                       {o.units.length > 0 && <span> · {o.units.join(" · ")}</span>}
                       {o.branch && <span> · {o.branch}</span>}
+                      <span className="mono"> · {fmtDuration(o.durationSec)}</span>
                     </span>
-                    <span className="mono carga-right">{fmtMoney(o.totalValue)}</span>
                   </div>
                   <div className="carga-line carga-qty">
                     <span className="mono">
@@ -223,7 +223,9 @@ export default async function CargasPage({ searchParams }: { searchParams: Promi
                     <div className="ops-bar" aria-hidden>
                       <span style={{ width: `${pct}%` }} />
                     </div>
-                    <span className="mono muted small carga-right">{fmtDuration(o.durationSec)}</span>
+                    <span className="carga-right">
+                      <Status o={o} />
+                    </span>
                   </div>
                 </li>
               );
