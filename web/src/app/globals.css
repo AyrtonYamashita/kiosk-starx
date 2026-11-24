@@ -250,7 +250,8 @@ button.toggle[data-state="checked"] { justify-content: flex-end; background: var
 button.toggle[data-state="checked"]:hover { background: var(--blue-press); border-color: var(--blue-press); }
 button.toggle:disabled { opacity: .5; }
 button.toggle:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
-.toggle-thumb { display: block; width: 14px; height: 14px; border-radius: 2px; background: #fff; box-shadow: 0 1px 2px rgb(0 0 0 / 0.25); }
+/* polegar ligado na cor de texto do azul (--on-blue): no escuro o branco sobre o azul claro dava 2,8:1 */
+.toggle-thumb { display: block; width: 14px; height: 14px; border-radius: 2px; background: var(--on-blue); box-shadow: 0 1px 2px rgb(0 0 0 / 0.25); }
 button.toggle[data-state="unchecked"] .toggle-thumb { background: var(--soft); box-shadow: none; }
 label.check-label:has(button.toggle) { cursor: pointer; }
 form.stack { gap: 12px; }
@@ -269,6 +270,8 @@ button:active:not(:disabled), .button:active { transform: scale(0.98); }
 button.primary { background: var(--blue); border-color: var(--blue); color: var(--on-blue); }
 button.primary:hover { background: var(--blue-press); border-color: var(--blue-press); color: var(--on-blue); }
 button:disabled { background: var(--subtle); border-color: var(--line); color: var(--soft); cursor: default; }
+/* primário desativado/carregando continua com cara de ação principal (azul claro), mas claramente diferente do ativo */
+button.primary:disabled, button.primary:disabled:hover { background: var(--blue-tint); border-color: var(--blue-edge); color: var(--blue-deep); }
 /* ação destrutiva: texto vermelho escuro, nunca preenchimento */
 button.danger, button.danger:hover {
   height: auto; padding: 0; border: none; background: none; font-size: 11.5px; font-weight: 500; color: var(--bad-deep);
@@ -409,7 +412,8 @@ a.ops-load:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; 
 .ops-load-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: 12.5px; font-weight: 600; }
 .ops-load-sub { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--soft); white-space: nowrap; }
 .dot.good { background: var(--good); }
-.dot.off { background: var(--muted); }
+/* offline: anel vazado (forma diferente do ponto cheio do online, não só a cor) com contraste de 5,8:1 */
+.dot.off { background: transparent; box-shadow: inset 0 0 0 1.5px var(--soft); }
 .ops-fn-label { font-size: 13px; font-weight: 500; color: var(--mid); }
 .ops-detail-top { display: grid; gap: 16px; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); align-items: stretch; }
 .ops-tiles { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 1fr; }
