@@ -689,6 +689,21 @@ button.cmd-button.bad, button.cmd-button.bad:hover { color: var(--bad-deep); }
   input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='file']):not(.device-name-input),
   select, select.mono, textarea, textarea.mono { font-size: 16px; }
 }
+
+/*
+  Alvos de toque (só com ponteiro de toque): 44 px no mínimo. No desktop com mouse nada muda; o rótulo em volta das
+  caixas da tabela de Aparelhos (.check-hit) nem existe para o layout lá (display: contents).
+*/
+label.check-hit { display: contents; }
+@media (pointer: coarse) {
+  input[type='checkbox'], input[type='radio'], label.check-label input[type='checkbox'] { width: 20px; height: 20px; }
+  /* caixa da tabela: área de 44 px; a margem negativa evita que a linha cresça mais que a caixa de 20 px */
+  label.check-hit { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; margin: -12px; }
+  label.dev-check { min-height: 44px; }
+  .link-button, button.danger { display: inline-flex; align-items: center; min-height: 44px; }
+  button.toast-close { width: 44px; height: 44px; margin: -8px -8px -8px 0; }
+  .segmented button { height: 44px; }
+}
 } /* fim da camada components */
 
 /* Ajustes do maplibre: o CSS dele fica fora das camadas, então estes também (e com seletor mais específico). */

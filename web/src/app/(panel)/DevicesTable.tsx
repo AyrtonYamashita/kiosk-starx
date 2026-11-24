@@ -256,12 +256,14 @@ export function DevicesTable({
               <thead>
                 <tr>
                   <th style={{ width: 32 }}>
-                    <input
-                      type="checkbox"
-                      aria-label="Selecionar todos os exibidos"
-                      checked={all}
-                      onChange={() => setSelected(all ? new Set() : new Set(list.map((d) => d.id)))}
-                    />
+                    <label className="check-hit">
+                      <input
+                        type="checkbox"
+                        aria-label="Selecionar todos os exibidos"
+                        checked={all}
+                        onChange={() => setSelected(all ? new Set() : new Set(list.map((d) => d.id)))}
+                      />
+                    </label>
                   </th>
                   <th>Aparelho</th>
                   <th className="hide-sm">Usuário</th>
@@ -279,7 +281,9 @@ export function DevicesTable({
                   return (
                     <tr key={d.id}>
                       <td>
-                        <input type="checkbox" aria-label={`Selecionar ${d.name}`} checked={selected.has(d.id)} onChange={() => toggle(d.id)} />
+                        <label className="check-hit">
+                          <input type="checkbox" aria-label={`Selecionar ${d.name}`} checked={selected.has(d.id)} onChange={() => toggle(d.id)} />
+                        </label>
                       </td>
                       <td>
                         <span className="dev-name">
