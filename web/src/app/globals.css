@@ -518,7 +518,7 @@ label.dev-check { min-height: 32px; gap: 8px; font-size: 12.5px; }
   .main:has(.filter-bar) > .page { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
   .main:has(.filter-bar) > .page > .fit-page { flex: 1 1 0; min-height: 0; }
   .fit-page > .list-card, .fit-page > .dev-layout, .fit-page .dev-main, .fit-page .dev-main > .list-card { flex: 0 1 auto; min-height: 0; }
-  .fit-page > .dev-layout { display: flex; flex-direction: column; }
+  .fit-page > .dev-layout { display: flex; flex-direction: column; align-items: stretch; }
   .fit-page .cargas-cards, .fit-page .dev-main .list-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
   .dev-filters-sheet { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; padding-bottom: 8px; }
   .dev-filters-sheet .dev-search, .dev-filters-sheet > .row { grid-column: 1 / -1; }
