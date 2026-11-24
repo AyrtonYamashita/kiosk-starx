@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { api, type OpsHistory } from "@/lib/api";
+import { CollapsibleFilters } from "@/components/FilterToggle";
 import { dateTime } from "@/lib/format";
 import { END_LABEL, fmtDuration, fmtMoney, fmtQty } from "@/lib/opsFormat";
 
@@ -50,7 +51,8 @@ export default async function CargasPage({ searchParams }: { searchParams: Promi
         <h1 style={{ margin: 0 }}>Cargas</h1>
       </div>
 
-      <form className="card cargas-filters" method="get" role="search">
+      <CollapsibleFilters count={Object.values(filters).filter(Boolean).length} controls="cargas-filters">
+      <form className="card cargas-filters" id="cargas-filters" method="get" role="search">
         <label>
           Placa
           <input name="plate" defaultValue={s.plate ?? ""} placeholder="ABC1D23" maxLength={20} autoComplete="off" />
@@ -105,6 +107,7 @@ export default async function CargasPage({ searchParams }: { searchParams: Promi
           )}
         </div>
       </form>
+      </CollapsibleFilters>
 
       {data.operations.length === 0 ? (
         <div className="card muted">{filtered ? "Nenhuma carga com esses filtros." : "Nenhuma carga registrada ainda."}</div>

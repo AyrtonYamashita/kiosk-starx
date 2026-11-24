@@ -476,7 +476,23 @@ label.dev-check { min-height: 32px; gap: 8px; font-size: 12.5px; }
 @media (max-width: 1023.98px) {
   .dev-layout { grid-template-columns: minmax(0, 1fr); }
   .dev-filters { position: static; max-height: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .dev-filters .dev-search, .dev-filters > .row { grid-column: 1 / -1; }
+  .dev-filters .dev-search, .dev-filters > .row, .dev-filters > .filters-toggle { grid-column: 1 / -1; }
+}
+
+/*
+  Filtros recolhíveis (celular): botão "Filtros (n ativos)"; fechados, só a busca (Aparelhos) e o botão ficam à
+  vista e a lista sobe. No desktop o botão some, o bloco de fora das Cargas não existe para o layout
+  (display: contents) e os filtros ficam sempre abertos.
+*/
+.filters-toggle { display: none; }
+.filters-collapse { display: contents; }
+@media (max-width: 1023.98px) {
+  button.filters-toggle { display: flex; width: 100%; justify-content: flex-start; gap: 8px; padding: 0 12px; }
+  .filters-chevron { margin-left: auto; transition: transform .2s ease-out; }
+  .filters-toggle[aria-expanded="true"] .filters-chevron { transform: rotate(180deg); }
+  .filters-collapse { display: flex; flex-direction: column; gap: 8px; }
+  .filters-collapse[data-open="false"] > :not(.filters-toggle),
+  .dev-filters[data-open="false"] > :not(.dev-search):not(.filters-toggle) { display: none; }
 }
 .dev-main table :is(th, td) { padding-left: 10px; padding-right: 10px; }
 .dev-main table :is(th, td):first-child { padding-left: 14px; }
