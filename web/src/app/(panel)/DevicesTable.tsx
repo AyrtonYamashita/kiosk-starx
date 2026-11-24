@@ -41,7 +41,7 @@ function BulkCommand({ ids, repo }: { ids: string[]; repo: { packageName: string
       {ids.map((id) => (
         <input key={id} type="hidden" name="deviceId" value={id} />
       ))}
-      <select name="type" required value={type} onChange={(e) => setType(e.target.value)} style={{ width: "auto", minWidth: 200 }}>
+      <select name="type" required value={type} onChange={(e) => setType(e.target.value)} style={{ width: "auto", minWidth: "min(100%, 200px)", maxWidth: "100%" }}>
         <option value="" disabled>
           Enviar comando…
         </option>
@@ -52,9 +52,9 @@ function BulkCommand({ ids, repo }: { ids: string[]; repo: { packageName: string
         <option value="install_app">Instalar app (mais nova)</option>
         <option value="reboot">Reiniciar</option>
       </select>
-      {type === "message" && <input name="text" required maxLength={1000} placeholder="Mensagem (fica na tela até tocarem em OK)" style={{ width: "auto", minWidth: 280 }} />}
+      {type === "message" && <input name="text" required maxLength={1000} placeholder="Mensagem (fica na tela até tocarem em OK)" style={{ width: "auto", minWidth: "min(100%, 280px)", maxWidth: "100%" }} />}
       {type === "install_app" && (
-        <select name="app" required defaultValue="" style={{ width: "auto", minWidth: 200 }}>
+        <select name="app" required defaultValue="" style={{ width: "auto", minWidth: "min(100%, 200px)", maxWidth: "100%" }}>
           <option value="" disabled>
             {repo.length ? "App…" : "repositório vazio"}
           </option>
@@ -210,7 +210,7 @@ export function DevicesTable({
               <input key={id} type="hidden" name="deviceId" value={id} />
             ))}
             <strong>{selected.size} selecionado(s)</strong>
-            <select name="profileId" required defaultValue="" style={{ width: "auto", minWidth: 220 }}>
+            <select name="profileId" required defaultValue="" style={{ width: "auto", minWidth: "min(100%, 220px)", maxWidth: "100%" }}>
               <option value="" disabled>
                 Aplicar perfil…
               </option>

@@ -29,7 +29,7 @@ export default async function CodeSearchPage({ searchParams }: { searchParams: P
 
       <section className="card stack">
         <form method="get" className="row">
-          <label style={{ flex: 1, minWidth: 240 }}>
+          <label style={{ flex: 1, minWidth: "min(100%, 240px)" }}>
             Código (inteiro ou o começo, mínimo 3 caracteres)
             <input name="code" defaultValue={code} minLength={3} maxLength={80} required autoFocus className="mono" inputMode="numeric" />
           </label>

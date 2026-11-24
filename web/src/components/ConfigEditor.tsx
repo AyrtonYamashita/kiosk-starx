@@ -519,7 +519,7 @@ function AppsList({ apps, labelOf, onChange }: { apps: string[]; labelOf: (p: st
               add();
             }
           }}
-          style={{ flex: 1, minWidth: 240 }}
+          style={{ flex: 1, minWidth: "min(100%, 240px)" }}
         />
         <button type="button" onClick={add}>
           Adicionar

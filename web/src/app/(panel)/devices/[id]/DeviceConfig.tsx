@@ -40,7 +40,7 @@ export function DeviceConfig({
       <form action={action} className="stack">
         <input type="hidden" name="id" value={device.id} />
         <div className="row" style={{ alignItems: "flex-end" }}>
-          <label style={{ flex: 1, minWidth: 260 }}>
+          <label style={{ flex: 1, minWidth: "min(100%, 260px)" }}>
             Perfil
             <select name="profileId" value={profileId} onChange={(e) => setProfileId(e.target.value)}>
               <option value="">— Sem perfil (o aparelho usa só os ajustes abaixo)</option>
