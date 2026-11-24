@@ -20,6 +20,7 @@ import type { OpsLive } from "../opsLive.js";
 import type { Mailer } from "../mfa.js";
 import { adminLockKey, audit, clearLock, lockedFor, lockKey, recordFailure } from "../auth.js";
 import { requireTenant, tenantOf } from "../tenant.js";
+import { platformRoutes } from "./platform.js";
 import type { Waker } from "../wake.js";
 
 declare module "fastify" {
@@ -31,8 +32,11 @@ declare module "fastify" {
       email: string | null;
       role: "admin" | "operator";
       sessionId: string;
+      /** empresa que a requisição vê: a do usuário, ou a que a plataforma "entrou" (suporte) */
       tenantId: string | null;
       platform: boolean;
+      /** plataforma dentro de uma empresa ("entrar como") */
+      acting: boolean;
     };
   }
 }
@@ -100,7 +104,8 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
       `UPDATE sessions s SET last_used_at = now() FROM admins a
        WHERE s.token_hash = $1 AND s.stage = 'full' AND s.expires_at > now() AND s.last_used_at > now() - make_interval(hours => $2)
          AND a.id = s.admin_id AND a.disabled_at IS NULL
-       RETURNING s.id AS session_id, s.tenant_id, a.id, a.username, a.display_name, a.email, a.role, a.platform`,
+       RETURNING s.id AS session_id, s.tenant_id, s.acting_tenant_id, a.id, a.username, a.display_name, a.email, a.role, a.platform,
+                 (SELECT status FROM tenants t WHERE t.id = s.tenant_id) AS tenant_status`,
       [tokenHash, config.sessionIdleHours],
     );
     if (!r.rows[0]) {
@@ -110,8 +115,14 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
       return reply.code(401).send({ error: "unauthorized" });
     }
     const a = r.rows[0];
-    // banco (RLS): a requisição passa a ver só os dados da empresa da sessão (a plataforma, nenhuma)
-    setTenant(a.tenant_id);
+    // empresa suspensa pela plataforma: os usuários dela não entram
+    if (a.tenant_status === "suspended") {
+      return reply.code(403).send({ error: "tenant_suspended", message: "Empresa suspensa. Fale com o suporte da PStarX." });
+    }
+    // a plataforma vê a empresa em que "entrou"; os demais, sempre a própria
+    const tenantId: string | null = a.platform ? (a.acting_tenant_id ?? null) : a.tenant_id;
+    // banco (RLS): a requisição passa a ver só os dados dessa empresa (a plataforma fora de uma, nenhuma)
+    setTenant(tenantId);
     // empresa: sempre a da sessão (copiada do usuário no login), nunca de cabeçalho, URL ou corpo. Vazia = plataforma.
     req.admin = {
       id: a.id,
@@ -120,8 +131,9 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
       email: a.email,
       role: a.role,
       sessionId: a.session_id,
-      tenantId: a.tenant_id,
+      tenantId,
       platform: a.platform === true,
+      acting: a.platform === true && !!a.acting_tenant_id,
     };
   }
 
@@ -143,7 +155,7 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
 
     // O e-mail é único no sistema todo; o nome de usuário, só dentro da empresa. Nome repetido em mais de uma empresa:
     // vale a conta cuja senha confere (o login não pergunta a empresa).
-    const cols = "id, username, email, password_hash, disabled_at";
+    const cols = "id, tenant_id, username, email, password_hash, disabled_at";
     let candidates = (await db.query(`SELECT ${cols} FROM admins WHERE lower(email) = lower($1)`, [identifier])).rows;
     if (!candidates.length) candidates = (await db.query(`SELECT ${cols} FROM admins WHERE username = $1 ORDER BY created_at LIMIT 5`, [identifier])).rows;
     // conta bloqueada pelo segundo fator (erros de código contam na conta, qualquer que seja o identificador digitado)
@@ -170,6 +182,14 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
     if (passwordOk && candidates.length > 1) {
       const sec = await mfaBlocked(admin!);
       if (sec > 0) return tooMany(reply, sec);
+    }
+    // empresa suspensa: mesma resposta de conta desativada (a mensagem certa aparece depois, na sessão)
+    const suspended = passwordOk && admin.tenant_id
+      ? (await db.query("SELECT 1 FROM tenants WHERE id = $1 AND status = 'suspended'", [admin.tenant_id])).rowCount
+      : 0;
+    if (suspended) {
+      await audit(db, req, "login_failure", { adminId: admin.id, identifier, details: { reason: "tenant_suspended" } });
+      return reply.code(403).send({ error: "tenant_suspended", message: "Empresa suspensa. Fale com o suporte da PStarX." });
     }
     const ok = passwordOk && !admin.disabled_at;
     if (!ok) {
@@ -231,6 +251,7 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
         email: req.admin!.email,
         role: req.admin!.role,
         platform: req.admin!.platform,
+        acting: req.admin!.acting,
         tenant: t ? { id: t.id, name: t.name, slug: t.slug } : null,
       };
     });
@@ -242,6 +263,7 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
     await priv.register(privacyRoutes, { db, config });
     await priv.register(pushRoutes, { db, push: opts.push });
     await priv.register(kioskReleaseRoutes, { db, config });
+    await priv.register(platformRoutes, { db, config });
 
     /** O próprio nome de exibição (vazio = volta a mostrar o nome de usuário). */
     priv.patch("/v1/admin/me", async (req, reply) => {

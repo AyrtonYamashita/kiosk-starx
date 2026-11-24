@@ -9,8 +9,8 @@ const ETAPA: Record<string, string> = {
   tentativas: "Muitos códigos errados. Entre de novo com a senha.",
 };
 
-export default async function LoginPage({ searchParams }: { searchParams: Promise<{ expirada?: string; etapa?: string }> }) {
-  const { expirada, etapa } = await searchParams;
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ expirada?: string; etapa?: string; suspensa?: string }> }) {
+  const { expirada, etapa, suspensa } = await searchParams;
   return (
     <main className="login">
       <div className="brand">
@@ -25,6 +25,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         </div>
         {expirada && <div className="alert warn">Sua sessão expirou. Entre de novo.</div>}
         {etapa && ETAPA[etapa] && <div className="alert warn">{ETAPA[etapa]}</div>}
+        {suspensa && <div className="alert warn">Empresa suspensa. Fale com o suporte da PStarX.</div>}
         <LoginForm />
         <PasskeyLogin />
       </div>

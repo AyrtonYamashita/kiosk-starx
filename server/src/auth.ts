@@ -77,19 +77,24 @@ export async function clearLock(db: Db, kind: LockKind, key: string) {
   await db.query("DELETE FROM auth_lockouts WHERE kind = $1 AND key = $2", [kind, key]);
 }
 
-/** Evento de auditoria. Nunca grava senha, token ou código. */
+/**
+ * Evento de auditoria. Nunca grava senha, token ou código. A empresa do evento é a da requisição (a plataforma
+ * "entrando" numa empresa aparece na trilha dela) ou, sem ela, a do usuário (preenchida pelo banco).
+ */
 export async function audit(
   db: Db,
   req: FastifyRequest,
   event: string,
-  o: { adminId?: string | null; identifier?: string | null; details?: Record<string, unknown> } = {},
+  o: { adminId?: string | null; identifier?: string | null; details?: Record<string, unknown>; tenantId?: string | null } = {},
 ) {
-  await db.query("INSERT INTO auth_events (admin_id, identifier, event, ip, user_agent, details) VALUES ($1, $2, $3, $4, $5, $6)", [
+  const tenantId = o.tenantId !== undefined ? o.tenantId : (req.admin?.tenantId ?? null);
+  await db.query("INSERT INTO auth_events (admin_id, identifier, event, ip, user_agent, details, tenant_id) VALUES ($1, $2, $3, $4, $5, $6, $7)", [
     o.adminId ?? null,
     o.identifier ?? null,
     event,
     req.ip,
     (req.headers["user-agent"] ?? "").toString().slice(0, 300) || null,
     o.details ?? null,
+    tenantId,
   ]);
 }

@@ -2,7 +2,7 @@
 
 **Situação:** 3.1 (base), 3.2 (filtro na aplicação) e 3.3 (RLS) feitas em 2026-11-24 (migrações `016_tenants.sql`,
 `017_tenant_scope.sql` e `019_rls.sql`; testes em `server/test/tenants.test.ts`, `isolation.test.ts` e
-`rls.test.ts`). 3.4 em andamento. Respostas do dono do produto em 2026-11-18 no fim; o desenho abaixo já as considera.
+`rls.test.ts`). 3.4 (painel da plataforma) também, com `020_platform_acting.sql` e `platform.test.ts`. Respostas do dono do produto em 2026-11-18 no fim; o desenho abaixo já as considera.
 
 ## Objetivo
 
@@ -160,8 +160,25 @@ Cada parte é publicada e validada antes da próxima, como nas fases anteriores.
 - **Próximo endurecimento possível:** um usuário de login próprio para o papel restrito (hoje é `SET ROLE` sobre o
   superusuário: protege contra filtro esquecido, não contra injeção de SQL, que as consultas parametrizadas já evitam).
 
-**Fica para depois:** empresa suspensa ainda entra e os coletores dela continuam (entra na 3.4, junto com a tela de
-empresas); prazos de retenção continuam globais.
+## 3.4 como foi feita (2026-11-24)
+
+- **Empresas** (`/v1/platform/*`, só `admins.platform`; painel: menu "Empresas"): lista com coletores (online/total),
+  usuários e último contato; criar empresa já com o primeiro administrador (nome, usuário, e-mail e senha inicial,
+  tudo numa transação); renomear; suspender e reativar.
+- **Suspensa:** as sessões dos usuários dela caem na hora; login com a senha certa responde "empresa suspensa" (com a
+  senha errada, a resposta genérica de sempre). **Os coletores continuam funcionando** (check-in, kiosk, leitura do
+  SSW): suspender corta o painel, não a operação. Se um dia for preciso parar os coletores também, é uma regra a mais
+  no `authDevice`.
+- **"Entrar como":** `sessions.acting_tenant_id` (só para a plataforma). A sessão passa a ver a empresa como um
+  administrador dela (o RLS usa essa empresa), até "Sair da empresa"; vale só para aquela sessão. Entrada, saída e
+  tudo o que o suporte fizer lá dentro ficam na auditoria da empresa (e entrada/saída também na da plataforma). O painel
+  mostra a faixa "Você está vendo a empresa X". A lista de usuários da empresa não mostra os da plataforma.
+- **Auditoria da plataforma:** eventos sem empresa (ações da plataforma, contas inexistentes, login sem senha), na
+  tela Empresas.
+- Excluir empresa não tem tela de propósito (apaga tudo dela em cascata): por enquanto, só por SQL, depois de um backup.
+
+**Fica para depois:** prazos de retenção continuam globais (por empresa, se alguma pedir); usuário de login próprio
+para o papel restrito do banco.
 
 ## Respostas (2026-11-18)
 

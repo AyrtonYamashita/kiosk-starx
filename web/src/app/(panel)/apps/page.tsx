@@ -16,7 +16,7 @@ export default async function AppsPage() {
       <div className="stack">
         <h1>App do kiosk</h1>
         <p className="muted" style={{ margin: 0 }}>
-          Conta da plataforma: o mesmo app vale para todas as empresas. As telas das empresas chegam com o &quot;entrar como&quot;.
+          Conta da plataforma: o mesmo app vale para todas as empresas. Para ver uma empresa, entre nela em <Link href="/platform">Empresas</Link>.
         </p>
         <section className="card stack">
           <h2>App do kiosk (StarX Kiosk)</h2>

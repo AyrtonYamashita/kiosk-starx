@@ -425,6 +425,60 @@ export async function updateUser(_: FormState, form: FormData): Promise<FormStat
   return { ok: "Salvo." };
 }
 
+// ---------------------------------------------------------------- plataforma (fase 3.4)
+
+export async function createTenant(_: FormState, form: FormData): Promise<FormState> {
+  const password = String(form.get("password") ?? "");
+  if (password !== String(form.get("confirm") ?? "")) return { error: "As senhas não conferem." };
+  try {
+    await api("/v1/platform/tenants", {
+      method: "POST",
+      body: {
+        name: String(form.get("name") ?? ""),
+        slug: String(form.get("slug") ?? ""),
+        admin: {
+          username: String(form.get("username") ?? ""),
+          displayName: String(form.get("displayName") ?? ""),
+          email: String(form.get("email") ?? ""),
+          password,
+        },
+      },
+    });
+  } catch (e) {
+    return { error: message(e) };
+  }
+  revalidatePath("/platform");
+  return { ok: "Empresa criada. Passe a senha inicial do administrador por um canal seguro." };
+}
+
+export async function updateTenant(_: FormState, form: FormData): Promise<FormState> {
+  const body: Record<string, unknown> = {};
+  const name = String(form.get("name") ?? "").trim();
+  if (name) body.name = name;
+  const status = String(form.get("status") ?? "");
+  if (status) body.status = status;
+  try {
+    await api(`/v1/platform/tenants/${String(form.get("id"))}`, { method: "PATCH", body });
+  } catch (e) {
+    return { error: message(e) };
+  }
+  revalidatePath("/platform");
+  return { ok: status === "suspended" ? "Empresa suspensa." : status === "active" ? "Empresa reativada." : "Salvo." };
+}
+
+/** "Entrar como": esta sessão passa a ver a empresa (fica na auditoria das duas). */
+export async function enterTenant(form: FormData) {
+  await api(`/v1/platform/tenants/${String(form.get("id"))}/enter`, { method: "POST" });
+  revalidatePath("/", "layout");
+  redirect("/operations");
+}
+
+export async function exitTenant() {
+  await api("/v1/platform/exit", { method: "POST" });
+  revalidatePath("/", "layout");
+  redirect("/platform");
+}
+
 /** O próprio nome de exibição (Conta). */
 export async function updateMyName(_: FormState, form: FormData): Promise<FormState> {
   try {

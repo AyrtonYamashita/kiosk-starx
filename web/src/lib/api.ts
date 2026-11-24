@@ -61,8 +61,10 @@ export async function api<T>(path: string, init: { method?: string; body?: unkno
   if (res.status === 401) redirect("/login?expirada=1");
   const text = await res.text();
   const json = text ? JSON.parse(text) : null;
-  // usuário da plataforma (sem empresa) numa tela de empresa: vai para Apps (app do kiosk), a tela dele
-  if (res.status === 403 && json?.error === "no_tenant") redirect("/apps");
+  // usuário da plataforma (sem empresa) numa tela de empresa: vai para Empresas, a tela dele
+  if (res.status === 403 && json?.error === "no_tenant") redirect("/platform");
+  // empresa suspensa pela plataforma
+  if (res.status === 403 && json?.error === "tenant_suspended") redirect("/login?suspensa=1");
   if (!res.ok) throw new ApiError(res.status, json);
   return json as T;
 }
@@ -297,7 +299,22 @@ export interface Me {
   role: Role;
   /** Usuário da plataforma (PStarX): cria as empresas e publica o app do kiosk. Não tem empresa. */
   platform: boolean;
+  /** Plataforma dentro de uma empresa ("entrar como", suporte). */
+  acting: boolean;
   tenant: { id: string; name: string; slug: string } | null;
+}
+
+/** Empresa no painel da plataforma. */
+export interface PlatformTenant {
+  id: string;
+  name: string;
+  slug: string;
+  status: "active" | "suspended";
+  createdAt: string;
+  devices: number;
+  online: number;
+  users: number;
+  lastSeenAt: string | null;
 }
 
 export interface SessionInfo {
