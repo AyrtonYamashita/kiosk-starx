@@ -25,7 +25,8 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 a { color: var(--blue); text-decoration: none; transition: color .12s ease-out; }
-a:hover { color: color-mix(in srgb, var(--blue) 70%, transparent); }
+/* hover: o azul mais fundo (antes o azul ficava 30% transparente e caía para 3,1:1) */
+a:hover { color: var(--blue-deep); }
 /* título de página 24/600 -0.02em · título de cartão 13/600 */
 h1 { font-family: var(--font-display); font-size: 24px; line-height: 32px; font-weight: 600; letter-spacing: -0.02em; margin: 0 0 4px; }
 h2 { font-size: 13px; line-height: 18px; font-weight: 600; margin: 0; }
@@ -326,8 +327,9 @@ span.alert { display: inline-flex; padding: 6px 10px; }
 .login .brand { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 32px; }
 .login .card { width: 100%; max-width: 380px; padding: 24px; }
 .login .card > h2:first-child { margin: 0; padding: 0; border: none; }
-.login-foot { margin-top: 20px; font-size: 11.5px; color: var(--soft); }
-.login-foot a { color: var(--soft); }
+/* rodapé do login fica direto sobre o fundo de bolhas: --mid (≥ 5,5:1 até sobre a bolha), link sublinhado */
+.login-foot { margin-top: 20px; font-size: 11.5px; color: var(--mid); }
+.login-foot a { color: var(--mid); text-decoration: underline; text-underline-offset: 2px; }
 .login-foot a:hover { color: var(--ink); }
 
 /* política de privacidade pública (/privacidade) */
@@ -727,6 +729,23 @@ label.check-hit { display: contents; }
   .touch-only { display: block; }
   .device-name-pen { opacity: 1; }
 }
+/*
+  Texto direto sobre o fundo de bolhas (fora de card): o cinza --soft cai para 2,9:1 onde a bolha azul passa por
+  trás; ali o texto secundário usa --mid e o link usa --blue-deep. Dentro de qualquer caixa com fundo próprio nada
+  muda. :where() mantém a especificidade baixa, para os :hover existentes continuarem valendo.
+*/
+:where(.main > .page) :is(.muted, .link-button, .page-header p):not(:where(.card, .liquid-glass, .dev-filters, .ops-load, .segmented, .alert, .badge, dialog, .toast) *) {
+  color: var(--mid);
+}
+:where(.main > .page) a:not(:where(.button, .link-button, .card, .ops-load, .nav-item)):not(:where(.card, .liquid-glass, .dev-filters, .ops-load, .alert, dialog, .toast) *) {
+  color: var(--blue-deep);
+}
+
+/*
+  Link dentro de frase: sublinhado. Só a cor não basta (WCAG 1.4.1): no escuro o azul fica a 2,4:1 do texto ao redor.
+  Links soltos (tabelas, menus, botões) continuam sem sublinhado.
+*/
+:is(p, li, .muted, .alert, .policy-body) a:not(.button, .link-button) { text-decoration: underline; text-underline-offset: 2px; }
 } /* fim da camada components */
 
 /* Ajustes do maplibre: o CSS dele fica fora das camadas, então estes também (e com seletor mais específico). */
