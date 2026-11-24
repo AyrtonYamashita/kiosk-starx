@@ -390,6 +390,7 @@ export async function createUser(_: FormState, form: FormData): Promise<FormStat
       method: "POST",
       body: {
         username: String(form.get("username") ?? ""),
+        displayName: String(form.get("displayName") ?? ""),
         email: String(form.get("email") ?? ""),
         role: String(form.get("role") ?? "operator"),
         password,
@@ -405,6 +406,8 @@ export async function createUser(_: FormState, form: FormData): Promise<FormStat
 export async function updateUser(_: FormState, form: FormData): Promise<FormState> {
   const id = String(form.get("id"));
   const body: Record<string, unknown> = {};
+  // nome: sempre enviado pelo formulário (vazio = volta a mostrar o nome de usuário)
+  if (form.has("displayName")) body.displayName = String(form.get("displayName") ?? "");
   const email = String(form.get("email") ?? "").trim();
   if (email) body.email = email;
   const role = String(form.get("role") ?? "");
@@ -420,6 +423,17 @@ export async function updateUser(_: FormState, form: FormData): Promise<FormStat
   }
   revalidatePath("/users");
   return { ok: "Salvo." };
+}
+
+/** O próprio nome de exibição (Conta). */
+export async function updateMyName(_: FormState, form: FormData): Promise<FormState> {
+  try {
+    await api("/v1/admin/me", { method: "PATCH", body: { displayName: String(form.get("displayName") ?? "") } });
+  } catch (e) {
+    return { error: message(e) };
+  }
+  revalidatePath("/", "layout");
+  return { ok: "Nome salvo." };
 }
 
 export async function unlock(form: FormData) {

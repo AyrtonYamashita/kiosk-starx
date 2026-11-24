@@ -59,8 +59,12 @@ export default async function UsersPage() {
               {users.map((u) => (
                 <tr key={u.id}>
                   <td>
-                    <span className="mono">{u.username}</span> {u.id === me.id && <span className="badge blue">você</span>}
-                    <div className="muted small">{u.email ?? "sem e-mail"}</div>
+                    {u.displayName ? <strong>{u.displayName}</strong> : <span className="mono">{u.username}</span>}{" "}
+                    {u.id === me.id && <span className="badge blue">você</span>}
+                    <div className="muted small">
+                      {u.displayName && <span className="mono">{u.username} · </span>}
+                      {u.email ?? "sem e-mail"}
+                    </div>
                   </td>
                   <td>{u.role === "admin" ? "Administrador" : "Operador"}</td>
                   <td>

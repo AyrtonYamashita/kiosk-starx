@@ -18,6 +18,10 @@ export function CreateUserForm() {
     <form action={action} className="stack">
       <div className="grid">
         <label>
+          Nome
+          <input name="displayName" maxLength={80} placeholder="João Silva" />
+        </label>
+        <label>
           Usuário (login)
           <input name="username" required minLength={3} maxLength={64} placeholder="joao.silva" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
         </label>
@@ -69,6 +73,10 @@ export function EditUser({ user, self }: { user: UserInfo; self: boolean }) {
   return (
     <form action={action} className="stack" style={{ minWidth: 280, textAlign: "left" }}>
       <input type="hidden" name="id" value={user.id} />
+      <label>
+        Nome
+        <input name="displayName" defaultValue={user.displayName ?? ""} maxLength={80} placeholder={user.username} />
+      </label>
       <label>
         E-mail
         <input name="email" type="email" defaultValue={user.email ?? ""} maxLength={200} />

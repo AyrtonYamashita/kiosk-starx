@@ -3,6 +3,7 @@ import { logout } from "@/lib/actions";
 import { api, type Me, type MfaInfo, type PushInfo, type SessionInfo } from "@/lib/api";
 import { SessionsTable } from "@/components/SessionsTable";
 import { ThemePicker } from "@/components/brand/ThemePicker";
+import { NameForm } from "./NameForm";
 import { PasswordForm } from "./PasswordForm";
 import { PasskeysSection } from "./PasskeysSection";
 import { TotpSection } from "./TotpSection";
@@ -34,12 +35,16 @@ export default async function AccountPage() {
         <section className="card account-profile">
           <span className="section-label">Conta</span>
           <div className="account-who">
-            <span className="avatar account-avatar">{me.username.slice(0, 2).toUpperCase()}</span>
+            <span className="avatar account-avatar">{(me.displayName ?? me.username).slice(0, 2).toUpperCase()}</span>
             <div className="account-id">
-              <h1 className="account-name mono">{me.username}</h1>
-              <span className="muted small account-email">{me.email ?? "sem e-mail cadastrado"}</span>
+              <h1 className={`account-name${me.displayName ? "" : " mono"}`}>{me.displayName ?? me.username}</h1>
+              <span className="muted small account-email">
+                {me.displayName && <span className="mono">{me.username} · </span>}
+                {me.email ?? "sem e-mail cadastrado"}
+              </span>
             </div>
           </div>
+          <NameForm current={me.displayName} placeholder={me.username} />
           <div className="row" style={{ gap: 8 }}>
             <span className={`badge ${me.role === "admin" ? "blue" : "off"}`}>
               <span className="dot" /> {me.role === "admin" ? "administrador" : "operador"}

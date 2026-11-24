@@ -15,7 +15,7 @@ export default async function PanelLayout({ children }: { children: React.ReactN
       <ToastProvider>
       <ConfirmProvider>
       <div className="shell">
-        <Sidebar username={me.username} role={me.role} platformOnly={platformOnly} />
+        <Sidebar username={me.displayName ?? me.username} role={me.role} platformOnly={platformOnly} />
         <main className="main">
           <TopBar />
           <PageTransition effect="flow" className="page">

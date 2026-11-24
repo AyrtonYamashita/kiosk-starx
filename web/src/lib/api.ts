@@ -291,6 +291,8 @@ export type Role = "admin" | "operator";
 export interface Me {
   id: string;
   username: string;
+  /** Nome de exibição ("Ayrton Yamashita"); null = mostra o nome de usuário. */
+  displayName: string | null;
   email: string | null;
   role: Role;
   /** Usuário da plataforma (PStarX): cria as empresas e publica o app do kiosk. Não tem empresa. */
@@ -312,6 +314,7 @@ export interface SessionInfo {
 export interface UserInfo {
   id: string;
   username: string;
+  displayName: string | null;
   email: string | null;
   role: Role;
   disabled: boolean;

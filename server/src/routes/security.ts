@@ -17,9 +17,22 @@ const Email = z.string().trim().toLowerCase().email().max(200);
 const Password = z.string().min(10, "a senha precisa ter pelo menos 10 caracteres").max(256);
 const Role = z.enum(["admin", "operator"]);
 
-const CreateUser = z.object({ username: Username, email: Email, role: Role, password: Password });
+/** Nome de exibição: vazio vira null (mostra o nome de usuário). */
+export const DisplayName = z
+  .string()
+  .trim()
+  .max(80)
+  .nullable()
+  .transform((v) => (v ? v.replace(/\s+/g, " ") : null));
+const CreateUser = z.object({ username: Username, displayName: DisplayName.optional(), email: Email, role: Role, password: Password });
 const UpdateUser = z
-  .object({ email: Email.optional(), role: Role.optional(), disabled: z.boolean().optional(), password: Password.optional() })
+  .object({
+    displayName: DisplayName.optional(),
+    email: Email.optional(),
+    role: Role.optional(),
+    disabled: z.boolean().optional(),
+    password: Password.optional(),
+  })
   .refine((v) => Object.keys(v).length > 0, "nada para alterar");
 const Unlock = z.object({ kind: z.enum(["ip", "account"]), key: z.string().min(1).max(200) });
 
@@ -27,6 +40,7 @@ function userJson(u: Record<string, any>) {
   return {
     id: u.id,
     username: u.username,
+    displayName: u.display_name ?? null,
     email: u.email,
     role: u.role,
     disabled: !!u.disabled_at,
@@ -112,8 +126,8 @@ export async function securityRoutes(app: FastifyInstance, opts: { db: Db; confi
       if (!body.success) return reply.code(400).send({ error: "invalid_body", message: firstIssue(body.error) });
       try {
         const r = await db.query(
-          "INSERT INTO admins (tenant_id, username, email, role, password_hash, password_changed_at) VALUES ($5, $1, $2, $3, $4, now()) RETURNING *",
-          [body.data.username, body.data.email, body.data.role, await hashPassword(body.data.password), tenantOf(req)],
+          "INSERT INTO admins (tenant_id, username, email, role, password_hash, password_changed_at, display_name) VALUES ($5, $1, $2, $3, $4, now(), $6) RETURNING *",
+          [body.data.username, body.data.email, body.data.role, await hashPassword(body.data.password), tenantOf(req), body.data.displayName ?? null],
         );
         await audit(db, req, "user_created", { adminId: req.admin!.id, details: { userId: r.rows[0].id, username: body.data.username, role: body.data.role } });
         return userJson(r.rows[0]);
@@ -145,9 +159,19 @@ export async function securityRoutes(app: FastifyInstance, opts: { db: Db; confi
           `UPDATE admins SET email = COALESCE($2, email), role = COALESCE($3, role),
              disabled_at = CASE WHEN $4::boolean IS NULL THEN disabled_at WHEN $4 THEN COALESCE(disabled_at, now()) ELSE NULL END,
              password_hash = COALESCE($5, password_hash),
-             password_changed_at = CASE WHEN $5::text IS NULL THEN password_changed_at ELSE now() END
+             password_changed_at = CASE WHEN $5::text IS NULL THEN password_changed_at ELSE now() END,
+             display_name = CASE WHEN $7 THEN $8 ELSE display_name END
            WHERE id = $1 AND tenant_id = $6 RETURNING *`,
-          [id, b.email ?? null, b.role ?? null, b.disabled ?? null, b.password ? await hashPassword(b.password) : null, tenantOf(req)],
+          [
+            id,
+            b.email ?? null,
+            b.role ?? null,
+            b.disabled ?? null,
+            b.password ? await hashPassword(b.password) : null,
+            tenantOf(req),
+            b.displayName !== undefined,
+            b.displayName ?? null,
+          ],
         );
         // desativar, trocar papel ou senha: a pessoa precisa entrar de novo
         if (b.disabled === true || b.role || b.password) await db.query("DELETE FROM sessions WHERE admin_id = $1", [id]);
