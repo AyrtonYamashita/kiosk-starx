@@ -502,15 +502,24 @@ label.dev-check { min-height: 32px; gap: 8px; font-size: 12.5px; }
 .filters-desktop { display: contents; }
 @media (max-width: 1023.98px) {
   .dev-filters, .filters-desktop { display: none; }
-  /* faixa opaca colada na barra de abas: a lista rola por baixo sem aparecer em volta do botão */
   .filter-bar {
-    display: flex; position: fixed; z-index: 40; left: 0; right: 0;
-    bottom: calc(56px + env(safe-area-inset-bottom));
-    padding: 8px 16px; background: var(--surface); border-top: 1px solid var(--line);
+    display: flex; position: fixed; z-index: 40; left: 16px; right: 16px;
+    bottom: calc(56px + 8px + env(safe-area-inset-bottom));
   }
-  button.filter-bar-btn { flex: 1; gap: 8px; background: var(--surface); color: var(--ink); }
-  /* a barra de filtros não cobre o fim da lista (abas 56 + faixa ~61 + respiro 16) */
-  .main:has(.filter-bar) { padding-bottom: calc(56px + 64px + 16px + env(safe-area-inset-bottom)); }
+  button.filter-bar-btn { flex: 1; height: 44px; gap: 8px; background: var(--surface); color: var(--ink); box-shadow: var(--shadow-float); }
+  /*
+    A lista não passa por trás do botão: a página ocupa a altura da tela e termina 8 px acima do botão
+    (abas 56 + 8 + botão 44 + 8), com a lista rolando dentro do card, como no desktop.
+  */
+  .main:has(.filter-bar) {
+    box-sizing: border-box; height: 100dvh; display: flex; flex-direction: column;
+    padding-bottom: calc(56px + 8px + 44px + 8px + env(safe-area-inset-bottom));
+  }
+  .main:has(.filter-bar) > .page { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
+  .main:has(.filter-bar) > .page > .fit-page { flex: 1 1 0; min-height: 0; }
+  .fit-page > .list-card, .fit-page > .dev-layout, .fit-page .dev-main, .fit-page .dev-main > .list-card { flex: 0 1 auto; min-height: 0; }
+  .fit-page > .dev-layout { display: flex; flex-direction: column; }
+  .fit-page .cargas-cards, .fit-page .dev-main .list-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
   .dev-filters-sheet { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; padding-bottom: 8px; }
   .dev-filters-sheet .dev-search, .dev-filters-sheet > .row { grid-column: 1 / -1; }
   .filter-sheet .cargas-filters { padding: 4px 0 8px; }
