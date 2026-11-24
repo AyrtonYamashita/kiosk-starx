@@ -1,8 +1,8 @@
 # Várias empresas no mesmo painel (Fase 3)
 
-**Situação:** 3.1 (base) e 3.2 (filtro na aplicação) feitas em 2026-11-24 (migrações `016_tenants.sql` e
-`017_tenant_scope.sql`; testes em `server/test/tenants.test.ts` e `server/test/isolation.test.ts`). 3.3 e 3.4 ainda
-não começaram. Respostas do dono do produto em 2026-11-18 no fim; o desenho abaixo já as considera.
+**Situação:** 3.1 (base), 3.2 (filtro na aplicação) e 3.3 (RLS) feitas em 2026-11-24 (migrações `016_tenants.sql`,
+`017_tenant_scope.sql` e `019_rls.sql`; testes em `server/test/tenants.test.ts`, `isolation.test.ts` e
+`rls.test.ts`). 3.4 em andamento. Respostas do dono do produto em 2026-11-18 no fim; o desenho abaixo já as considera.
 
 ## Objetivo
 
@@ -137,6 +137,28 @@ Cada parte é publicada e validada antes da próxima, como nas fases anteriores.
 - **Plataforma no painel:** sem empresa, vê só "App do kiosk" e "Conta"; telas de empresa levam para Apps. As telas
   das empresas chegam com o "entrar como" da 3.4.
 - **Sem atalho:** `tenant_fallback()` só usa `app.tenant_id` (para a 3.3); gravação sem empresa falha.
+
+## 3.3 como foi feita (2026-11-24)
+
+- **Papel restrito `kiosk_app`** (migração 019): sem superusuário e sem BYPASSRLS. A API continua conectando com o
+  usuário do contêiner e troca de papel por conexão (`set_config('role', …)`), junto com `app.tenant_id`
+  (`src/db.ts`, guardado por conexão para não repetir).
+- **Contexto por requisição** (AsyncLocalStorage): toda requisição começa como `kiosk_app` **sem empresa**. A sessão
+  do painel (`requireAdmin`) ou o coletor (`authDevice`, eventos do SSW, cadastro pelo código, envio de APK) definem a
+  empresa. Esquecer de definir dá "nada", nunca "tudo".
+- **Sistema** (papel dono, vê tudo), só onde precisa cruzar empresas: migrações, jobs de fundo e inicialização (fora de
+  requisição), busca do coletor pelo token/id e do código de cadastro, "transferido" do serial em outra empresa, card
+  da tela ao vivo, conferência de APK compartilhado antes de apagar o arquivo e versões do app do kiosk para a
+  plataforma.
+- **Políticas** `tenant_isolation` (USING e WITH CHECK) em devices, enrollment_codes, profiles, commands,
+  screenshots, apps, app_versions, ops_* e privacy_erasures. Fora do RLS (presas ao usuário/sessão e lidas antes de
+  saber a empresa no login): admins, sessions, 2FA, passkeys, auth_events, auth_lockouts, upload_tokens, push_* e
+  tenants.
+- Sem `FORCE ROW LEVEL SECURITY`: o dono é justamente o papel "sistema". A barreira vale para o papel das requisições.
+- Teste de mutação: sem o `WHERE tenant_id` da lista de aparelhos, a bateria de isolamento continua passando (o banco
+  segura). Antes da 3.3, a mesma mutação fazia 3 testes falharem.
+- **Próximo endurecimento possível:** um usuário de login próprio para o papel restrito (hoje é `SET ROLE` sobre o
+  superusuário: protege contra filtro esquecido, não contra injeção de SQL, que as consultas parametrizadas já evitam).
 
 **Fica para depois:** empresa suspensa ainda entra e os coletores dela continuam (entra na 3.4, junto com a tela de
 empresas); prazos de retenção continuam globais.

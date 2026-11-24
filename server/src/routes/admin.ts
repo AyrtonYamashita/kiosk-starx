@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { Config } from "../config.js";
 import { hashPassword, needsRehash, newEnrollmentCode, newToken, sha256, verifyPassword } from "../crypto.js";
-import type { Db } from "../db.js";
+import { setTenant, type Db } from "../db.js";
 import { redactConfig } from "../kioskConfig.js";
 import { provisioningPayload, readRelease } from "../release.js";
 import { appRepoRoutes, kioskReleaseRoutes } from "./apps.js";
@@ -110,6 +110,8 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
       return reply.code(401).send({ error: "unauthorized" });
     }
     const a = r.rows[0];
+    // banco (RLS): a requisição passa a ver só os dados da empresa da sessão (a plataforma, nenhuma)
+    setTenant(a.tenant_id);
     // empresa: sempre a da sessão (copiada do usuário no login), nunca de cabeçalho, URL ou corpo. Vazia = plataforma.
     req.admin = {
       id: a.id,

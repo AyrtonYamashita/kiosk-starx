@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { EventEmitter } from "node:events";
-import type { Db } from "./db.js";
+import { asSystem, type Db } from "./db.js";
 import type { OpsBus } from "./ops.js";
 
 /**
@@ -148,7 +148,8 @@ export class OpsLive extends EventEmitter {
       setTimeout(async () => {
         this.pending.delete(deviceId);
         try {
-          const r = await deviceCardWithTenant(this.db, deviceId);
+          // o coletor pode ser de qualquer empresa: como sistema (o card vai só às telas da empresa dele)
+          const r = await asSystem(() => deviceCardWithTenant(this.db, deviceId));
           if (r) this.emit("card", r.card, r.tenantId);
         } catch {
           /* banco fora: a próxima mudança tenta de novo */

@@ -15,7 +15,8 @@ import type { Db } from "./db.js";
 /** Ponto do gráfico de uma carga: [hora em ms, volumes lidos]. */
 export type CurvePoint = [number, number];
 
-type Q = Pick<pg.PoolClient, "query"> | Db;
+/** Quem executa a consulta: o pool (Db) ou uma conexão de transação. */
+type Q = { query: Db["query"] };
 
 /**
  * Pontos do gráfico de uma carga: os guardados na carga (eventos já apagados) seguidos dos eventos mais novos que

@@ -6,7 +6,7 @@ import { z } from "zod";
 import { ApkError, parseApk } from "../apk.js";
 import type { Config } from "../config.js";
 import { newToken, sha256 } from "../crypto.js";
-import type { Db } from "../db.js";
+import { asSystem, setTenant, type Db } from "../db.js";
 import { authDevice } from "../deviceAuth.js";
 import { certChecksum, readPending, readRelease, writeJsonAtomic, type Release } from "../release.js";
 import { requirePlatform, tenantOf } from "../tenant.js";
@@ -68,7 +68,8 @@ export async function findArtifact(db: Db, tenantId: string, packageName: string
  */
 async function removeUnusedApks(db: Db, config: Config, shas: string[]) {
   for (const sha of new Set(shas)) {
-    if ((await db.query("SELECT 1 FROM app_versions WHERE sha256 = $1 LIMIT 1", [sha])).rowCount) continue;
+    // olha todas as empresas (o arquivo é compartilhado): como sistema, senão o RLS só mostraria esta
+    if ((await asSystem(() => db.query("SELECT 1 FROM app_versions WHERE sha256 = $1 LIMIT 1", [sha]))).rowCount) continue;
     fs.rmSync(apkFile(config, sha), { force: true });
   }
 }
@@ -166,12 +167,14 @@ export async function kioskReleaseRoutes(app: FastifyInstance, opts: { db: Db; c
   app.get("/v1/admin/kiosk-release", async (req) => {
     // versões nos coletores: os da empresa; a plataforma vê o total de todas
     const t = req.admin!.tenantId;
+    // a plataforma (sem empresa) soma os coletores de todas: como sistema
+    const run = <T,>(fn: () => Promise<T>) => (t ? fn() : asSystem(fn));
     const versions = (
-      await db.query(
+      await run(() => db.query(
         `SELECT app_version AS version_name, app_version_code AS version_code, count(*)::int AS devices
          FROM devices WHERE $1::uuid IS NULL OR tenant_id = $1 GROUP BY 1, 2 ORDER BY 2 DESC NULLS LAST`,
         [t],
-      )
+      ))
     ).rows;
     const pendingFile = path.join(config.apkDir, "pending.json");
     const uploadedBy = fs.existsSync(pendingFile) ? (JSON.parse(fs.readFileSync(pendingFile, "utf8")).uploadedBy ?? null) : null;
@@ -330,6 +333,7 @@ export async function uploadRoutes(app: FastifyInstance, opts: { db: Db; config:
     // repositório de apps: da empresa de quem enviou
     const tenantId = t.tenant_id;
     if (!tenantId) return reply.code(403).send({ error: "no_tenant", message: "Usuário da plataforma: o repositório de apps é de uma empresa." });
+    setTenant(tenantId);
     const buf = req.body;
     if (!Buffer.isBuffer(buf) || buf.length === 0) return reply.code(400).send({ error: "invalid_body", message: "arquivo vazio" });
 

@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { Config } from "../config.js";
-import type { Db } from "../db.js";
+import { setTenant, type Db } from "../db.js";
 import { allCards, deviceCard, FN_LABEL, opMetrics, type OpsLive } from "../opsLive.js";
 import { loadCurve, scansFromCurve } from "../opsRetention.js";
 import { OPS_READER_ON_SQL } from "../ops.js";
@@ -314,6 +314,8 @@ export async function opsStreamRoutes(app: FastifyInstance, opts: { db: Db; conf
         )
       ).rowCount;
     if (!(await sessionOk())) return reply.code(401).headers(cors).send({ error: "unauthorized" });
+    // banco (RLS): a conexão ao vivo vê só a empresa do ingresso
+    setTenant(t.tenantId);
     if (total >= MAX_STREAMS || (perAdmin.get(t.adminId) ?? 0) >= MAX_STREAMS_PER_ADMIN || (perTenant.get(t.tenantId) ?? 0) >= MAX_STREAMS_PER_TENANT) {
       return reply.code(429).headers(cors).send({ error: "too_many_streams", message: "muitas telas abertas" });
     }

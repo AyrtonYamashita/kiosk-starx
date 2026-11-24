@@ -4,7 +4,7 @@ import Fastify from "fastify";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import type { Config } from "./config.js";
-import type { Db } from "./db.js";
+import { runInContext, type Db } from "./db.js";
 import { adminRoutes } from "./routes/admin.js";
 import { deviceAppRoutes, uploadRoutes } from "./routes/apps.js";
 import { deviceScreenshotRoutes } from "./routes/commands.js";
@@ -31,6 +31,10 @@ export async function buildApp(config: Config, db: Db, waker = new Waker(), mail
     trustProxy: config.trustProxy,
     bodyLimit: 512 * 1024,
   });
+
+  // Contexto de banco da requisição (RLS, 3.3): começa sem empresa (o banco não devolve dados de empresa); a sessão
+  // do painel ou o coletor definem a empresa depois. Primeiro hook: vale para todos os seguintes e para a rota.
+  app.addHook("onRequest", (_req, _reply, done) => runInContext({ system: false, tenantId: null }, done));
 
   // Atrás da Cloudflare, o IP real do cliente vem em CF-Connecting-IP (a API só é alcançável pelo Caddy, na rede
   // interna). Vale para os logs, o rate limit e o "IP público" do aparelho.

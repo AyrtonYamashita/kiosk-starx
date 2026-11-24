@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { Config } from "../config.js";
 import { newToken, sha256 } from "../crypto.js";
-import type { Db } from "../db.js";
+import { asSystem, setTenant, type Db } from "../db.js";
 import { authDevice } from "../deviceAuth.js";
 import { desiredConfig } from "../kioskConfig.js";
 import { OPS_READER_ON_SQL } from "../ops.js";
@@ -145,7 +145,7 @@ export async function deviceRoutes(app: FastifyInstance, opts: { db: Db; config:
    * duplicado sai. Em outra empresa, o registro de lá fica como transferido.
    */
   async function mergeBySerial(tenantId: string, deviceId: string, serial: string, currentName: string, enrollmentCodeId: string | null): Promise<string> {
-    await transferOut(db, tenantId, serial);
+    await asSystem(() => transferOut(db, tenantId, serial));
     const old = (
       await db.query("SELECT id, name, profile_id, config_overrides FROM devices WHERE tenant_id = $3 AND serial = $1 AND id <> $2 ORDER BY enrolled_at DESC LIMIT 1", [
         serial,
@@ -171,6 +171,13 @@ export async function deviceRoutes(app: FastifyInstance, opts: { db: Db; config:
     const body = Enroll.safeParse(req.body);
     if (!body.success) return reply.code(400).send({ error: "invalid_body", details: body.error.issues });
     const code = body.data.code.toUpperCase();
+    // a empresa vem do código: achada como sistema (antes dela, nada se sabe); o cadastro roda na empresa (RLS)
+    const owner = (await asSystem(() => db.query<{ tenant_id: string }>("SELECT tenant_id FROM enrollment_codes WHERE code = $1", [code]))).rows[0];
+    if (!owner) return reply.code(403).send({ error: "invalid_code", message: "código de cadastro inválido, expirado ou esgotado" });
+    setTenant(owner.tenant_id);
+    // o mesmo serial em outra empresa fica como transferido (lá; por isso como sistema)
+    const serial = hardwareFields(body.data.info).serial;
+    if (serial) await asSystem(() => transferOut(db, owner.tenant_id, serial));
     const client = await db.connect();
     try {
       await client.query("BEGIN");
@@ -191,7 +198,6 @@ export async function deviceRoutes(app: FastifyInstance, opts: { db: Db; config:
       const token = newToken();
       // o código define a empresa do coletor. O mesmo serial nesta empresa é o mesmo coletor (reaproveita o registro);
       // em outra empresa, o registro de lá fica como transferido e o token antigo para de valer
-      if (hw.serial) await transferOut(client, ec.tenant_id, hw.serial);
       const existing = hw.serial
         ? (await client.query("SELECT id, name FROM devices WHERE tenant_id = $2 AND serial = $1 ORDER BY enrolled_at DESC LIMIT 1", [hw.serial, ec.tenant_id])).rows[0]
         : undefined;
