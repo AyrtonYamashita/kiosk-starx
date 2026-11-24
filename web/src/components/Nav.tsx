@@ -16,6 +16,7 @@ import { Smartphone } from "@/components/animate-ui/icons/smartphone";
 import { UserRound } from "@/components/animate-ui/icons/user-round";
 import { Lock } from "@/components/animate-ui/icons/lock";
 import { logout } from "@/lib/actions";
+import { closeSheet } from "@/lib/sheet";
 import { StarxLogo } from "@/components/brand/Logo";
 
 const LINKS: { href: string; label: string; short: string; icon: ComponentType<{ size?: number; strokeWidth?: number; "aria-hidden"?: boolean }>; match: (p: string) => boolean; adminOnly?: boolean }[] = [
@@ -83,20 +84,6 @@ export function TopBar() {
   );
 }
 
-/**
- * Fecha a folha com a animação de saída: põe a classe "closing" (CSS anima 180 ms) e só então chama close() do
- * <dialog>, que sozinho some na hora. Com movimento reduzido o CSS zera a animação; a espera é a mesma.
- */
-const CLOSE_MS = 180;
-function closeAnimated(d: HTMLDialogElement | null) {
-  if (!d || !d.open || d.classList.contains("closing")) return;
-  d.classList.add("closing");
-  window.setTimeout(() => {
-    d.classList.remove("closing");
-    if (d.open) d.close();
-  }, CLOSE_MS);
-}
-
 /** Abas fixas da barra inferior; o resto do menu fica na folha "Mais". */
 const TAB_HREFS = ["/operations", "/cargas", "/"];
 
@@ -116,7 +103,7 @@ export function TabBar({ role }: { role: "admin" | "operator" }) {
 
   // fecha ao navegar (com animação) e quando a tela passa para o layout de desktop (na hora: a barra some)
   useEffect(() => {
-    closeAnimated(sheetRef.current);
+    closeSheet(sheetRef.current);
   }, [path]);
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 1024px)");
@@ -134,7 +121,7 @@ export function TabBar({ role }: { role: "admin" | "operator" }) {
       setOpen(true);
     }
   };
-  const hide = () => closeAnimated(sheetRef.current);
+  const hide = () => closeSheet(sheetRef.current);
 
   return (
     <>

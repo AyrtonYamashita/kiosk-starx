@@ -489,24 +489,27 @@ label.dev-check { min-height: 32px; gap: 8px; font-size: 12.5px; }
 .segmented-fill button { flex: 1 1 0; min-width: 0; padding: 0 8px; }
 @media (max-width: 1023.98px) {
   .dev-layout { grid-template-columns: minmax(0, 1fr); }
-  .dev-filters { position: static; max-height: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .dev-filters .dev-search, .dev-filters > .row, .dev-filters > .filters-toggle { grid-column: 1 / -1; }
 }
 
 /*
-  Filtros recolhíveis (celular): botão "Filtros (n ativos)"; fechados, só a busca (Aparelhos) e o botão ficam à
-  vista e a lista sobe. No desktop o botão some, o bloco de fora das Cargas não existe para o layout
-  (display: contents) e os filtros ficam sempre abertos.
+  Filtros no celular (Aparelhos e Cargas): a lista fica em cima e uma barra "Filtros (n ativos)" fixa no pé da tela,
+  logo acima da barra de abas, abre uma folha igual à do menu "Mais" (FilterSheet) com os filtros. No desktop a barra
+  não existe e os filtros ficam no lugar de sempre (coluna em Aparelhos, card em Cargas).
 */
-.filters-toggle { display: none; }
-.filters-collapse { display: contents; }
+.filter-bar { display: none; }
+.filters-desktop { display: contents; }
 @media (max-width: 1023.98px) {
-  button.filters-toggle { display: flex; width: 100%; justify-content: flex-start; gap: 8px; padding: 0 12px; }
-  .filters-chevron { margin-left: auto; transition: transform .2s ease-out; }
-  .filters-toggle[aria-expanded="true"] .filters-chevron { transform: rotate(180deg); }
-  .filters-collapse { display: flex; flex-direction: column; gap: 8px; }
-  .filters-collapse[data-open="false"] > :not(.filters-toggle),
-  .dev-filters[data-open="false"] > :not(.dev-search):not(.filters-toggle) { display: none; }
+  .dev-filters, .filters-desktop { display: none; }
+  .filter-bar {
+    display: flex; position: fixed; z-index: 40; left: 16px; right: 16px;
+    bottom: calc(56px + 8px + env(safe-area-inset-bottom));
+  }
+  button.filter-bar-btn { flex: 1; gap: 8px; background: var(--surface); color: var(--ink); box-shadow: var(--shadow-float); }
+  /* a barra de filtros não cobre o fim da lista */
+  .main:has(.filter-bar) { padding-bottom: calc(72px + 52px + env(safe-area-inset-bottom)); }
+  .dev-filters-sheet { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; padding-bottom: 8px; }
+  .dev-filters-sheet .dev-search, .dev-filters-sheet > .row { grid-column: 1 / -1; }
+  .filter-sheet .cargas-filters { padding: 4px 0 8px; }
 }
 .dev-main table :is(th, td) { padding-left: 10px; padding-right: 10px; }
 .dev-main table :is(th, td):first-child { padding-left: 14px; }

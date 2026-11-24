@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { api, type OpsHistory } from "@/lib/api";
-import { CollapsibleFilters } from "@/components/FilterToggle";
+import { FilterSheet } from "@/components/FilterSheet";
 import { dateTime } from "@/lib/format";
 import { END_LABEL, fmtDuration, fmtMoney, fmtQty } from "@/lib/opsFormat";
 
@@ -45,69 +45,72 @@ export default async function CargasPage({ searchParams }: { searchParams: Promi
   const data = await api<OpsHistory>(`/v1/admin/ops/operations?${qs({ ...filters, before: s.before })}`);
   const filtered = Object.values(filters).some(Boolean);
 
+  // o mesmo formulário (GET) no card do desktop e na folha de filtros do celular
+  const filterForm = (cls: string) => (
+        <form className={cls} method="get" role="search">
+          <label>
+            Placa
+            <input name="plate" defaultValue={s.plate ?? ""} placeholder="ABC1D23" maxLength={20} autoComplete="off" />
+          </label>
+          <label>
+            Colaborador
+            <select name="user" defaultValue={s.user ?? ""}>
+              <option value="">Todos</option>
+              {data.users.map((u) => (
+                <option key={u} value={u}>
+                  {u}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Função
+            <select name="fn" defaultValue={s.fn ?? ""}>
+              <option value="">Todas</option>
+              {data.functions.map((f) => (
+                <option key={f.value} value={f.value}>
+                  {f.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Situação
+            <select name="status" defaultValue={s.status ?? ""}>
+              <option value="">Todas</option>
+              {STATUS.map((x) => (
+                <option key={x.value} value={x.value}>
+                  {x.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            De
+            <input type="date" name="from" defaultValue={s.from ?? ""} />
+          </label>
+          <label>
+            Até
+            <input type="date" name="to" defaultValue={s.to ?? ""} />
+          </label>
+          <div className="cargas-actions">
+            <button className="primary">Filtrar</button>
+            {filtered && (
+              <Link href="/cargas" className="link-button">
+                limpar
+              </Link>
+            )}
+          </div>
+        </form>
+  );
+
   return (
     <div className="stack wide fit-page">
       <div className="row">
         <h1 style={{ margin: 0 }}>Cargas</h1>
       </div>
 
-      <CollapsibleFilters count={Object.values(filters).filter(Boolean).length} controls="cargas-filters">
-      <form className="card cargas-filters" id="cargas-filters" method="get" role="search">
-        <label>
-          Placa
-          <input name="plate" defaultValue={s.plate ?? ""} placeholder="ABC1D23" maxLength={20} autoComplete="off" />
-        </label>
-        <label>
-          Colaborador
-          <select name="user" defaultValue={s.user ?? ""}>
-            <option value="">Todos</option>
-            {data.users.map((u) => (
-              <option key={u} value={u}>
-                {u}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Função
-          <select name="fn" defaultValue={s.fn ?? ""}>
-            <option value="">Todas</option>
-            {data.functions.map((f) => (
-              <option key={f.value} value={f.value}>
-                {f.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Situação
-          <select name="status" defaultValue={s.status ?? ""}>
-            <option value="">Todas</option>
-            {STATUS.map((x) => (
-              <option key={x.value} value={x.value}>
-                {x.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          De
-          <input type="date" name="from" defaultValue={s.from ?? ""} />
-        </label>
-        <label>
-          Até
-          <input type="date" name="to" defaultValue={s.to ?? ""} />
-        </label>
-        <div className="cargas-actions">
-          <button className="primary">Filtrar</button>
-          {filtered && (
-            <Link href="/cargas" className="link-button">
-              limpar
-            </Link>
-          )}
-        </div>
-      </form>
-      </CollapsibleFilters>
+      <div className="filters-desktop">{filterForm("card cargas-filters")}</div>
 
       {data.operations.length === 0 ? (
         <div className="card muted">{filtered ? "Nenhuma carga com esses filtros." : "Nenhuma carga registrada ainda."}</div>
@@ -253,6 +256,11 @@ export default async function CargasPage({ searchParams }: { searchParams: Promi
           </div>
         </div>
       )}
+
+      {/* celular: barra "Filtros" no pé da tela (a lista fica em cima); o toque abre a folha com o formulário */}
+      <FilterSheet id="cargas-filtros" count={Object.values(filters).filter(Boolean).length} closeOnSubmit>
+        {filterForm("cargas-filters")}
+      </FilterSheet>
     </div>
   );
 }

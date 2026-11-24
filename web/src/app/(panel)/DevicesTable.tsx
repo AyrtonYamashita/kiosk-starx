@@ -2,7 +2,7 @@
 
 import { useActionToast } from "@/components/Toasts";
 import { useConfirm } from "@/components/ConfirmDialog";
-import { FilterToggle } from "@/components/FilterToggle";
+import { FilterSheet } from "@/components/FilterSheet";
 import Link from "next/link";
 import { useActionState, useMemo, useState } from "react";
 import { Search } from "lucide-react";
@@ -130,8 +130,6 @@ export function DevicesTable({
   repo: { packageName: string; label: string }[];
 }) {
   const [f, setF] = useState<Filters>(DEFAULTS);
-  // celular: filtros recolhidos atrás do botão "Filtros" (no desktop ficam sempre abertos)
-  const [filtersOpen, setFiltersOpen] = useState(false);
   const set = (patch: Partial<Filters>) => setF((cur) => ({ ...cur, ...patch }));
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [state, action, pending] = useActionState(bulkAssignProfile, undefined);
@@ -182,34 +180,39 @@ export function DevicesTable({
       return n;
     });
 
+  // os mesmos filtros (mesmo estado) na coluna do desktop e na folha de baixo do celular
+  const filters = (
+    <>
+      <label className="dev-search">
+        <Search size={16} strokeWidth={1.75} aria-hidden />
+        <input type="search" value={f.q} onChange={(e) => set({ q: e.target.value })} placeholder="Buscar" title="Série, modelo, MAC, IP ou rede" aria-label="Buscar por série, modelo, MAC, IP ou rede" />
+      </label>
+      <CheckGroup title="Status" options={groups.status} value={f.status} onChange={(v) => set({ status: v })} />
+      <CheckGroup title="Usuário no SSW" options={groups.user} value={f.user} onChange={(v) => set({ user: v })} />
+      <CheckGroup title="Perfil" options={groups.profile} value={f.profile} onChange={(v) => set({ profile: v })} />
+      <CheckGroup title="Modelo" options={groups.model} value={f.model} onChange={(v) => set({ model: v })} />
+      <div className="row small" style={{ gap: 8 }}>
+        <span className="muted">
+          {list.length} de {devices.length}
+        </span>
+        {changed && (
+          <button type="button" className="link-button" onClick={() => setF(DEFAULTS)}>
+            limpar filtros
+          </button>
+        )}
+      </div>
+    </>
+  );
+  const activeFilters = f.status.length + f.user.length + f.profile.length + f.model.length + (f.q.trim() ? 1 : 0);
+
   return (
     <div className="dev-layout">
-      <aside className="dev-filters" id="dev-filters" aria-label="Filtros" data-open={filtersOpen}>
-        <label className="dev-search">
-          <Search size={16} strokeWidth={1.75} aria-hidden />
-          <input type="search" value={f.q} onChange={(e) => set({ q: e.target.value })} placeholder="Buscar" title="Série, modelo, MAC, IP ou rede" aria-label="Buscar por série, modelo, MAC, IP ou rede" />
-        </label>
-        <FilterToggle
-          open={filtersOpen}
-          onToggle={() => setFiltersOpen((o) => !o)}
-          count={f.status.length + f.user.length + f.profile.length + f.model.length}
-          controls="dev-filters"
-        />
-        <CheckGroup title="Status" options={groups.status} value={f.status} onChange={(v) => set({ status: v })} />
-        <CheckGroup title="Usuário no SSW" options={groups.user} value={f.user} onChange={(v) => set({ user: v })} />
-        <CheckGroup title="Perfil" options={groups.profile} value={f.profile} onChange={(v) => set({ profile: v })} />
-        <CheckGroup title="Modelo" options={groups.model} value={f.model} onChange={(v) => set({ model: v })} />
-        <div className="row small" style={{ gap: 8 }}>
-          <span className="muted">
-            {list.length} de {devices.length}
-          </span>
-          {changed && (
-            <button type="button" className="link-button" onClick={() => setF(DEFAULTS)}>
-              limpar filtros
-            </button>
-          )}
-        </div>
+      <aside className="dev-filters" aria-label="Filtros">
+        {filters}
       </aside>
+      <FilterSheet id="dev-filtros" count={activeFilters}>
+        <div className="dev-filters-sheet">{filters}</div>
+      </FilterSheet>
 
       <div className="stack dev-main">
       {selected.size > 0 && (
