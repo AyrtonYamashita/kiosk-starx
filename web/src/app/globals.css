@@ -455,7 +455,10 @@ button.toast-close:hover { background: var(--subtle); color: var(--ink); }
 .toast-ico.ok { color: var(--good); }
 .toast-text { font-size: 11.5px; line-height: 16px; color: var(--soft); }
 .toast-action { align-self: flex-start; margin-top: 2px; }
-@media (max-width: 1023.98px) { .toasts { right: 16px; bottom: calc(72px + env(safe-area-inset-bottom)); } }
+/* celular: avisos no topo da tela (abaixo do notch), largura toda; o mais novo fica junto da borda de cima */
+@media (max-width: 1023.98px) {
+  .toasts { top: calc(12px + env(safe-area-inset-top)); bottom: auto; left: 16px; right: 16px; width: auto; flex-direction: column-reverse; }
+}
 .dev-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; align-items: start; }
 .dev-filters {
   position: sticky; top: 24px; display: flex; flex-direction: column; gap: 16px; padding: 16px;

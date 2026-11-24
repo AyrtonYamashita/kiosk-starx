@@ -5,6 +5,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import { AnimatePresence, motion } from "motion/react";
 import { blur, ReducedMotionConfig, scale, spring, transition as motionTransition, useTempoTransition } from "@animate-ui/react/utils/motion";
 import { CircleCheck, X } from "lucide-react";
+import { useMediaQuery } from "@/lib/client";
 
 /*
   Avisos no canto da tela (toast com as animações da Animate UI), em todo o painel: os avisos ao vivo do
@@ -73,6 +74,9 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const enter = useTempoTransition(spring.toast);
   const leave = useTempoTransition(motionTransition.dismiss);
 
+  // celular (abaixo de 1024 px): avisos no topo da tela, descendo de cima; desktop: canto inferior direito
+  const top = useMediaQuery("(max-width: 1023.98px)");
+
   return (
     <Ctx.Provider value={push}>
       {children}
@@ -85,11 +89,11 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                 role="status"
                 className="toast"
                 layout="position"
-                initial={{ opacity: 0, y: "100%", scale: scale.toast, filter: blur.surface }}
+                initial={{ opacity: 0, y: top ? "-100%" : "100%", scale: scale.toast, filter: blur.surface }}
                 animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)", transition: enter }}
                 exit={{ opacity: 0, scale: scale.toast, filter: blur.surface, transition: leave }}
                 transition={enter}
-                style={{ originY: 1 }}
+                style={{ originY: top ? 0 : 1 }}
                 onPointerEnter={() => hold(t.id)}
                 onPointerLeave={() => arm(t.id)}
                 onFocus={() => hold(t.id)}

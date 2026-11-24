@@ -7,6 +7,19 @@ export function useHydrated(): boolean {
   return useSyncExternalStore(noop, () => true, () => false);
 }
 
+/** Media query CSS em tempo real (ex.: "(max-width: 1023.98px)"); false no servidor e na hidratação. */
+export function useMediaQuery(query: string): boolean {
+  return useSyncExternalStore(
+    (cb) => {
+      const mq = window.matchMedia(query);
+      mq.addEventListener("change", cb);
+      return () => mq.removeEventListener("change", cb);
+    },
+    () => window.matchMedia(query).matches,
+    () => false,
+  );
+}
+
 /** Valor que só existe no navegador (ex.: suporte a passkey ou WebUSB); `server` vale no servidor e na hidratação. */
 export function useClientValue<T extends string | number | boolean | null>(read: () => T, server: T): T {
   return useSyncExternalStore(noop, read, () => server);
