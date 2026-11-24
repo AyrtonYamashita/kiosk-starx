@@ -707,6 +707,22 @@ button.cmd-button.bad, button.cmd-button.bad:hover { color: var(--bad-deep); }
 @media (max-width: 1023.98px), (pointer: coarse) {
   input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='file']):not(.device-name-input),
   select, select.mono, textarea, textarea.mono { font-size: 16px; }
+  /*
+    Texto de botão com 14 px (era 11 a 12,5 px). Ficam de fora: rótulos da barra de abas (navegação, decisão de
+    tipografia pendente), botões só de ícone e o nome do aparelho (17 px).
+  */
+  :is(button, .button):not(.tabbar-more, .device-name-btn, .toggle, .more-close, .toast-close),
+  .link-button, button.danger, button.cmd-button, .segmented button, button.device-tab, button.device-more-toggle,
+  input[type='file']::file-selector-button { font-size: 14px; }
+  /* com 14 px, nada pode cortar: abas do aparelho numa linha só (rolam de lado dentro do card se não couberem) e os
+     segmentos do editor de configuração com largura pelo texto (iguais, "Segurança" cortava) */
+  .device-tabs-list { overflow-x: auto; scrollbar-width: none; gap: 12px; } /* 12 px: a próxima aba aparece pela metade e mostra que rola */
+  button.device-tab { white-space: nowrap; flex: none; }
+  .segmented-fill button { flex: 1 1 auto; }
+}
+/* comandos do aparelho: 4 colunas de 55 px não cabem "Recarregar" em 14 px; no celular estreito, 2 colunas */
+@media (max-width: 479.98px) {
+  .cmd-buttons { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 /*
