@@ -107,12 +107,39 @@ button:not(:disabled), [role='button'] { cursor: pointer; }
     display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 50; height: calc(56px + env(safe-area-inset-bottom));
     padding-bottom: env(safe-area-inset-bottom); background: var(--surface); border-top: 1px solid var(--line);
   }
-  .tabbar a {
+  .tabbar a, .tabbar > button.tabbar-more {
     flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
     color: var(--soft); font-size: 10px; font-weight: 500;
   }
-  .tabbar a.active { color: var(--blue); }
+  /* "Mais" é um <button>: tira a aparência de botão para ficar igual às abas */
+  .tabbar > button.tabbar-more { height: auto; padding: 0; border: none; border-radius: 0; background: none; font-family: inherit; }
+  .tabbar > button.tabbar-more:hover { background: none; color: var(--soft); }
+  .tabbar > button.tabbar-more:focus-visible { outline: 2px solid var(--blue); outline-offset: -4px; }
+  .tabbar a.active, .tabbar > button.tabbar-more.active { color: var(--blue); }
+
+  /* folha "Mais": <dialog> modal preso ao pé da tela, por cima da barra de abas */
+  dialog.more-sheet {
+    margin: auto 0 0; padding: 0; border: none; background: none; color: inherit;
+    width: 100%; max-width: none; max-height: calc(100dvh - 48px);
+  }
+  dialog.more-sheet::backdrop { background: rgb(4 10 20 / 0.55); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
+  dialog.more-sheet[open] { animation: more-in .18s ease-out; }
+  dialog.more-sheet[open]::backdrop { animation: confirm-fade .18s ease-out; }
+  .more-box {
+    display: flex; flex-direction: column; gap: 4px; max-height: calc(100dvh - 48px); overflow-y: auto;
+    padding: 4px 16px calc(16px + env(safe-area-inset-bottom));
+    background: var(--surface); border-top: 1px solid var(--line); border-radius: var(--radius-card) var(--radius-card) 0 0;
+    box-shadow: var(--shadow-float);
+  }
+  .more-head { display: flex; align-items: center; justify-content: space-between; min-height: 48px; }
+  button.more-close { width: 44px; height: 44px; padding: 0; margin-right: -10px; border: none; background: none; color: var(--soft); }
+  button.more-close:hover { background: var(--subtle); color: var(--ink); }
+  .more-box nav { display: flex; flex-direction: column; gap: 2px; }
+  .more-box .nav-item { height: 48px; }
+  .more-foot { margin-top: 4px; padding-top: 8px; border-top: 1px solid var(--rule); }
+  .more-foot .logout { height: 48px; }
 }
+@keyframes more-in { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
 
 /* barra do topo só no celular */
 .topbar { display: none; }
@@ -600,7 +627,7 @@ button.cmd-button.bad, button.cmd-button.bad:hover { color: var(--bad-deep); }
 /* mapa: fundo fixo da tela toda; o resto da página deixa os toques passarem para ele onde não há card */
 .device-map { position: fixed; inset: 0; z-index: -1; pointer-events: auto; }
 .shell:has(.device-page.has-map) { pointer-events: none; }
-.shell:has(.device-page.has-map) :is(.sidebar, .tabbar, .topbar, .device-card) { pointer-events: auto; }
+.shell:has(.device-page.has-map) :is(.sidebar, .tabbar, .topbar, .device-card, .more-sheet) { pointer-events: auto; }
 .device-map-canvas { width: 100%; height: 100%; }
 .device-pin {
   width: 18px; height: 18px; border-radius: 50%; background: var(--blue); border: 3px solid var(--surface);

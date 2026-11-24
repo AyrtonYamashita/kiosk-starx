@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ComponentType } from "react";
+import { useEffect, useRef, useState, type ComponentType } from "react";
+import { Ellipsis, X } from "lucide-react";
 import { AnimateIcon } from "@animate-ui/react/icons";
 import { Activity } from "@/components/animate-ui/icons/activity";
 import { Truck } from "@/components/animate-ui/icons/truck";
@@ -82,20 +83,109 @@ export function TopBar() {
   );
 }
 
-/** Barra de abas inferior (celular). */
+/** Abas fixas da barra inferior; o resto do menu fica na folha "Mais". */
+const TAB_HREFS = ["/operations", "/cargas", "/"];
+
+/**
+ * Barra de abas inferior (celular): 3 abas + "Mais". A folha "Mais" é um <dialog> modal (foco preso, Esc fecha,
+ * o foco volta ao botão) com os demais itens do menu lateral e o "Sair".
+ */
 export function TabBar({ role }: { role: "admin" | "operator" }) {
   const path = usePathname();
   const links = LINKS.filter((l) => !l.adminOnly || role === "admin");
+  const tabs = links.filter((l) => TAB_HREFS.includes(l.href));
+  const more = links.filter((l) => !TAB_HREFS.includes(l.href));
+  const moreActive = more.some((l) => l.match(path));
+  const sheetRef = useRef<HTMLDialogElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useState(false);
+
+  // fecha ao navegar e quando a tela passa para o layout de desktop (onde a barra some)
+  useEffect(() => {
+    sheetRef.current?.close();
+  }, [path]);
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const onChange = () => {
+      if (mq.matches) sheetRef.current?.close();
+    };
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+
+  const show = () => {
+    const d = sheetRef.current;
+    if (d && !d.open) {
+      d.showModal();
+      setOpen(true);
+    }
+  };
+  const hide = () => sheetRef.current?.close();
+
   return (
-    <nav className="tabbar" aria-label="Navegação">
-      {links.map((l) => (
-        <AnimateIcon key={l.href} animateOnTap asChild>
-          <Link href={l.href} className={l.match(path) ? "active" : undefined} aria-current={l.match(path) ? "page" : undefined}>
-            <l.icon size={20} strokeWidth={1.75} aria-hidden />
-            <span>{l.short}</span>
-          </Link>
-        </AnimateIcon>
-      ))}
-    </nav>
+    <>
+      <nav className="tabbar" aria-label="Navegação">
+        {tabs.map((l) => (
+          <AnimateIcon key={l.href} animateOnTap asChild>
+            <Link href={l.href} className={l.match(path) ? "active" : undefined} aria-current={l.match(path) ? "page" : undefined}>
+              <l.icon size={20} strokeWidth={1.75} aria-hidden />
+              <span>{l.short}</span>
+            </Link>
+          </AnimateIcon>
+        ))}
+        <button
+          ref={triggerRef}
+          type="button"
+          className={`tabbar-more${moreActive ? " active" : ""}`}
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          aria-controls="more-sheet"
+          onClick={show}
+        >
+          <Ellipsis size={20} strokeWidth={1.75} aria-hidden />
+          <span>Mais</span>
+        </button>
+      </nav>
+      <dialog
+        ref={sheetRef}
+        id="more-sheet"
+        className="more-sheet"
+        aria-labelledby="more-sheet-title"
+        onClose={() => {
+          setOpen(false);
+          triggerRef.current?.focus();
+        }}
+        onClick={(e) => {
+          // toque no fundo escurecido (fora da folha) fecha
+          if (e.target === e.currentTarget) hide();
+        }}
+      >
+        <div className="more-box">
+          <div className="more-head">
+            <h2 id="more-sheet-title">Mais</h2>
+            <button type="button" className="more-close" aria-label="Fechar menu" onClick={hide}>
+              <X size={20} strokeWidth={1.75} aria-hidden />
+            </button>
+          </div>
+          <nav aria-label="Mais opções">
+            {more.map((l) => (
+              <AnimateIcon key={l.href} animateOnTap asChild>
+                <Link href={l.href} className={`nav-item${l.match(path) ? " active" : ""}`} aria-current={l.match(path) ? "page" : undefined} onClick={hide}>
+                  <l.icon size={18} strokeWidth={1.75} aria-hidden />
+                  <span>{l.label}</span>
+                </Link>
+              </AnimateIcon>
+            ))}
+          </nav>
+          <form action={logout} className="more-foot">
+            <AnimateIcon animateOnTap asChild>
+              <button className="logout">
+                <LogOut size={18} strokeWidth={1.75} aria-hidden /> Sair
+              </button>
+            </AnimateIcon>
+          </form>
+        </div>
+      </dialog>
+    </>
   );
 }
