@@ -61,8 +61,19 @@ export function DeviceMap({ lat, lon, accuracyM }: { lat: number; lon: number; a
       attributionControl: false,
       dragRotate: false,
       pitchWithRotate: false,
+      locale: {
+        "CooperativeGesturesHandler.MobileHelpText": "Use dois dedos para mover o mapa",
+        "CooperativeGesturesHandler.WindowsHelpText": "Use Ctrl + rolagem para dar zoom no mapa",
+        "CooperativeGesturesHandler.MacHelpText": "Use ⌘ + rolagem para dar zoom no mapa",
+      },
     });
     m.touchZoomRotate.disableRotation();
+    // celular: o mapa vira um card no meio da página; um dedo rola a página, dois movem o mapa. No desktop o mapa é
+    // o fundo da tela e continua com um dedo/mouse.
+    const mobile = window.matchMedia("(max-width: 1023.98px)");
+    const syncGestures = () => (mobile.matches ? m.cooperativeGestures.enable() : m.cooperativeGestures.disable());
+    syncGestures();
+    mobile.addEventListener("change", syncGestures);
     m.setPadding(padding());
     m.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-left");
     map.current = m;
@@ -85,6 +96,7 @@ export function DeviceMap({ lat, lon, accuracyM }: { lat: number; lon: number; a
     window.addEventListener("resize", onResize);
     return () => {
       window.removeEventListener("resize", onResize);
+      mobile.removeEventListener("change", syncGestures);
       marker.current = null;
       map.current = null;
       m.remove();
@@ -101,7 +113,8 @@ export function DeviceMap({ lat, lon, accuracyM }: { lat: number; lon: number; a
     m.easeTo({ center: [lon, lat], duration: 600 });
   }, [lat, lon, accuracyM]);
 
-  // a caixa de fora é fixa (tela toda); o maplibre põe position: relative no próprio container, por isso o de dentro
+  // a caixa de fora é fixa (tela toda; no celular, um card de 240 px na página); o maplibre põe position: relative no
+  // próprio container, por isso o de dentro
   return (
     <div className="device-map">
       <div

@@ -676,6 +676,18 @@ button.cmd-button.bad, button.cmd-button.bad:hover { color: var(--bad-deep); }
 @media (max-width: 1023.98px) {
   .device-page { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-template-areas: "main" "info"; }
   .device-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /*
+    Celular: o mapa deixa de ser o fundo da tela (onde o toque entre os cards arrastava o mapa em vez de rolar a
+    página) e vira um card de 240 px logo depois de "Coordenadas". Um dedo rola a página; dois movem o mapa
+    (cooperativeGestures, ligado no DeviceMap só nesta largura). A página e o fundo voltam ao normal.
+  */
+  .device-page.has-map { grid-template-areas: "main" "map" "info"; }
+  .device-page > .device-map {
+    position: relative; inset: auto; z-index: auto; grid-area: map; height: 240px;
+    border: 1px solid var(--line); border-radius: var(--radius-card); overflow: hidden;
+  }
+  .shell:has(.device-page.has-map) { pointer-events: auto; }
+  body:has(.device-page.has-map) .starx-bg { display: block; }
 }
 
 /*
@@ -713,5 +725,6 @@ label.check-hit { display: contents; }
   .device-map .maplibregl-ctrl-bottom-left { left: 0; transform: none; }
 }
 @media (max-width: 1023.98px) {
-  .device-map .maplibregl-ctrl-bottom-left { bottom: calc(56px + env(safe-area-inset-bottom)); }
+  /* o mapa é um card no celular: a atribuição fica no canto dele (antes subia acima da barra de abas) */
+  .device-map .maplibregl-ctrl-bottom-left { bottom: 0; }
 }
