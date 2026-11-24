@@ -661,6 +661,18 @@ button.cmd-button.bad, button.cmd-button.bad:hover { color: var(--bad-deep); }
   .device-page { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-template-areas: "main" "info"; }
   .device-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/*
+  Celular e telas de toque: campos com 16 px. Abaixo disso o Safari do iPhone dá zoom na página ao focar o campo.
+  Só muda o tamanho da letra (família, altura e bordas ficam). O :not() sobe a especificidade acima de ".mono" e
+  ".device-card input"; checkbox, rádio, faixa, cor e arquivo não abrem teclado e ficam como estão, e o campo do
+  nome do aparelho já tem 17 px.
+  No desktop com mouse nada muda.
+*/
+@media (max-width: 1023.98px), (pointer: coarse) {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='file']):not(.device-name-input),
+  select, select.mono, textarea, textarea.mono { font-size: 16px; }
+}
 } /* fim da camada components */
 
 /* Ajustes do maplibre: o CSS dele fica fora das camadas, então estes também (e com seletor mais específico). */
