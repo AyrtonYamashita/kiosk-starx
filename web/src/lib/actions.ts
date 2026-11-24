@@ -658,3 +658,50 @@ export async function anonymizeSubject(_: FormState, form: FormData): Promise<Fo
     return { error: message(e) };
   }
 }
+
+// ---------------------------------------------------------------- notificações no celular (Web Push)
+
+export type PushEventKey = "start" | "done" | "stopped";
+type PushResult = { ok?: string; error?: string };
+
+/** Inscreve este navegador (o objeto vem de PushSubscription.toJSON() no aparelho). */
+export async function pushSubscribe(sub: { endpoint?: string; keys?: { p256dh?: string; auth?: string } }): Promise<PushResult> {
+  try {
+    await api("/v1/admin/push/subscribe", { method: "POST", body: { endpoint: sub.endpoint, keys: sub.keys } });
+  } catch (e) {
+    return { error: message(e) };
+  }
+  revalidatePath("/account");
+  return { ok: "Notificações ligadas neste aparelho." };
+}
+
+export async function pushUnsubscribe(endpoint: string): Promise<PushResult> {
+  try {
+    await api("/v1/admin/push/unsubscribe", { method: "POST", body: { endpoint } });
+  } catch (e) {
+    return { error: message(e) };
+  }
+  revalidatePath("/account");
+  return { ok: "Notificações desligadas neste aparelho." };
+}
+
+export async function pushSetEvents(events: PushEventKey[]): Promise<PushResult> {
+  try {
+    await api("/v1/admin/push/events", { method: "PUT", body: { events } });
+  } catch (e) {
+    return { error: message(e) };
+  }
+  revalidatePath("/account");
+  return { ok: "Preferências salvas." };
+}
+
+export async function pushTest(): Promise<PushResult> {
+  try {
+    const r = await api<{ sent: number; total: number }>("/v1/admin/push/test", { method: "POST" });
+    if (!r.total) return { error: "Nenhum aparelho com notificação ligada." };
+    if (!r.sent) return { error: "O serviço de push recusou o envio. Desligue e ligue de novo neste aparelho." };
+    return { ok: `Teste enviado para ${r.sent} ${r.sent === 1 ? "aparelho" : "aparelhos"}.` };
+  } catch (e) {
+    return { error: message(e) };
+  }
+}

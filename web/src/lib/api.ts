@@ -347,6 +347,14 @@ export async function apiMfa<T>(token: string, path: string, body?: unknown): Pr
   return { status: res.status, json };
 }
 
+/** Notificações no celular (GET /v1/admin/push): chave pública VAPID, eventos escolhidos e aparelhos inscritos. */
+export interface PushInfo {
+  enabled: boolean;
+  publicKey: string | null;
+  events: ("start" | "done" | "stopped")[];
+  subscriptions: { endpoint: string; userAgent: string | null; createdAt: string; lastSentAt: string | null }[];
+}
+
 export interface MfaInfo {
   required: boolean;
   email: string | null;

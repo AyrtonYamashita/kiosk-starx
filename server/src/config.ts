@@ -114,6 +114,13 @@ function timeZone(): string {
   return tz;
 }
 
+/** Quem envia as notificações (VAPID): o serviço de push só aceita https: ou mailto:. */
+function vapidSubject(): string {
+  const v = process.env.VAPID_SUBJECT || "https://kiosk.pstarx.com";
+  if (!/^(https:\/\/|mailto:)\S+$/.test(v)) throw new Error("VAPID_SUBJECT precisa começar com https:// ou mailto:");
+  return v;
+}
+
 export function loadConfig(): Config {
   return {
     port: Number(process.env.PORT ?? 3100),
@@ -162,6 +169,6 @@ export function loadConfig(): Config {
     timeZone: timeZone(),
     vapidPublicKey: process.env.VAPID_PUBLIC_KEY || undefined,
     vapidPrivateKey: process.env.VAPID_PRIVATE_KEY || undefined,
-    vapidSubject: process.env.VAPID_SUBJECT ?? "https://kiosk.pstarx.com",
+    vapidSubject: vapidSubject(),
   };
 }

@@ -1,11 +1,12 @@
 import { LogOut } from "lucide-react";
 import { logout } from "@/lib/actions";
-import { api, type Me, type MfaInfo, type SessionInfo } from "@/lib/api";
+import { api, type Me, type MfaInfo, type PushInfo, type SessionInfo } from "@/lib/api";
 import { SessionsTable } from "@/components/SessionsTable";
 import { ThemePicker } from "@/components/brand/ThemePicker";
 import { PasswordForm } from "./PasswordForm";
 import { PasskeysSection } from "./PasskeysSection";
 import { TotpSection } from "./TotpSection";
+import { PushCard } from "./PushCard";
 import { RecoveryCodes, TrustedDevices } from "./MfaCard";
 import Link from "next/link";
 import { privacyConfig } from "@/lib/privacy";
@@ -18,10 +19,12 @@ export const dynamic = "force-dynamic";
   O último card de cada coluna estica até o fim; se o conteúdo passar da altura, a coluna rola.
 */
 export default async function AccountPage() {
-  const [me, { sessions, idleHours }, mfa] = await Promise.all([
+  const [me, { sessions, idleHours }, mfa, push] = await Promise.all([
     api<Me>("/v1/admin/me"),
     api<{ sessions: SessionInfo[]; idleHours: number }>("/v1/admin/sessions"),
     api<MfaInfo>("/v1/admin/mfa"),
+    // API antiga (sem notificações): a página abre sem o card
+    api<PushInfo>("/v1/admin/push").catch(() => null),
   ]);
   const others = sessions.filter((s) => !s.current).length;
 
@@ -73,6 +76,8 @@ export default async function AccountPage() {
           <ThemePicker />
           <span className="muted small">Vale para este navegador.</span>
         </section>
+
+        {push && <PushCard info={push} />}
 
         <section className="card account-card account-fill">
           <h2>Trocar senha</h2>
