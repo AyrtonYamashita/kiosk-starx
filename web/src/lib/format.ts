@@ -6,6 +6,14 @@ export function dateTime(iso: string | null | undefined): string {
   return new Date(iso).toLocaleString("pt-BR", { timeZone: TZ, dateStyle: "short", timeStyle: "short" });
 }
 
+/** Dia e hora sem o ano ("23/11 09:33"), para listas compactas no celular. */
+export function dayTime(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  return new Date(iso)
+    .toLocaleString("pt-BR", { timeZone: TZ, day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
+    .replace(",", "");
+}
+
 /** "há 2 min", "há 3 h", "há 5 d" */
 export function ago(iso: string | null | undefined, now = Date.now()): string {
   if (!iso) return "nunca";

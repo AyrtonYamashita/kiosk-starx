@@ -553,17 +553,16 @@ label.dev-check { min-height: 32px; gap: 8px; font-size: 12.5px; }
   .cargas-table { display: none; }
   .cargas-cards { display: block; }
 }
-/* card enxuto: 3 linhas (placa, função e valor | início, colaborador, coletor e duração | volumes e situação); o card inteiro
-   é o link para a carga (::after cobre tudo) e o link do coletor fica por cima dele */
-.carga-card { position: relative; display: flex; flex-direction: column; gap: 4px; padding: 10px 14px; border-bottom: 1px solid var(--rule); }
+/* card leve: 3 linhas (placa e função | início e colaborador | volumes, barra e situação); o card inteiro é o link
+   para a carga (::after cobre tudo), onde ficam valor, duração, coletor e unidades */
+.carga-card { position: relative; display: flex; flex-direction: column; gap: 6px; padding: 12px 16px; border-bottom: 1px solid var(--rule); }
 .carga-card:last-child { border-bottom: none; }
 .carga-card:active { background: var(--subtle); }
-.carga-line { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+.carga-line { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; }
 a.carga-card-link { display: flex; align-items: center; gap: 8px; min-width: 0; color: var(--ink); font-weight: 600; }
 a.carga-card-link::after { content: ""; position: absolute; inset: 0; }
 .carga-fn { min-width: 0; overflow-wrap: anywhere; } /* quebra em 2 linhas só se não couber: o nome da função nunca é cortado */
-.carga-meta { flex: 1; min-width: 0; overflow-wrap: anywhere; } /* nome de coletor sem espaços (ex.: sdk_gphone64_x86_64) */
-a.carga-device { position: relative; z-index: 1; }
+.carga-meta { min-width: 0; overflow-wrap: anywhere; }
 .carga-right { flex: none; white-space: nowrap; }
 .carga-qty .ops-bar { flex: 1; min-width: 40px; height: 4px; }
 .num { display: inline-flex; align-items: baseline; white-space: nowrap; font-variant-numeric: tabular-nums; }
@@ -816,7 +815,7 @@ label.check-hit { display: contents; }
   Link dentro de frase: sublinhado. Só a cor não basta (WCAG 1.4.1): no escuro o azul fica a 2,4:1 do texto ao redor.
   Links soltos (tabelas, menus, botões) continuam sem sublinhado.
 */
-:is(p, li, .muted, .alert, .policy-body) a:not(.button, .link-button, .carga-card-link, .carga-device) { text-decoration: underline; text-underline-offset: 2px; }
+:is(p, li, .muted, .alert, .policy-body) a:not(.button, .link-button, .carga-card-link) { text-decoration: underline; text-underline-offset: 2px; }
 /*
   Transição de página (View Transitions): só o conteúdo da página anima. Barra de abas, barra do topo (celular) e
   menu lateral (desktop) ganham captura própria, desenhada por cima e parada; sem isso a página deslizava por cima

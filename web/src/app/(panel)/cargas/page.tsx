@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { api, type OpsHistory } from "@/lib/api";
 import { FilterSheet } from "@/components/FilterSheet";
-import { dateTime } from "@/lib/format";
+import { dateTime, dayTime } from "@/lib/format";
 import { END_LABEL, fmtDuration, fmtMoney, fmtQty } from "@/lib/opsFormat";
 
 export const dynamic = "force-dynamic";
@@ -189,32 +189,18 @@ export default async function CargasPage({ searchParams }: { searchParams: Promi
               const pct = o.totalQty > 0 ? Math.min(100, (o.readQty / o.totalQty) * 100) : 0;
               return (
                 <li key={o.id} className="carga-card">
-                  <div className="carga-line">
-                    {/* placa e função | início, colaborador, coletor, unidades, duração | volumes e situação; o link cobre o card todo (::after), o do coletor fica por cima */}
-                    <Link href={`/operations/${o.device.id}?op=${o.id}`} className="carga-card-link">
-                      <span className="ops-plate mono">{o.realPlate || o.plate}</span>
-                      <span className="carga-fn">{o.fnLabel}</span>
-                    </Link>
-                    <span className="mono carga-right">{fmtMoney(o.totalValue)}</span>
-                  </div>
-                  <div className="carga-line muted small">
-                    <span className="carga-meta">
-                      <span className="mono">{dateTime(o.startedAt)}</span>
-                      {o.user && (
-                        <>
-                          {" · "}
-                          <span className="mono">{o.user}</span>
-                        </>
-                      )}
-                      {" · "}
-                      <Link href={`/devices/${o.device.id}`} className="mono carga-device">
-                        {o.device.name}
-                      </Link>
-                      {o.realPlate && o.realPlate !== o.plate && <span className="mono"> · placa no SSW {o.plate}</span>}
-                      {o.units.length > 0 && <span> · {o.units.join(" · ")}</span>}
-                      {o.branch && <span> · {o.branch}</span>}
-                      <span className="mono"> · {fmtDuration(o.durationSec)}</span>
-                    </span>
+                  {/*
+                    Só o que identifica a carga de relance: placa e função | início e colaborador | volumes e situação.
+                    Valor, duração, coletor, unidades e filial ficam no detalhe (o card todo abre a carga, via ::after)
+                    e na tabela do desktop.
+                  */}
+                  <Link href={`/operations/${o.device.id}?op=${o.id}`} className="carga-card-link">
+                    <span className="ops-plate mono">{o.realPlate || o.plate}</span>
+                    <span className="carga-fn">{o.fnLabel}</span>
+                  </Link>
+                  <div className="carga-meta muted small">
+                    {dayTime(o.startedAt)}
+                    {o.user && ` · ${o.user}`}
                   </div>
                   <div className="carga-line carga-qty">
                     <span className="mono">
