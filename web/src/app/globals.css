@@ -537,6 +537,7 @@ label.dev-check { min-height: 32px; gap: 8px; font-size: 12.5px; }
 .carga-card-title { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 44px; min-width: 0; color: var(--ink); font-weight: 600; }
 .carga-card-qty { display: flex; align-items: center; gap: 8px; }
 .carga-card-qty .ops-bar { flex: 1; min-width: 60px; }
+.carga-card .ops-facts dd { overflow-wrap: anywhere; } /* nome de coletor sem espaços (ex.: sdk_gphone64_x86_64) */
 .num { display: inline-flex; align-items: baseline; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .good { color: var(--good-deep); }
 .bad { color: var(--bad-deep); }
@@ -788,7 +789,7 @@ label.check-hit { display: contents; }
   Link dentro de frase: sublinhado. Só a cor não basta (WCAG 1.4.1): no escuro o azul fica a 2,4:1 do texto ao redor.
   Links soltos (tabelas, menus, botões) continuam sem sublinhado.
 */
-:is(p, li, .muted, .alert, .policy-body) a:not(.button, .link-button) { text-decoration: underline; text-underline-offset: 2px; }
+:is(p, li:not(.carga-card), .muted, .alert, .policy-body) a:not(.button, .link-button) { text-decoration: underline; text-underline-offset: 2px; }
 } /* fim da camada components */
 
 /* Ajustes do maplibre: o CSS dele fica fora das camadas, então estes também (e com seletor mais específico). */
