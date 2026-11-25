@@ -20,14 +20,12 @@ import android.view.View
 import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.view.WindowManager
-import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
 import android.webkit.SslErrorHandler
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import android.webkit.WebStorage
 import android.widget.FrameLayout
 import android.widget.GridLayout
 import android.widget.Button
@@ -65,7 +63,7 @@ class KioskActivity : Activity() {
     private var resumed = false
     private val restarts = ArrayDeque<Long>()
     private var countdown: Runnable? = null
-    private val inactivity = Runnable { webView?.loadUrl(config.kiosk.web.url) }
+    private val inactivity = Runnable { if (gate == null) webView?.loadUrl(config.kiosk.web.url) }
     private val onChange: () -> Unit = { if (resumed) refresh() }
     /** Piloto da leitura do SSW ligado/desligado no painel: liga ou para o leitor sem recarregar o site. */
     private val onPanelChange: () -> Unit = { applyOps() }
@@ -102,6 +100,8 @@ class KioskActivity : Activity() {
         PanelStore.get(this).removeListener(onPanelChange)
         if (OpsReader.onScriptChanged === onReaderChange) OpsReader.onScriptChanged = null
         OpsReader.stop()
+        gate?.stop()
+        gate = null
         handler.removeCallbacksAndMessages(null)
         webView?.destroy()
         super.onDestroy()
@@ -259,12 +259,10 @@ class KioskActivity : Activity() {
     /** Sai do SSW: apaga a sessão (cookies e dados da página) e volta à página inicial do site. */
     private fun logoutSsw() {
         Log.i(TAG, "Operador parado: saindo do SSW")
-        val cookies = CookieManager.getInstance()
-        cookies.removeAllCookies { cookies.flush() }
-        WebStorage.getInstance().deleteAllData()
-        webView?.let {
-            it.clearHistory()
-            it.loadUrl(config.kiosk.web.url)
+        val wv = webView
+        // a página inicial só abre depois de os cookies terem saído de verdade (senão ela podia voltar logada)
+        SessionReset.clear(this, wv, forBoot = false) {
+            if (wv != null && webView === wv) wv.loadUrl(config.kiosk.web.url)
         }
     }
 
@@ -301,6 +299,8 @@ class KioskActivity : Activity() {
         if (key == renderedKey) return
         renderedKey = key
         root.removeAllViews()
+        gate?.stop()
+        gate = null
         webView?.destroy()
         webView = null
         pageUrl = null
@@ -465,6 +465,7 @@ class KioskActivity : Activity() {
             )
         }
         val wv = WebView(this)
+        val loader = LoadingOverlay(this, parseColor(config.appearance.backgroundColor, Theme.NIGHT), parseColor(config.appearance.textColor, Color.WHITE))
         // ponte do leitor do SSW: só aceita chamadas com o piloto ligado e com a página principal no SSW
         wv.addJavascriptInterface(OpsReader.Bridge { OpsReader.isSswUrl(pageUrl) }, OpsReader.JS_NAME)
         wv.addJavascriptInterface(IdleBridge(), IDLE_JS_NAME)
@@ -508,7 +509,9 @@ class KioskActivity : Activity() {
                 if (!request.isForMainFrame) return
                 webError = true
                 Log.w(TAG, "Erro ao carregar ${request.url}: ${error.description}")
-                scheduleReload(view)
+                // caiu a internet: no lugar da página de erro, a tela de espera; volta ao início quando a rede voltar
+                if (webView === view && !online()) openWhenOnline(view, loader, forBoot = false)
+                else scheduleReload(view)
             }
 
             override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, error: SslError) {
@@ -518,10 +521,62 @@ class KioskActivity : Activity() {
                 scheduleReload(view)
             }
         }
-        wv.loadUrl(web.url)
         webView = wv
-        restartInactivity()
-        return wv
+        openWhenOnline(wv, loader, forBoot = true)
+        return FrameLayout(this).apply {
+            addView(wv, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+            addView(loader, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        }
+    }
+
+    /** Espera pela internet (e não deixa a tela em branco ou com erro): fica em cima do site até abrir a página. */
+    private var gate: ConnectionGate? = null
+
+    /**
+     * Abre a página inicial só com a internet funcionando e, na primeira vez depois de ligar o coletor, só depois de
+     * apagar a sessão guardada (quem desligou sem sair do SSW não volta "logado").
+     */
+    private fun openWhenOnline(wv: WebView, loader: LoadingOverlay, forBoot: Boolean) {
+        gate?.stop()
+        gate = null
+        handler.removeCallbacks(inactivity)
+        val url = config.kiosk.web.url
+        loader.show("Iniciando…", "")
+        var online = false
+        var clean = !(forBoot && SessionReset.pendingForBoot(this))
+        val go = {
+            if (online && clean && webView === wv) {
+                loader.hide()
+                wv.loadUrl(url)
+                restartInactivity()
+            }
+        }
+        if (!clean) {
+            loader.show("Iniciando…", "Limpando a sessão anterior")
+            SessionReset.clear(this, wv, forBoot = true) {
+                clean = true
+                go()
+            }
+        }
+        val g = ConnectionGate(
+            this,
+            url,
+            onStage = { _, title, detail -> if (webView === wv) loader.show(title, detail) },
+            onReady = {
+                online = true
+                gate = null
+                go()
+            },
+        )
+        gate = g
+        g.start()
+    }
+
+    /** O Android diz que há rede com internet (sem garantia de que o site responde). */
+    private fun online(): Boolean {
+        val cm = getSystemService(android.net.ConnectivityManager::class.java)
+        val caps = cm.activeNetwork?.let { cm.getNetworkCapabilities(it) } ?: return false
+        return caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
     }
 
     /** Última carga da página principal falhou (o atalho então volta à URL inicial em vez de repetir a página com erro). */
@@ -533,6 +588,8 @@ class KioskActivity : Activity() {
     /** Atalho do operador: recarrega a página atual; se ela deu erro (ou não há página), volta à URL inicial. */
     private fun reloadPage() {
         val wv = webView ?: return
+        // esperando a internet: a página abre sozinha quando conectar
+        if (gate != null) return
         Log.i(TAG, "Recarregar pela tela (erro=$webError)")
         if (webError || wv.url.isNullOrBlank()) wv.loadUrl(config.kiosk.web.url) else wv.reload()
         restartInactivity()
@@ -569,7 +626,7 @@ class KioskActivity : Activity() {
     private fun restartInactivity() {
         handler.removeCallbacks(inactivity)
         val sec = config.kiosk.web.inactivityReturnSec
-        if (config.kiosk.mode == KioskConfig.Mode.WEB && sec > 0 && webView != null) handler.postDelayed(inactivity, sec * 1000L)
+        if (config.kiosk.mode == KioskConfig.Mode.WEB && sec > 0 && webView != null && gate == null) handler.postDelayed(inactivity, sec * 1000L)
     }
 
     /** Aviso centralizado na tela do kiosk: 13/600 (título de cartão), na cor do texto da aparência. */
