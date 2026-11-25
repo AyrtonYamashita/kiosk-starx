@@ -52,9 +52,35 @@ class IdleLogoutTest {
         idle.tick(0, limit, true)
         assertEquals(Action.NONE, idle.tick(500_000, limit, eligible = false))
         assertEquals(Action.NONE, idle.tick(600_000, limit, eligible = true))
-        assertEquals(Action.SHOW, idle.tick(720_000, limit, true))
-        assertEquals(Action.HIDE, idle.tick(721_000, limit, eligible = false))
+        assertEquals(Action.SHOW, idle.tick(620_000, limit, true))
+        assertEquals(Action.HIDE, idle.tick(621_000, limit, eligible = false))
         assertFalse(idle.warning)
+    }
+
+    @Test
+    fun telaApagadaContaComoParado() {
+        val idle = IdleLogout()
+        idle.tick(0, limit, true)
+        idle.activity(10_000)
+        // tela apagada: sem ticks; o alarme fica para o último uso + limite + 30 s
+        assertEquals(160_000L, idle.logoutAt(limit))
+        // acendeu dentro do limite + aviso: aviso com o tempo que sobrou
+        assertEquals(Action.SHOW, idle.tick(140_000, limit, true))
+        assertEquals(20, idle.secondsLeft(140_000))
+        assertEquals(160_000L, idle.logoutAt(limit))
+        assertEquals(Action.LOGOUT, idle.tick(160_000, limit, true))
+    }
+
+    @Test
+    fun voltouDepoisDoPrazoSaiNaHora() {
+        val idle = IdleLogout()
+        idle.tick(0, limit, true)
+        assertEquals(Action.LOGOUT, idle.tick(500_000, limit, true))
+        assertFalse(idle.warning)
+        // recomeça a contar depois de desconectar
+        assertEquals(Action.NONE, idle.tick(501_000, limit, true))
+        assertEquals(null, IdleLogout().logoutAt(limit))
+        assertEquals(null, idle.logoutAt(0))
     }
 
     @Test

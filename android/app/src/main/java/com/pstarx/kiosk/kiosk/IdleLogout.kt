@@ -9,6 +9,8 @@ package com.pstarx.kiosk.kiosk
  *  - Toque, tecla (inclusive o leitor de código que digita como teclado) e digitação/rolagem na página zeram o tempo.
  *  - Passado o limite, mostra o aviso com 30 s; durante o aviso só o botão confirma (um toque qualquer não basta).
  *  - Sem confirmação até o fim dos 30 s: desconecta.
+ *  - Tela apagada conta como parado: acender a tela não é uso, e quem volta depois do limite + 30 s já sai na hora
+ *    (com a tela apagada, um alarme desconecta no prazo; ver KioskActivity).
  */
 class IdleLogout(private val confirmMs: Long = CONFIRM_MS) {
     enum class Action { NONE, SHOW, UPDATE, HIDE, LOGOUT }
@@ -55,10 +57,26 @@ class IdleLogout(private val confirmMs: Long = CONFIRM_MS) {
             return Action.UPDATE
         }
         if (now - lastActivity >= limitMs) {
-            deadline = now + confirmMs
+            // prazo contado do último uso (não de quando o app percebeu): com a tela apagada o app fica parado e,
+            // ao voltar, quem já passou do limite + 30 s sai na hora, sem aviso
+            val end = lastActivity + limitMs + confirmMs
+            if (now >= end) {
+                lastActivity = now
+                return Action.LOGOUT
+            }
+            deadline = end
             return Action.SHOW
         }
         return Action.NONE
+    }
+
+    /**
+     * Quando desconectar se ninguém mexer (último uso + limite + os 30 s do aviso), para o alarme da tela apagada.
+     * null = sem contagem.
+     */
+    fun logoutAt(limitMs: Long): Long? {
+        if (limitMs <= 0 || lastActivity == Long.MIN_VALUE) return null
+        return deadline ?: (lastActivity + limitMs + confirmMs)
     }
 
     companion object {

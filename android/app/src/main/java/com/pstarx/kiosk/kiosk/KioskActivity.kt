@@ -92,6 +92,7 @@ class KioskActivity : Activity() {
         kiosk.addListener(onChange)
         PanelStore.get(this).addListener(onPanelChange)
         OpsReader.onScriptChanged = onReaderChange
+        IdleAlarmReceiver.onFire = onIdleAlarm
     }
 
     override fun onDestroy() {
@@ -99,6 +100,8 @@ class KioskActivity : Activity() {
         kiosk.removeListener(onChange)
         PanelStore.get(this).removeListener(onPanelChange)
         if (OpsReader.onScriptChanged === onReaderChange) OpsReader.onScriptChanged = null
+        if (IdleAlarmReceiver.onFire === onIdleAlarm) IdleAlarmReceiver.onFire = null
+        IdleAlarmReceiver.cancel(this)
         OpsReader.stop()
         gate?.stop()
         gate = null
@@ -123,8 +126,12 @@ class KioskActivity : Activity() {
         }
         ensureLockTask()
         refresh()
-        idle.activity(SystemClock.elapsedRealtime())
+        // acender a tela não é uso: quem passou do prazo com a tela apagada sai agora (ou vê o aviso com o que sobrou)
+        IdleAlarmReceiver.cancel(this)
+        // mudanças da página com a tela apagada não são leituras do colaborador
+        seenScanActivity = OpsReader.scanActivity
         handler.removeCallbacks(idleTick)
+        tickIdle()
         handler.postDelayed(idleTick, 1_000)
         if (config.kiosk.mode == KioskConfig.Mode.APP) {
             if (kiosk.restartAppPending) {
@@ -149,6 +156,9 @@ class KioskActivity : Activity() {
         IdleVibration.stop(this)
         cancelCountdown()
         handler.removeCallbacks(idleTick)
+        // tela apagada (ou outra tela por cima): o prazo continua correndo; o alarme desconecta se ninguém voltar
+        val (eligible, limitMs) = idleRule()
+        if (eligible) idle.logoutAt(limitMs)?.let { IdleAlarmReceiver.schedule(this, it) }
         super.onPause()
     }
 
@@ -191,17 +201,14 @@ class KioskActivity : Activity() {
 
     private fun tickIdle() {
         val now = SystemClock.elapsedRealtime()
-        val url = pageUrl
         // leituras na bipagem contam como uso (o leitor de código nem sempre chega aqui como tecla)
         val scans = OpsReader.scanActivity
         if (scans != seenScanActivity) {
             seenScanActivity = scans
             idle.activity(now)
         }
-        val eligible = config.kiosk.mode == KioskConfig.Mode.WEB && webView != null && IdleLogout.loggedIn(url, OpsReader.isSswUrl(url))
-        // na bipagem o prazo é maior (o colaborador pode estar movendo volumes sem tocar no coletor)
-        val limitMin = if (IdleLogout.scanningUrl(url)) config.kiosk.web.idleLogoutScanMin else config.kiosk.web.idleLogoutMin
-        when (idle.tick(now, limitMin * 60_000L, eligible)) {
+        val (eligible, limitMs) = idleRule()
+        when (idle.tick(now, limitMs, eligible)) {
             IdleLogout.Action.SHOW -> showIdle(now)
             IdleLogout.Action.UPDATE -> updateIdle(now)
             IdleLogout.Action.HIDE -> hideIdle()
@@ -210,6 +217,31 @@ class KioskActivity : Activity() {
                 logoutSsw()
             }
             IdleLogout.Action.NONE -> Unit
+        }
+    }
+
+    /** Conta a inatividade (alguém logado no SSW, modo site) e o prazo da tela aberta. */
+    private fun idleRule(): Pair<Boolean, Long> {
+        val url = pageUrl
+        val eligible = config.kiosk.mode == KioskConfig.Mode.WEB && webView != null && IdleLogout.loggedIn(url, OpsReader.isSswUrl(url))
+        // na bipagem o prazo é maior (o colaborador pode estar movendo volumes sem tocar no coletor)
+        val limitMin = if (IdleLogout.scanningUrl(url)) config.kiosk.web.idleLogoutScanMin else config.kiosk.web.idleLogoutMin
+        return eligible to limitMin * 60_000L
+    }
+
+    /** Alarme do prazo com a tela apagada: desconecta sem mostrar aviso (não tem ninguém olhando). */
+    private val onIdleAlarm: () -> Unit = {
+        if (!resumed) {
+            val (eligible, limitMs) = idleRule()
+            when (idle.tick(SystemClock.elapsedRealtime(), limitMs, eligible)) {
+                IdleLogout.Action.LOGOUT -> {
+                    hideIdle()
+                    logoutSsw()
+                }
+                // acordou antes do prazo (alarme adiantado pelo Android): agenda de novo
+                IdleLogout.Action.SHOW, IdleLogout.Action.UPDATE -> idle.logoutAt(limitMs)?.let { IdleAlarmReceiver.schedule(this, it) }
+                else -> Unit
+            }
         }
     }
 
@@ -303,6 +335,7 @@ class KioskActivity : Activity() {
         gate = null
         webView?.destroy()
         webView = null
+        loaderView = null
         pageUrl = null
         root.setBackgroundColor(parseColor(config.appearance.backgroundColor, Theme.NIGHT))
         val screen = when (config.kiosk.mode) {
@@ -495,6 +528,13 @@ class KioskActivity : Activity() {
 
             override fun onPageFinished(view: WebView, url: String?) {
                 pageUrl = url
+                // terminou de "carregar" sem internet: é a página de erro do WebView (nem sempre vem onReceivedError)
+                if (webView === view && gate == null && !online()) {
+                    Log.w(TAG, "Página terminou sem internet: tela de espera")
+                    webError = true
+                    openWhenOnline(view, loader, forBoot = false)
+                    return
+                }
                 if (webView === view) {
                     injectReader(view)
                     view.evaluateJavascript(IDLE_HOOK, null)
@@ -522,6 +562,7 @@ class KioskActivity : Activity() {
             }
         }
         webView = wv
+        loaderView = loader
         openWhenOnline(wv, loader, forBoot = true)
         return FrameLayout(this).apply {
             addView(wv, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
@@ -531,6 +572,7 @@ class KioskActivity : Activity() {
 
     /** Espera pela internet (e não deixa a tela em branco ou com erro): fica em cima do site até abrir a página. */
     private var gate: ConnectionGate? = null
+    private var loaderView: LoadingOverlay? = null
 
     /**
      * Abre a página inicial só com a internet funcionando e, na primeira vez depois de ligar o coletor, só depois de
@@ -591,6 +633,11 @@ class KioskActivity : Activity() {
         // esperando a internet: a página abre sozinha quando conectar
         if (gate != null) return
         Log.i(TAG, "Recarregar pela tela (erro=$webError)")
+        // sem internet: a tela de espera no lugar da página de erro (abre sozinha quando conectar)
+        if (!online()) {
+            loaderView?.let { openWhenOnline(wv, it, forBoot = false) }
+            return
+        }
         if (webError || wv.url.isNullOrBlank()) wv.loadUrl(config.kiosk.web.url) else wv.reload()
         restartInactivity()
     }

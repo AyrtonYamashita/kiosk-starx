@@ -76,6 +76,11 @@
             android:name=".panel.PanelSync$Alarm"
             android:exported="false" />
 
+        <!-- saída por inatividade com a tela apagada (alarme no prazo) -->
+        <receiver
+            android:name=".kiosk.IdleAlarmReceiver"
+            android:exported="false" />
+
         <!-- resultado do PackageInstaller (instalação/remoção pelo painel) -->
         <receiver
             android:name=".apps.AppInstaller$StatusReceiver"
