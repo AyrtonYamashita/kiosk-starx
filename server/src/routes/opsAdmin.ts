@@ -21,7 +21,7 @@ export async function opsAdminRoutes(app: FastifyInstance, opts: { db: Db; confi
     if (code.length < 3 || code.length > 80) return reply.code(400).send({ error: "invalid_code", message: "Digite pelo menos 3 caracteres do código." });
     const prefix = code.replace(/[\\%_]/g, (c) => "\\" + c) + "%";
     const r = await db.query(
-      `SELECT s.at, s.code, s.kind, s.read_qty, d.id AS device_id, d.name AS device_name,
+      `SELECT s.at, s.code, s.kind, s.read_qty, s.error, d.id AS device_id, d.name AS device_name,
               o.id AS op_id, o.fn, o.plate, o.ssw_user, o.branch, o.started_at, o.ended_at, o.end_reason
        FROM ops_scans s JOIN devices d ON d.id = s.device_id LEFT JOIN ops_operations o ON o.id = s.operation_id
        WHERE s.tenant_id = $3 AND (s.code = $1 OR s.code LIKE $2)
@@ -33,6 +33,7 @@ export async function opsAdminRoutes(app: FastifyInstance, opts: { db: Db; confi
         at: x.at,
         code: x.code,
         kind: x.kind,
+        error: x.error,
         readQty: x.read_qty === null ? null : Number(x.read_qty),
         device: { id: x.device_id, name: x.device_name },
         operation: x.op_id
@@ -49,6 +50,86 @@ export async function opsAdminRoutes(app: FastifyInstance, opts: { db: Db; confi
             }
           : null,
       })),
+    };
+  });
+
+  /**
+   * Erros de bipagem (código recusado pelo SSW, com a mensagem como apareceu na tela): do mais novo para o mais antigo,
+   * 100 por página (`before` continua). Filtros: tipo de erro (`type` = mensagem normalizada), colaborador, coletor,
+   * placa e período (dias no fuso da operação; sem período, os últimos 7 dias). O resumo conta os tipos com os mesmos
+   * filtros, menos o próprio tipo (para a lista de escolha mostrar quantos há de cada).
+   */
+  const ErrorsQuery = z.object({
+    type: z.string().trim().min(1).max(160).optional(),
+    user: z.string().trim().max(80).optional(),
+    device: z.uuid().optional(),
+    plate: z.string().trim().max(20).optional(),
+    from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    before: z.string().regex(/^\d{13}_\d{1,19}$/).optional(),
+  });
+  app.get("/v1/admin/ops/scan-errors", async (req, reply) => {
+    const q = ErrorsQuery.safeParse(req.query);
+    if (!q.success) return reply.code(400).send({ error: "invalid_query" });
+    const f = q.data;
+    const tenantId = tenantOf(req);
+    const args: unknown[] = [tenantId];
+    const where: string[] = ["s.tenant_id = $1", "s.kind = 'erro'"];
+    const add = (sql: string, v: unknown) => {
+      args.push(v);
+      where.push(sql.replaceAll("?", `$${args.length}`));
+    };
+    if (f.user) add("o.ssw_user = ?", f.user);
+    if (f.device) add("s.device_id = ?", f.device);
+    if (f.plate) add("(upper(o.plate) LIKE ? OR upper(COALESCE(o.real_plate, '')) LIKE ?)", "%" + f.plate.toUpperCase().replace(/[\\%_]/g, (c) => "\\" + c) + "%");
+    if (f.from) add(`s.at >= (?::date::timestamp AT TIME ZONE '${TZ}')`, f.from);
+    else if (!f.to) where.push("s.at >= now() - interval '7 days'");
+    if (f.to) add(`s.at < ((?::date + 1)::timestamp AT TIME ZONE '${TZ}')`, f.to);
+    const base = [...where];
+    const baseArgs = [...args];
+    if (f.type) add("s.error_key = ?", f.type);
+    if (f.before) {
+      const [ms, id] = f.before.split("_");
+      args.push(new Date(Number(ms)), id);
+      where.push(`(s.at, s.id) < ($${args.length - 1}, $${args.length}::bigint)`);
+    }
+    const FROM = "FROM ops_scans s JOIN devices d ON d.id = s.device_id LEFT JOIN ops_operations o ON o.id = s.operation_id";
+    const [list, summary, users, devices] = await Promise.all([
+      db.query(
+        `SELECT s.id, s.at, s.code, s.error, s.error_key, s.read_qty, d.id AS device_id, d.name AS device_name,
+                o.id AS op_id, o.fn, o.plate, o.real_plate, o.ssw_user, o.branch
+         ${FROM} WHERE ${where.join(" AND ")} ORDER BY s.at DESC, s.id DESC LIMIT 101`,
+        args,
+      ),
+      db.query<{ key: string; sample: string; n: number; last_at: Date }>(
+        `SELECT s.error_key AS key, (array_agg(s.error ORDER BY s.at DESC))[1] AS sample, count(*)::int AS n, max(s.at) AS last_at
+         ${FROM} WHERE ${base.join(" AND ")} GROUP BY s.error_key ORDER BY n DESC, last_at DESC LIMIT 50`,
+        baseArgs,
+      ),
+      db.query<{ u: string }>(
+        "SELECT DISTINCT ssw_user AS u FROM ops_operations WHERE tenant_id = $1 AND ssw_user IS NOT NULL AND started_at > now() - interval '180 days' ORDER BY 1 LIMIT 500",
+        [tenantId],
+      ),
+      db.query<{ id: string; name: string }>("SELECT id, name FROM devices WHERE tenant_id = $1 ORDER BY name LIMIT 500", [tenantId]),
+    ]);
+    const rows = list.rows.slice(0, 100);
+    const last = rows[rows.length - 1];
+    return {
+      errors: rows.map((x) => ({
+        at: x.at,
+        code: x.code,
+        message: x.error,
+        type: x.error_key,
+        readQty: x.read_qty === null ? null : Number(x.read_qty),
+        device: { id: x.device_id, name: x.device_name },
+        operation: x.op_id
+          ? { id: x.op_id, fn: x.fn, fnLabel: FN_LABEL[x.fn] ?? x.fn, plate: x.plate, realPlate: x.real_plate, user: x.ssw_user, branch: x.branch }
+          : null,
+      })),
+      next: list.rows.length > 100 && last ? `${new Date(last.at).getTime()}_${last.id}` : null,
+      types: summary.rows.map((t) => ({ type: t.key, message: t.sample, count: t.n, lastAt: t.last_at })),
+      users: users.rows.map((u) => u.u),
+      devices: devices.rows,
     };
   });
 
@@ -96,7 +177,7 @@ export async function opsAdminRoutes(app: FastifyInstance, opts: { db: Db; confi
     const r = await db.query(
       `SELECT o.id, o.device_id, d.name AS device_name, o.fn, o.plate, o.real_plate, o.ssw_user, o.branch, o.units,
               o.started_at, o.ended_at, o.end_reason, o.total_qty, o.read_qty, o.total_value, o.read_value, o.scans,
-              o.scan_interval_sum_ms, o.scan_interval_count,
+              o.scan_interval_sum_ms, o.scan_interval_count, o.scan_errors,
               extract(epoch FROM COALESCE(o.ended_at, now()) - o.started_at)::int AS duration_sec
        FROM ops_operations o JOIN devices d ON d.id = o.device_id
        WHERE ${where.join(" AND ")}
@@ -131,6 +212,7 @@ export async function opsAdminRoutes(app: FastifyInstance, opts: { db: Db; confi
         totalValue: Number(o.total_value),
         readValue: Number(o.read_value),
         scans: o.scans,
+        scanErrors: o.scan_errors,
         avgSecPerVolume: Number(o.scan_interval_count) > 0 ? Math.round(Number(o.scan_interval_sum_ms) / Number(o.scan_interval_count) / 100) / 10 : null,
       })),
       next: r.rows.length > 50 && last ? `${new Date(last.started_at).getTime()}_${last.id}` : null,
@@ -204,10 +286,10 @@ export async function opsAdminRoutes(app: FastifyInstance, opts: { db: Db; confi
     const codes = op
       ? (
           await db.query(
-            "SELECT at, code, kind, read_qty FROM ops_scans WHERE operation_id = $1 ORDER BY at DESC, id DESC LIMIT 1000",
+            "SELECT at, code, kind, read_qty, error FROM ops_scans WHERE operation_id = $1 ORDER BY at DESC, id DESC LIMIT 1000",
             [op.id],
           )
-        ).rows.map((r) => ({ at: r.at, code: r.code, kind: r.kind, readQty: r.read_qty === null ? null : Number(r.read_qty) }))
+        ).rows.map((r) => ({ at: r.at, code: r.code, kind: r.kind, error: r.error, readQty: r.read_qty === null ? null : Number(r.read_qty) }))
       : [];
 
     const today = (
@@ -267,6 +349,7 @@ export async function opsAdminRoutes(app: FastifyInstance, opts: { db: Db; confi
             endedAt: op.ended_at,
             endReason: op.end_reason,
             scans: op.scans,
+            scanErrors: op.scan_errors,
             firstScanAt: op.first_scan_at,
             lastScanAt: op.last_scan_at,
             ...opMetrics(op),

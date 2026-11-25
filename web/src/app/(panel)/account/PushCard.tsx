@@ -11,6 +11,7 @@ const EVENTS: { key: PushEventKey; label: string }[] = [
   { key: "start", label: "Carga iniciada" },
   { key: "done", label: "Carga concluída" },
   { key: "stopped", label: "Carga encerrada sem concluir (interrompida, sem sinal…)" },
+  { key: "scan_error", label: "Erro na bipagem (código recusado pelo SSW; no máximo um aviso por carga a cada minuto)" },
 ];
 
 type Support = "checking" | "ok" | "ios-browser" | "unsupported";

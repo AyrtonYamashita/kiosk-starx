@@ -2,7 +2,7 @@ import Link from "next/link";
 import { api, type OpsHistory } from "@/lib/api";
 import { FilterSheet } from "@/components/FilterSheet";
 import { dateTime, dayTime } from "@/lib/format";
-import { END_LABEL, fmtDuration, fmtMoney, fmtQty } from "@/lib/opsFormat";
+import { END_LABEL, fmtDuration, fmtMoney, fmtQty, localDay } from "@/lib/opsFormat";
 
 export const dynamic = "force-dynamic";
 
@@ -176,6 +176,16 @@ export default async function CargasPage({ searchParams }: { searchParams: Promi
                       </td>
                       <td>
                         <Status o={o} />
+                        {o.scanErrors > 0 && (
+                          <div>
+                            <Link
+                              href={`/operations/erros?${new URLSearchParams({ device: o.device.id, plate: o.plate, from: localDay(o.startedAt), to: localDay(o.endedAt ?? new Date().toISOString()) })}`}
+                              className="small bad"
+                            >
+                              {o.scanErrors} {o.scanErrors === 1 ? "erro" : "erros"} na bipagem
+                            </Link>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   );

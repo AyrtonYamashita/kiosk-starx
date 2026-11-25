@@ -3,8 +3,10 @@ import type { Config } from "./config.js";
 import type { Db } from "./db.js";
 
 /** Eventos que viram notificação no celular. */
-export const PUSH_EVENTS = ["start", "done", "stopped"] as const;
+export const PUSH_EVENTS = ["start", "done", "stopped", "scan_error"] as const;
 export type PushEvent = (typeof PUSH_EVENTS)[number];
+/** Quem nunca escolheu recebe estes (erro de bipagem é opcional: pode ser muita notificação). */
+export const PUSH_DEFAULT: readonly PushEvent[] = ["start", "done", "stopped"];
 
 /** O que aparece na notificação; `url` é a página do painel aberta ao tocar. */
 export interface PushMessage {
@@ -85,20 +87,24 @@ export class Push {
     return this.sender !== null && this.publicKey !== null;
   }
 
-  /** Para os usuários ativos da empresa que escolheram receber esse evento. Nunca lança (quem chama não espera). */
-  async notify(tenantId: string, event: PushEvent, msg: PushMessage): Promise<void> {
-    if (!this.enabled) return;
+  /**
+   * Para os usuários ativos da empresa que escolheram receber esse evento; devolve quantos aparelhos aceitaram.
+   * Nunca lança (quem chama não espera).
+   */
+  async notify(tenantId: string, event: PushEvent, msg: PushMessage): Promise<number> {
+    if (!this.enabled) return 0;
     try {
       const rows = await this.db.query<Row>(
         `SELECT s.id, s.endpoint, s.p256dh, s.auth FROM push_subscriptions s
          JOIN admins a ON a.id = s.admin_id AND a.disabled_at IS NULL
          LEFT JOIN push_prefs p ON p.admin_id = s.admin_id
          WHERE s.tenant_id = $3 AND $1 = ANY (COALESCE(p.events, $2::text[]))`,
-        [event, PUSH_EVENTS, tenantId],
+        [event, PUSH_DEFAULT, tenantId],
       );
-      await this.deliver(rows.rows, msg);
+      return await this.deliver(rows.rows, msg);
     } catch (e) {
       this.log?.warn({ err: e }, "push: falha ao enviar");
+      return 0;
     }
   }
 

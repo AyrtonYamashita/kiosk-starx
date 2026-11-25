@@ -5,7 +5,7 @@
 (function () {
   "use strict";
   // muda a cada versão do leitor: uma versão nova substitui a antiga já injetada na página
-  var VERSION = "2026-11-19.2";
+  var VERSION = "2026-11-24.1";
   if (window.__starxOps) {
     if (window.__starxOps.version === VERSION) {
       window.__starxOps.scan(true);
@@ -130,34 +130,90 @@
     return s;
   }
 
-  // ------------------------------------------------------------ códigos de barras (app 0.5.2)
-  // A tela mostra o último código lido em #last. Cada código novo vira um registro com o tipo:
-  //  "lido" (Lidos aumentou), "outra" (Outras aumentou) ou "nao_contou" (nada aumentou: repetido, erro...).
-  // O número e o código podem mudar em momentos um pouco diferentes: espera até 1,5 s para casar os dois.
+  // ------------------------------------------------------------ códigos de barras (app 0.5.2; erros: leitor 2026-11-24)
+  // Cada bipagem vira um registro com o tipo:
+  //  "lido" (Lidos aumentou), "outra" (Outras aumentou), "erro" (o SSW recusou e mostrou uma mensagem na janela
+  //  #errormsg: o texto de #error_body vai junto, como apareceu) ou "nao_contou" (nada aumentou e nenhuma mensagem).
+  // A bipagem é percebida pelo Enter no campo #barcode (pega também o código repetido, que não muda #last) ou, se o
+  // Enter escapar, pelo código novo em #last (a página guarda ali o último código enviado).
+  // Número, código e mensagem podem chegar em momentos um pouco diferentes: espera até 1,5 s para casar; a mensagem que
+  // chegar até 8 s depois (rede lenta) ainda completa o registro, que vira "erro" (mesmo id: o servidor atualiza).
   var SCAN_WAIT_MS = 1500;
-  var sc = { key: null, code: "", read: null, out: null, incAt: 0, incKind: null, pending: null, done: null };
+  var ERROR_LATE_MS = 8000;
+  // mensagens logo depois de Concluir/Interromper são da carga (confirmação, pendências), não de uma bipagem
+  var ACTION_QUIET_MS = 15000;
+  var sc = {
+    key: null,
+    code: "",
+    read: null,
+    out: null,
+    incAt: 0,
+    incKind: null,
+    pending: null,
+    done: null,
+    doneAt: 0,
+    err: "",
+    typed: null,
+    typedAt: 0,
+    lastTyped: "",
+    lastTypedAt: 0,
+    actionAt: 0,
+  };
   function newId() {
     return Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
   }
-  function finish(p, kind, now, since) {
+  function finish(p, kind, now, since, error) {
     sc.done = { id: p.id, code: p.code, kind: kind, ageMs: Math.max(0, now - Math.min(p.at, since || p.at)) };
+    if (error) sc.done.error = error;
+    sc.doneAt = now;
     if (sc.pending === p) sc.pending = null;
+  }
+  function startScan(code, at, now) {
+    if (sc.pending) finish(sc.pending, "nao_contou", now);
+    var p = { id: newId(), code: code, at: at };
+    if (sc.incKind && now - sc.incAt <= SCAN_WAIT_MS) finish(p, sc.incKind, now, sc.incAt);
+    else sc.pending = p;
+    sc.incKind = null;
+  }
+  /** Mensagem aberta na janela de erro do SSW ("" = nenhuma). */
+  function errorText() {
+    return cut(text(byId("error_body")), 300);
+  }
+  /** O SSW mostrou uma mensagem: completa a bipagem a que ela pertence. */
+  function onError(err, code, now) {
+    if (now - sc.actionAt < ACTION_QUIET_MS) return;
+    if (sc.pending) return finish(sc.pending, "erro", now, null, err);
+    var d = sc.done;
+    if (d && now - sc.doneAt <= ERROR_LATE_MS) {
+      // chegou depois do prazo de 1,5 s: o "não contou" vira erro (mesmo registro)
+      if (!d.error && d.kind === "nao_contou") {
+        sc.done = { id: d.id, code: d.code, kind: "erro", ageMs: Math.min(600000, d.ageMs + (now - sc.doneAt)), error: err };
+        sc.doneAt = now;
+      }
+      // senão é continuação da mesma bipagem (ex.: resposta a um botão da janela): não vira outro registro
+      return;
+    }
+    // bipagem que escapou dos dois sinais (ex.: código repetido sem o Enter visto): fica com o código de #last
+    if (code) finish({ id: newId(), code: code, at: now }, "erro", now, null, err);
   }
   function trackScan(s) {
     var now = Date.now();
     var code = cut(text(byId("last")), 80);
     var read = s.read ? s.read.qty : null;
     var out = intNum(text(byId("out_qtde")));
+    var err = errorText();
     var key = (s.fn || "") + "|" + (s.plate || "");
     if (sc.key !== key) {
-      // outra carga (ou voltou à tela): o código que já estava na tela não é bipagem nova
+      // outra carga (ou voltou à tela): o código e a mensagem que já estavam na tela não são bipagem nova
       sc.key = key;
       sc.code = code;
       sc.read = read;
       sc.out = out;
+      sc.err = err;
       sc.incKind = null;
       sc.pending = null;
       sc.done = null;
+      sc.typed = null;
       return;
     }
     var kind = null;
@@ -172,15 +228,34 @@
         sc.incKind = kind;
       }
     }
-    if (code && code !== sc.code) {
-      if (sc.pending) finish(sc.pending, "nao_contou", now);
-      sc.code = code;
-      var p = { id: newId(), code: code, at: now };
-      if (sc.incKind && now - sc.incAt <= SCAN_WAIT_MS) finish(p, sc.incKind, now, sc.incAt);
-      else sc.pending = p;
-      sc.incKind = null;
+    if (sc.typed) {
+      startScan(sc.typed, sc.typedAt, now);
+      sc.lastTyped = sc.typed;
+      sc.lastTypedAt = sc.typedAt;
+      sc.typed = null;
     }
+    if (code && code !== sc.code) {
+      sc.code = code;
+      // o mesmo código que acabou de ser enviado pelo Enter já tem registro
+      if (!(code === sc.lastTyped && now - sc.lastTypedAt <= ERROR_LATE_MS)) startScan(code, now, now);
+    }
+    if (err && err !== sc.err) onError(err, code, now);
+    sc.err = err;
     if (sc.pending && now - sc.pending.at > SCAN_WAIT_MS) finish(sc.pending, "nao_contou", now);
+  }
+  /** Enter no campo do código (leitor ou teclado): só anota o que foi enviado, sem interferir. */
+  function onKey(e) {
+    var t = e.target;
+    if (!t || t.id !== "barcode" || !(e.key === "Enter" || e.keyCode === 13)) return;
+    var v = cut(t.value, 80);
+    if (!v) return;
+    var now = Date.now();
+    // Enter repetido do mesmo envio (tecla presa, leitor que manda dois) conta uma vez só
+    if (v === sc.typed && now - sc.typedAt < 300) return;
+    if (!sc.typed && v === sc.lastTyped && now - sc.lastTypedAt < 300) return;
+    sc.typed = v;
+    sc.typedAt = now;
+    soon();
   }
 
   /** O que impede de ler a tela (null = nada): bipagem sem função/placa/total ou tela do SSW desconhecida. */
@@ -248,6 +323,7 @@
     var t = String(el.innerText || el.value || "").trim().toLowerCase();
     var name = /^concluir/.test(t) ? "concluir" : /^interromper/.test(t) ? "interromper" : null;
     if (!name) return;
+    sc.actionAt = Date.now();
     try {
       bridge.action(name);
     } catch (err) {}
@@ -255,6 +331,7 @@
   }
 
   document.addEventListener("click", onClick, true);
+  document.addEventListener("keydown", onKey, true);
   try {
     observer = new MutationObserver(soon);
     observer.observe(document.documentElement, { subtree: true, childList: true, characterData: true });
@@ -269,6 +346,7 @@
       clearInterval(timer);
       if (observer) observer.disconnect();
       document.removeEventListener("click", onClick, true);
+      document.removeEventListener("keydown", onKey, true);
       delete window.__starxOps;
     },
   };

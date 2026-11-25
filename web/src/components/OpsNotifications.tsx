@@ -5,11 +5,17 @@ import { opsOperationEnd } from "@/lib/actions";
 import type { OpsCard } from "@/lib/api";
 import { useOpsStream } from "@/lib/useOpsStream";
 
-type Kind = "login" | "start" | "done" | "stopped";
+type Kind = "login" | "start" | "done" | "stopped" | "error";
 type Toast = { kind: Kind; title: string; text: string; href?: string };
 
-const TONE: Record<Kind, ToastInput["tone"]> = { login: "blue", start: "ok", done: "ok", stopped: "warn" };
-const LABEL: Record<Kind, string> = { login: "login no SSW", start: "carga iniciada", done: "carga concluída", stopped: "carga encerrada" };
+const TONE: Record<Kind, ToastInput["tone"]> = { login: "blue", start: "ok", done: "ok", stopped: "warn", error: "danger" };
+const LABEL: Record<Kind, string> = {
+  login: "login no SSW",
+  start: "carga iniciada",
+  done: "carga concluída",
+  stopped: "carga encerrada",
+  error: "erro na bipagem",
+};
 
 type Op = NonNullable<OpsCard["operation"]>;
 
@@ -50,6 +56,16 @@ function changes(c: OpsCard, prev: OpsCard): Toast[] {
       kind: "start",
       title: `${who} iniciou ${now.fnLabel}`,
       text: `${now.realPlate || now.plate} · ${now.total.qty} volumes · ${where}`,
+      href: `/operations/${c.deviceId}`,
+    });
+  }
+  // erro novo na mesma carga (o SSW recusou um código): a mensagem como apareceu no coletor
+  const err = now?.lastError;
+  if (now && err && now.id === was?.id && (err.at !== was.lastError?.at || err.code !== was.lastError?.code)) {
+    out.push({
+      kind: "error",
+      title: `${who}: ${err.message ?? "código recusado"}`,
+      text: `código ${err.code} · ${now.realPlate || now.plate} · ${where}${now.scanErrors > 1 ? ` · ${now.scanErrors} erros na carga` : ""}`,
       href: `/operations/${c.deviceId}`,
     });
   }

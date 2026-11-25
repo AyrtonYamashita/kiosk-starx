@@ -2,17 +2,19 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Num } from "@/components/Num";
 import { ApiError, api, type OpsDetail } from "@/lib/api";
-import { CODE_KIND, END_LABEL, fmtClock, fmtDuration, fmtQty, fmtTime, SCREEN_LABEL } from "@/lib/opsFormat";
+import { CODE_KIND, END_LABEL, fmtClock, fmtDuration, fmtQty, fmtTime, localDay, SCREEN_LABEL } from "@/lib/opsFormat";
 import { Elapsed, Eta, LiveDetail, SinceClock } from "./LiveDetail";
 import { ProgressChart } from "./ProgressChart";
 
 export const dynamic = "force-dynamic";
 
-type Row = { at: string; kind: string; codes: string[]; qty: number | null; delta: number; intervalSec: number | null; counted: boolean };
+type Row = { at: string; kind: string; codes: string[]; qty: number | null; delta: number; intervalSec: number | null; counted: boolean; error: string | null };
 
 /**
  * Uma linha por bipagem (o "lidos" subiu), com o código lido nela, mais os códigos que não contaram (outra carga,
- * repetido), na hora em que apareceram. O código casa com a bipagem pela contagem de lidos no momento da leitura.
+ * erro do SSW com a mensagem que apareceu, repetido sem mensagem), na hora em que apareceram. O código casa com a
+ * bipagem pela contagem de lidos no momento da leitura. Os que não contaram não entram no total de lidos: é o próprio
+ * SSW que não os contou.
  */
 function scanRows(d: OpsDetail): Row[] {
   const lido = new Map<number, string[]>();
@@ -23,11 +25,11 @@ function scanRows(d: OpsDetail): Row[] {
   const rows: Row[] = d.scans.map((s) => {
     const codes: string[] = [];
     for (let q = s.qty - Math.max(1, s.delta) + 1; q <= s.qty; q++) codes.push(...(lido.get(q) ?? []));
-    return { at: s.at, kind: "lido", codes, qty: s.qty, delta: s.delta, intervalSec: s.intervalSec, counted: true };
+    return { at: s.at, kind: "lido", codes, qty: s.qty, delta: s.delta, intervalSec: s.intervalSec, counted: true, error: null };
   });
   for (const c of d.codes ?? []) {
     if (c.kind === "lido") continue;
-    rows.push({ at: c.at, kind: c.kind, codes: [c.code], qty: c.readQty, delta: 0, intervalSec: null, counted: false });
+    rows.push({ at: c.at, kind: c.kind, codes: [c.code], qty: c.readQty, delta: 0, intervalSec: null, counted: false, error: c.error ?? null });
   }
   return rows.sort((a, b) => b.at.localeCompare(a.at));
 }
@@ -47,6 +49,7 @@ export default async function OpsDetailPage({ params, searchParams }: { params: 
   const user = op?.user ?? d.card?.user ?? null;
   const pct = op && op.total.qty > 0 ? Math.min(100, (op.read.qty / op.total.qty) * 100) : 0;
   const rows = scanRows(d);
+  const errorRows = rows.filter((r) => r.kind === "erro").length;
 
   return (
     <div className="stack wide ops-detail">
@@ -218,9 +221,19 @@ export default async function OpsDetailPage({ params, searchParams }: { params: 
           )}
 
           <section className="card stack">
-            <h2>
-              Bipagens (<Num value={rows.filter((r) => r.counted).length} />)
-            </h2>
+            <div className="row" style={{ justifyContent: "space-between" }}>
+              <h2>
+                Bipagens (<Num value={rows.filter((r) => r.counted).length} />)
+              </h2>
+              {errorRows > 0 && (
+                <Link
+                  href={`/operations/erros?${new URLSearchParams({ device: d.device.id, plate: op.plate, from: localDay(op.startedAt), to: localDay(op.endedAt ?? new Date(d.serverTime).toISOString()) })}`}
+                  className="badge danger"
+                >
+                  <span className="dot" /> {errorRows} {errorRows === 1 ? "erro" : "erros"} do SSW
+                </Link>
+              )}
+            </div>
             {rows.length === 0 ? (
               <span className="muted small">Nenhuma bipagem ainda.</span>
             ) : (
@@ -231,6 +244,7 @@ export default async function OpsDetailPage({ params, searchParams }: { params: 
                       <th>Hora</th>
                       <th>Código</th>
                       <th>Tipo</th>
+                      {errorRows > 0 && <th>Mensagem do SSW</th>}
                       <th style={{ textAlign: "right" }}>Lidos</th>
                       <th style={{ textAlign: "right" }}>Intervalo</th>
                     </tr>
@@ -258,6 +272,7 @@ export default async function OpsDetailPage({ params, searchParams }: { params: 
                               <span className="dot" /> {label}
                             </span>
                           </td>
+                          {errorRows > 0 && <td className="small">{r.error ?? ""}</td>}
                           <td className="mono" style={{ textAlign: "right" }}>
                             {r.qty === null ? "—" : fmtQty(r.qty)}
                             {r.delta > 1 && <span className="muted"> (+{r.delta})</span>}

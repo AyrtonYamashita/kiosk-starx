@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { asSystem, setTenant, type Db } from "../db.js";
 import { applyBatch, OPS_MAX_BODY, OPS_MAX_SKEW_MS, OPS_READER_ON_SQL, OpsBatch, type OpsBus, signatureOk } from "../ops.js";
-import { notifyOps } from "../opsPush.js";
+import { notifyOps, notifyScanErrors } from "../opsPush.js";
 import type { Push } from "../push.js";
 
 /**
@@ -81,12 +81,13 @@ export async function opsDeviceRoutes(app: FastifyInstance, opts: { db: Db; bus:
           await c.query("ROLLBACK");
           return reply.code(409).send({ error: "stale", message: "lote antigo ou repetido", serverTime });
         }
-        const { started, ended, ...r } = await applyBatch(c, deviceId, body.data.events);
+        const { started, ended, scanErrors, ...r } = await applyBatch(c, deviceId, body.data.events);
         await c.query("UPDATE devices SET ops_last_ts = $2 WHERE id = $1", [deviceId, ts]);
         await c.query("COMMIT");
         if (r.accepted) bus.changed(deviceId);
         // notificações no celular: em segundo plano (o coletor não espera o envio)
         if (opts.push && (started.length || ended.length)) void notifyOps(db, opts.push, started, ended);
+        if (opts.push && scanErrors.length) void notifyScanErrors(db, opts.push, scanErrors);
         return { ...r, serverTime };
       } catch (e) {
         await c.query("ROLLBACK").catch(() => undefined);

@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { sha256hex, signBatch } from "../src/ops.js";
-import { notifyOps } from "../src/opsPush.js";
+import { notifyOps, scanErrorMessage } from "../src/opsPush.js";
 import { closeStaleOps } from "../src/opsRetention.js";
 import { Push, validEndpoint, type PushTarget } from "../src/push.js";
 import { info, setupApi } from "./helpers.js";
@@ -221,5 +221,60 @@ describe("notificações das cargas (enviadas pela API)", () => {
     await notifyOps(t.db, push, [], operations);
     expect(got.length).toBe(before + 1);
     expect(got.at(-1)).toMatchObject({ title: "joana.lima: Descarga de Coleta encerrada (coletor sem sinal)", body: "PSH4D44 · 0/2 volumes · faltaram 2 · C6000 PSH1" });
+  });
+
+  it("erro de bipagem: só para quem escolheu, com a mensagem do SSW, no máximo um por carga por minuto", async () => {
+    const T = Date.now() - 10_000;
+    const err = (sid: string, code: string, error: string, at: number) => ({
+      id: id(),
+      at,
+      type: "progress",
+      fn: "coleta",
+      plate: "PSH5E55",
+      read: tot(0),
+      extra: { scan: { id: sid, code, kind: "erro", ageMs: 0, error } },
+    });
+    await send([
+      { id: id(), at: T, type: "session", user: "joana.lima", domain: "ALT", branch: "OTI" },
+      { id: id(), at: T + 100, type: "op_start", fn: "coleta", plate: "PSH5E55", total: tot(4) },
+    ]);
+    // quem não escolheu (padrão) não recebe erro de bipagem
+    let before = got.length;
+    await send([err("x1", "111", "Código não pertence / não localizado na empresa", T + 200)]);
+    expect(got.length).toBe(before);
+
+    await t.api("PUT", "/v1/admin/push/events", { events: ["start", "done", "stopped", "scan_error"] });
+    expect((await t.api("GET", "/v1/admin/push")).json.events).toContain("scan_error");
+    before = got.length;
+    await send([err("x2", "222", "CTRC 99 já foi lido", T + 300)]);
+    expect(got.length).toBe(before + 1);
+    expect(got.at(-1)).toMatchObject({
+      title: "joana.lima: erro na Descarga de Coleta (2 na carga)",
+      body: "CTRC 99 já foi lido · código 222 · PSH5E55 · C6000 PSH1",
+    });
+    expect(String(got.at(-1)!.tag).startsWith("err-")).toBe(true);
+    // outro erro da mesma carga logo em seguida: não notifica de novo (fica no contador)
+    await send([err("x3", "333", "CTRC 98 já foi lido", T + 400)]);
+    expect(got.length).toBe(before + 1);
+  });
+});
+
+describe("texto do aviso de erro de bipagem", () => {
+  it("sem carga e sem mensagem ainda faz sentido", () => {
+    const m = scanErrorMessage({
+      id: "1",
+      tenant_id: "t",
+      device_id: "d",
+      device_name: "C1",
+      code: "123",
+      error: null,
+      op_id: null,
+      fn: null,
+      plate: null,
+      real_plate: null,
+      ssw_user: null,
+      scan_errors: null,
+    });
+    expect(m).toEqual({ title: "Alguém: erro na bipagem", body: "código recusado · código 123 · sem placa · C1", url: "/operations/d", tag: "err-d" });
   });
 });

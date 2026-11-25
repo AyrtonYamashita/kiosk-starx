@@ -45,6 +45,23 @@ A tela não mostra a hora de cada bipagem: cada aumento de "Lidos" é uma bipage
   o app repassa `extra` sem conhecer (campos novos do leitor saem só com a API). Guardados em `ops_scans` por
   `OPS_SCAN_RETENTION_DAYS` (padrão 365). Painel: lista na carga e consulta em `/operations/codigo` (código inteiro ou
   começo). Limite: dois códigos em menos de ~0,1 s podem virar um só (a tela mostra só o último).
+- **Erros de bipagem** (leitor 2026-11-24, sem app novo): quando o SSW recusa um código ele abre a janela `#errormsg`
+  com o texto em `#error_body` (ex.: "Código não pertence / não localizado na empresa"); o texto some quando o
+  operador fecha (o Enter da próxima leitura fecha a janela). O leitor copia esse texto e grava a bipagem como `erro`,
+  com a mensagem exata em `extra.scan.error` (até 300 caracteres). A bipagem é percebida pelo Enter no campo `#barcode`
+  (pega também o código repetido, que não muda `#last`) ou pelo código novo em `#last`. Mensagem que chega depois do
+  prazo de 1,5 s (até 8 s, rede lenta) completa o mesmo registro: o servidor troca `nao_contou` por `erro`. Mensagens
+  até 15 s depois de Concluir/Interromper são da carga, não de uma bipagem, e ficam de fora. `nao_contou` passa a ser
+  só "nada aumentou e o SSW não disse nada".
+  - O erro **não entra** nos volumes lidos: o total é o "Lidos" do próprio SSW, que não contou aquele código.
+  - Servidor (`021_scan_errors.sql`): `ops_scans.error` (texto) e `error_key` (o tipo: sem acento, minúsculas,
+    números trocados por `#`, então "CTRC 4711 já foi lido" e "CTRC 4712 já foi lido" são o mesmo tipo);
+    `ops_operations.scan_errors` conta os erros da carga.
+  - Painel: coluna "Mensagem do SSW" na tabela de bipagens da carga; contador e último erro no card ao vivo e aviso na
+    tela (toast); "N erros na bipagem" na lista de Cargas; tela `/operations/erros` (`GET /v1/admin/ops/scan-errors`)
+    com resumo por tipo e filtros de tipo, colaborador, coletor, placa e período (padrão: 7 dias).
+  - Notificação no celular `scan_error`: opcional (desligada para quem nunca escolheu), no máximo um aviso por carga
+    a cada minuto; a tag é da carga (o aviso novo substitui o anterior) e o título traz quantos erros a carga já teve.
 - **Atualização do app** (0.5.1): adiada enquanto há bipagem (tela de bipagem ou carga aberta, com mudança há menos de
   15 min); instala no check-in seguinte, quando o colaborador sai da bipagem.
   Lê os campos da tabela acima, confere a cada mudança da página e a cada 500 ms (campos escondidos mudam sem gerar

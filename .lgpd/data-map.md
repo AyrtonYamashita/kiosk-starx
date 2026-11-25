@@ -52,10 +52,10 @@
 | Finalidade | Rastrear qual volume foi bipado, em que carga, coletor e hora, por quem (para resolver divergências de carga) |
 | Base legal | Art. 7º, IX (+ VI em disputas) ([LIA](./kit-cliente/lia-modelos/monitoramento-operacional.md)) — proposta |
 | Titulares | colaboradores (via carga → `ssw_user`) |
-| Dados comuns | código de barras do volume, horário, classificação (lido/outra/não contou), vínculo com carga e colaborador |
-| Dados sensíveis | Não (o código identifica o volume; não foi verificado se codifica dados do destinatário: **validação externa**) |
+| Dados comuns | código de barras do volume, horário, classificação (lido/outra/erro/não contou), mensagem de erro que o SSW mostrou ao recusar o código (ex.: "CTRC 4711 já foi lido"), vínculo com carga e colaborador |
+| Dados sensíveis | Não (o código identifica o volume; não foi verificado se codifica dados do destinatário: **validação externa**). A mensagem de erro é texto do SSW sobre o volume/CTRC; não foi verificado se alguma mensagem traz dado de pessoa: **validação externa** |
 | Origem | observado (leitura da tela) |
-| Sistemas | `ops_scans`; rota `/v1/admin/ops/scans` |
+| Sistemas | `ops_scans` (`error`, `error_key`); rotas `/v1/admin/ops/scans` e `/v1/admin/ops/scan-errors`; notificação `scan_error` |
 | Terceiros e papel | VPS, Vercel, Cloudflare (**operadores**) |
 | Retenção | 365 d (`OPS_SCAN_RETENTION_DAYS`) — justificar em L3/retenção |
 | Alto risco? | integra A001/A002 no RIPD |

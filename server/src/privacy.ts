@@ -64,7 +64,7 @@ export async function exportSubject(db: Db, tenantId: string, sswUser: string) {
   const scans = ids.length
     ? (
         await db.query(
-          "SELECT operation_id, at, code, kind, read_qty FROM ops_scans WHERE operation_id = ANY($1::uuid[]) ORDER BY at",
+          "SELECT operation_id, at, code, kind, read_qty, error FROM ops_scans WHERE operation_id = ANY($1::uuid[]) ORDER BY at",
           [ids],
         )
       ).rows
@@ -105,7 +105,7 @@ export async function exportSubject(db: Db, tenantId: string, sswUser: string) {
       bipagens: o.scans,
       segundos_por_volume: Number(o.scan_interval_count) > 0 ? Math.round(Number(o.scan_interval_sum_ms) / Number(o.scan_interval_count) / 100) / 10 : null,
     })),
-    bipagens: scans.map((s) => ({ carga: s.operation_id, hora: s.at, codigo: s.code, tipo: s.kind, lidos: s.read_qty === null ? null : Number(s.read_qty) })),
+    bipagens: scans.map((s) => ({ carga: s.operation_id, hora: s.at, codigo: s.code, tipo: s.kind, erro: s.error ?? undefined, lidos: s.read_qty === null ? null : Number(s.read_qty) })),
     eventos_guardados: events.map((e) => ({ tipo: e.type, hora: e.at, dados: e.data })),
     estado_atual: current.map((c) => ({ coletor: c.device, tela: c.screen, ultimo_evento: c.last_event_at })),
   };

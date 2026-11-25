@@ -730,7 +730,7 @@ export async function anonymizeSubject(_: FormState, form: FormData): Promise<Fo
 
 // ---------------------------------------------------------------- notificações no celular (Web Push)
 
-export type PushEventKey = "start" | "done" | "stopped";
+export type PushEventKey = "start" | "done" | "stopped" | "scan_error";
 type PushResult = { ok?: string; error?: string };
 
 /** Inscreve este navegador (o objeto vem de PushSubscription.toJSON() no aparelho). */

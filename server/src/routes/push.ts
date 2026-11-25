@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { Db } from "../db.js";
-import { PUSH_EVENTS, validEndpoint, type Push } from "../push.js";
+import { PUSH_DEFAULT, PUSH_EVENTS, validEndpoint, type Push } from "../push.js";
 
 const Subscribe = z.object({
   endpoint: z.string().max(1000).refine(validEndpoint, "endpoint"),
@@ -25,7 +25,7 @@ export async function pushRoutes(app: FastifyInstance, opts: { db: Db; push: Pus
     return {
       enabled: push.enabled,
       publicKey: push.publicKey,
-      events: prefs.rows[0]?.events ?? [...PUSH_EVENTS],
+      events: prefs.rows[0]?.events ?? [...PUSH_DEFAULT],
       subscriptions: subs.rows.map((s) => ({ endpoint: s.endpoint, userAgent: s.user_agent, createdAt: s.created_at, lastSentAt: s.last_sent_at })),
     };
   });

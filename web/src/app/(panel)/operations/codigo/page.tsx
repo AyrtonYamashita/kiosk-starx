@@ -73,6 +73,7 @@ export default async function CodeSearchPage({ searchParams }: { searchParams: P
                         <td className="mono">{r.code}</td>
                         <td>
                           <span className={`badge ${cls}`}>{label}</span>
+                          {r.error && <div className="small">{r.error}</div>}
                         </td>
                         <td>
                           {o ? (

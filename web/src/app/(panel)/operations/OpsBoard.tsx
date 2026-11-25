@@ -82,6 +82,9 @@ export function OpsBoard({ initial, initialServerTime }: { initial: OpsCard[]; i
               Consultar código de barras
             </Link>
           </AnimateIcon>
+          <Link href="/operations/erros" className="link-button small">
+            Erros de bipagem
+          </Link>
         </div>
       </header>
 
@@ -209,6 +212,18 @@ const OpsCardView = memo(function OpsCardView({ c, serverNow }: { c: OpsCard; se
               <dd>{op.etaAt && op.missing.qty > 0 ? <Eta etaAt={op.etaAt} serverNow={serverNow} /> : <span className="muted">—</span>}</dd>
             </div>
           </dl>
+          {op.scanErrors > 0 && (
+            <div className="ops-error small" title={op.lastError?.message ?? undefined}>
+              <span className="badge danger">
+                <span className="dot" /> {op.scanErrors} {op.scanErrors === 1 ? "erro" : "erros"}
+              </span>
+              {op.lastError && (
+                <span className="ops-error-text">
+                  {fmtTime(op.lastError.at)} · {op.lastError.message ?? "código recusado"}
+                </span>
+              )}
+            </div>
+          )}
         </>
       ) : (
         <p className="ops-idle">

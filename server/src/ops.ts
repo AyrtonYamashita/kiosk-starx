@@ -26,19 +26,39 @@ const Base = { id: z.uuid(), at: z.number().int().positive() };
 /**
  * Campos extras do leitor (vêm da página, repassados pelo app sem conhecer). `scan`: código de barras que apareceu na
  * tela, com o tipo decidido pelo leitor e há quanto tempo (o leitor espera um pouco para saber se "Lidos" aumentou).
+ * `error`: a mensagem que o SSW mostrou ao recusar o código (tipo "erro"), como apareceu na tela.
  */
+export const SCAN_KINDS = ["lido", "outra", "nao_contou", "erro"] as const;
 const Extra = z
   .object({
     scan: z
       .object({
         id: Str(40).min(1),
         code: Str(80).min(1),
-        kind: z.enum(["lido", "outra", "nao_contou"]),
+        kind: z.enum(SCAN_KINDS),
         ageMs: z.number().int().min(0).max(600_000),
+        error: Str(300).min(1).optional(),
       })
       .optional(),
   })
   .optional();
+
+/**
+ * Chave de agrupamento de uma mensagem de erro: sem acento, minúsculas, números trocados por "#" e espaços
+ * normalizados. "CTRC 123 já lido" e "CTRC 456 já lido" caem no mesmo tipo de erro.
+ */
+export function errorKey(message: string): string {
+  return (
+    message
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .toLowerCase()
+      .replace(/\d+([.,/-]\d+)*/g, "#")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 160) || "?"
+  );
+}
 
 export const OpsEvent = z.discriminatedUnion("type", [
   z.object({ ...Base, type: z.literal("session"), user: Str(64).nullable(), domain: Str(20).nullable().optional(), branch: Str(20).nullable().optional() }),
@@ -126,10 +146,12 @@ interface State {
 
 const ts = (ms: number) => new Date(ms);
 
-/** Cargas abertas e encerradas por um lote (para as notificações, enviadas depois do COMMIT). */
+/** Cargas abertas e encerradas e erros de bipagem novos de um lote (para as notificações, enviadas depois do COMMIT). */
 export interface OpsNotes {
   started: string[];
   ended: string[];
+  /** ids (ops_scans) das bipagens que viraram erro neste lote */
+  scanErrors: string[];
 }
 
 async function openOp(c: Client, deviceId: string): Promise<Open | null> {
@@ -282,17 +304,27 @@ export async function applyBatch(c: Client, deviceId: string, events: OpsEvent[]
     .rows[0];
   const st: State = row ?? { ssw_user: null, domain: null, branch: null, screen: null, operation_id: null, last_event_at: null, last_heartbeat_at: null };
 
-  const notes: OpsNotes = { started: [], ended: [] };
+  const notes: OpsNotes = { started: [], ended: [], scanErrors: [] };
   for (const e of fresh) {
     const opId = await applyEvent(c, notes, deviceId, st, e);
     const scan = (e.type === "op_start" || e.type === "progress") && e.extra?.scan;
     if (scan) {
-      // o mesmo código chega de novo em retratos seguintes: o id do leitor evita repetir
-      await c.query(
-        `INSERT INTO ops_scans (device_id, operation_id, scan_id, at, code, kind, read_qty) VALUES ($1, $2, $3, $4, $5, $6, $7)
-         ON CONFLICT (device_id, scan_id) DO NOTHING`,
-        [deviceId, opId, scan.id, ts(e.at - scan.ageMs), scan.code, scan.kind, e.read?.qty ?? null],
+      const error = scan.error ?? null;
+      // o mesmo código chega de novo em retratos seguintes: o id do leitor evita repetir. A mensagem do SSW pode chegar
+      // depois (rede lenta: o leitor já tinha dado "não contou"): o mesmo registro ganha a mensagem e vira erro.
+      const r = await c.query<{ id: string; kind: string; operation_id: string | null }>(
+        `INSERT INTO ops_scans (device_id, operation_id, scan_id, at, code, kind, read_qty, error, error_key)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         ON CONFLICT (device_id, scan_id) DO UPDATE SET kind = EXCLUDED.kind, error = EXCLUDED.error, error_key = EXCLUDED.error_key
+           WHERE ops_scans.error IS NULL AND EXCLUDED.error IS NOT NULL
+         RETURNING id, kind, operation_id`,
+        [deviceId, opId, scan.id, ts(e.at - scan.ageMs), scan.code, scan.kind, e.read?.qty ?? null, error, error ? errorKey(error) : null],
       );
+      const row = r.rows[0];
+      if (row?.kind === "erro") {
+        notes.scanErrors.push(row.id);
+        if (row.operation_id) await c.query("UPDATE ops_operations SET scan_errors = scan_errors + 1, updated_at = now() WHERE id = $1", [row.operation_id]);
+      }
     }
     const { id, type, at, ...data } = e;
     await c.query("INSERT INTO ops_events (id, device_id, operation_id, type, at, data) VALUES ($1, $2, $3, $4, $5, $6)", [id, deviceId, opId, type, ts(at), data]);

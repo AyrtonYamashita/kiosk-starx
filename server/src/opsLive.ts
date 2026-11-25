@@ -43,6 +43,9 @@ export interface OpsCard {
     avgSecPerVolume: number | null;
     /** previsão de término: faltantes × tempo médio por volume, a partir da última bipagem */
     etaAt: string | null;
+    /** bipagens recusadas pelo SSW nesta carga, e a mais recente (mensagem como apareceu na tela) */
+    scanErrors: number;
+    lastError: { at: string; code: string; message: string | null } | null;
   };
 }
 
@@ -72,10 +75,14 @@ const CARD_SQL = `
   SELECT d.id AS device_id, d.tenant_id, d.name AS device_name, s.ssw_user, s.domain, s.branch, s.screen,
          GREATEST(s.last_event_at, s.last_heartbeat_at) AS last_seen_at,
          o.id AS op_id, o.fn, o.plate, o.real_plate, o.units, o.started_at, o.total_qty, o.total_kg, o.total_value,
-         o.read_qty, o.read_kg, o.read_value, o.scans, o.last_scan_at, o.scan_interval_sum_ms, o.scan_interval_count
+         o.read_qty, o.read_kg, o.read_value, o.scans, o.last_scan_at, o.scan_interval_sum_ms, o.scan_interval_count,
+         o.scan_errors, le.at AS last_error_at, le.code AS last_error_code, le.error AS last_error
   FROM ops_device_state s
   JOIN devices d ON d.id = s.device_id
-  LEFT JOIN ops_operations o ON o.id = s.operation_id AND o.ended_at IS NULL`;
+  LEFT JOIN ops_operations o ON o.id = s.operation_id AND o.ended_at IS NULL
+  LEFT JOIN LATERAL (
+    SELECT x.at, x.code, x.error FROM ops_scans x WHERE o.scan_errors > 0 AND x.operation_id = o.id AND x.kind = 'erro' ORDER BY x.at DESC, x.id DESC LIMIT 1
+  ) le ON true`;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function toCard(r: any): OpsCard {
@@ -99,6 +106,8 @@ function toCard(r: any): OpsCard {
           scans: r.scans,
           lastScanAt: r.last_scan_at ? new Date(r.last_scan_at).toISOString() : null,
           ...opMetrics(r),
+          scanErrors: r.scan_errors ?? 0,
+          lastError: r.last_error_at ? { at: new Date(r.last_error_at).toISOString(), code: r.last_error_code, message: r.last_error } : null,
         }
       : null,
   };

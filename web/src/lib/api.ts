@@ -376,7 +376,7 @@ export async function apiMfa<T>(token: string, path: string, body?: unknown): Pr
 export interface PushInfo {
   enabled: boolean;
   publicKey: string | null;
-  events: ("start" | "done" | "stopped")[];
+  events: ("start" | "done" | "stopped" | "scan_error")[];
   subscriptions: { endpoint: string; userAgent: string | null; createdAt: string; lastSentAt: string | null }[];
 }
 
@@ -434,14 +434,19 @@ export interface OpsCard {
     lastScanAt: string | null;
     avgSecPerVolume: number | null;
     etaAt: string | null;
+    /** bipagens recusadas pelo SSW nesta carga e a mais recente */
+    scanErrors: number;
+    lastError: { at: string; code: string; message: string | null } | null;
   };
 }
-export type OpsCodeKind = "lido" | "outra" | "nao_contou";
+export type OpsCodeKind = "lido" | "outra" | "nao_contou" | "erro";
 
 export interface OpsCode {
   at: string;
   code: string;
   kind: OpsCodeKind;
+  /** mensagem que o SSW mostrou ao recusar o código (tipo "erro") */
+  error?: string | null;
   readQty: number | null;
 }
 
@@ -478,6 +483,7 @@ export interface OpsDetail {
     endedAt: string | null;
     endReason: string | null;
     scans: number;
+    scanErrors: number;
     firstScanAt: string | null;
     lastScanAt: string | null;
     total: OpsTotals;
@@ -529,9 +535,29 @@ export interface OpsHistory {
     totalValue: number;
     readValue: number;
     scans: number;
+    scanErrors: number;
     avgSecPerVolume: number | null;
   }[];
   next: string | null;
   users: string[];
   functions: { value: string; label: string }[];
+}
+
+/** Erros de bipagem (/v1/admin/ops/scan-errors): código recusado pelo SSW, com a mensagem como apareceu na tela. */
+export interface OpsScanErrors {
+  errors: {
+    at: string;
+    code: string;
+    message: string | null;
+    /** tipo de erro: a mensagem normalizada (números viram #) */
+    type: string | null;
+    readQty: number | null;
+    device: { id: string; name: string };
+    operation: null | { id: string; fn: string; fnLabel: string; plate: string; realPlate: string | null; user: string | null; branch: string | null };
+  }[];
+  next: string | null;
+  /** tipos de erro no período (com os outros filtros), do mais frequente para o menos */
+  types: { type: string | null; message: string | null; count: number; lastAt: string }[];
+  users: string[];
+  devices: { id: string; name: string }[];
 }

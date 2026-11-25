@@ -31,6 +31,9 @@ export function fmtAgo(iso: string | null, now: number): string {
 export const fmtTime = (iso: string | null) =>
   iso ? new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: TZ }) : "—";
 
+/** Dia (AAAA-MM-DD) no fuso da operação, como os filtros de período da API. */
+export const localDay = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { timeZone: TZ });
+
 export const fmtClock = (iso: string | null) =>
   iso ? new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: TZ }) : "—";
 
@@ -46,7 +49,8 @@ export const SCREEN_LABEL: Record<string, string> = {
 export const CODE_KIND: Record<string, [string, string]> = {
   lido: ["ok", "lido"],
   outra: ["warn", "outra carga"],
-  nao_contou: ["danger", "não contou"],
+  nao_contou: ["off", "não contou"],
+  erro: ["danger", "erro"],
 };
 
 export const END_LABEL: Record<string, string> = {

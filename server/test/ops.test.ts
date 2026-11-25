@@ -189,6 +189,61 @@ describe("carga de manifesto, diagnóstico da tela e leitor entregue pela API (0
     expect((await t.api("GET", "/v1/admin/ops/scans?code=99900011122233")).json.results).toHaveLength(0);
   });
 
+  it("erros de bipagem: mensagem do SSW guardada, agrupada por tipo, contada na carga e filtrável", async () => {
+    const sc = (code: string, kind: string, sid: string, error?: string) => ({ scan: { id: `e-${sid}`, code, kind, ageMs: 0, ...(error ? { error } : {}) } });
+    const base = { fn: "coleta", plate: "ARMAZEM" };
+    const msg = "Código não pertence / não localizado na empresa";
+    expect(
+      (
+        await send([
+          { id: id(), at: at(0), type: "session", user: "ayrton", domain: "ALT", branch: "CGB" },
+          { id: id(), at: at(1), type: "op_start", ...base, total: tot(10), read: tot(0) },
+          { id: id(), at: at(2), type: "progress", ...base, read: tot(0), extra: sc("99999999999", "erro", "a", msg) },
+          // o mesmo registro de novo (retrato seguinte): não conta duas vezes
+          { id: id(), at: at(3), type: "progress", ...base, read: tot(0), extra: sc("99999999999", "erro", "a", msg) },
+          // mensagem atrasada: primeiro "não contou", depois o mesmo registro com a mensagem
+          { id: id(), at: at(4), type: "progress", ...base, read: tot(0), extra: sc("12345", "nao_contou", "b") },
+          { id: id(), at: at(5), type: "progress", ...base, read: tot(0), extra: sc("12345", "erro", "b", "CTRC 4711 já foi lido") },
+          { id: id(), at: at(6), type: "progress", ...base, read: tot(0), extra: sc("12346", "erro", "c", "CTRC 4712 já foi lido") },
+        ])
+      ).status,
+    ).toBe(200);
+    const rows = (await t.db.query("SELECT code, kind, error, error_key FROM ops_scans WHERE device_id = $1 AND scan_id LIKE 'e-%' ORDER BY at", [deviceId])).rows;
+    expect(rows).toEqual([
+      { code: "99999999999", kind: "erro", error: msg, error_key: "codigo nao pertence / nao localizado na empresa" },
+      { code: "12345", kind: "erro", error: "CTRC 4711 já foi lido", error_key: "ctrc # ja foi lido" },
+      { code: "12346", kind: "erro", error: "CTRC 4712 já foi lido", error_key: "ctrc # ja foi lido" },
+    ]);
+    expect((await op()).scan_errors).toBe(3);
+
+    const detail = (await t.api("GET", `/v1/admin/ops/devices/${deviceId}`)).json;
+    expect(detail.operation.scanErrors).toBe(3);
+    expect(detail.codes[0]).toMatchObject({ code: "12346", kind: "erro", error: "CTRC 4712 já foi lido" });
+    expect(detail.card.operation).toMatchObject({ scanErrors: 3, lastError: { code: "12346", message: "CTRC 4712 já foi lido" } });
+    expect((await t.api("GET", "/v1/admin/ops/scans?code=99999999999")).json.results[0]).toMatchObject({ kind: "erro", error: msg });
+
+    const all = (await t.api("GET", "/v1/admin/ops/scan-errors")).json;
+    expect(all.errors).toHaveLength(3);
+    expect(all.next).toBeNull();
+    expect(all.errors[0]).toMatchObject({ code: "12346", message: "CTRC 4712 já foi lido", operation: { plate: "ARMAZEM", user: "ayrton", fnLabel: "Descarga de Coleta" } });
+    expect(all.types).toEqual([
+      expect.objectContaining({ type: "ctrc # ja foi lido", message: "CTRC 4712 já foi lido", count: 2 }),
+      expect.objectContaining({ type: "codigo nao pertence / nao localizado na empresa", count: 1 }),
+    ]);
+    const only = (await t.api("GET", `/v1/admin/ops/scan-errors?type=${encodeURIComponent("ctrc # ja foi lido")}`)).json;
+    expect(only.errors.map((e: { code: string }) => e.code)).toEqual(["12346", "12345"]);
+    expect(only.types).toHaveLength(2); // o resumo ignora o próprio filtro de tipo
+    expect((await t.api("GET", "/v1/admin/ops/scan-errors?user=outro")).json.errors).toHaveLength(0);
+    expect((await t.api("GET", "/v1/admin/ops/scan-errors?plate=armaz")).json.errors).toHaveLength(3);
+    expect((await t.api("GET", `/v1/admin/ops/scan-errors?device=${deviceId}`)).json.errors).toHaveLength(3);
+    expect((await t.api("GET", "/v1/admin/ops/scan-errors?from=2020-01-01&to=2020-01-31")).json.errors).toHaveLength(0);
+    expect((await t.api("GET", "/v1/admin/ops/scan-errors?from=ontem")).status).toBe(400);
+
+    // tipo desconhecido e mensagem longa demais continuam recusados
+    expect((await send([{ id: id(), at: at(7), type: "progress", ...base, read: tot(0), extra: sc("1", "xpto", "d") }])).status).toBe(400);
+    expect((await send([{ id: id(), at: at(8), type: "progress", ...base, read: tot(0), extra: sc("1", "erro", "d", "x".repeat(301)) }])).status).toBe(400);
+  });
+
   it("diagnóstico de tela não entendida é guardado e não mexe na operação", async () => {
     const d = {
       id: id(),
