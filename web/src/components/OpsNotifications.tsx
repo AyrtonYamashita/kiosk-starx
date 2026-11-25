@@ -6,7 +6,7 @@ import type { OpsCard } from "@/lib/api";
 import { useOpsStream } from "@/lib/useOpsStream";
 
 type Kind = "login" | "start" | "done" | "stopped" | "error";
-type Toast = { kind: Kind; title: string; text: string; href?: string };
+type Toast = { kind: Kind; title: string; text: string; href?: string; key?: string };
 
 const TONE: Record<Kind, ToastInput["tone"]> = { login: "blue", start: "ok", done: "ok", stopped: "warn", error: "danger" };
 const LABEL: Record<Kind, string> = {
@@ -67,6 +67,8 @@ function changes(c: OpsCard, prev: OpsCard): Toast[] {
       title: `${who}: ${err.message ?? "código recusado"}`,
       text: `código ${err.code} · ${now.realPlate || now.plate} · ${where}${now.scanErrors > 1 ? ` · ${now.scanErrors} erros na carga` : ""}`,
       href: `/operations/${c.deviceId}`,
+      // o mesmo colaborador errando de novo atualiza o aviso dele, não abre outro
+      key: `erro:${c.user ?? prev.user ?? c.deviceId}`,
     });
   }
   return out;
@@ -76,7 +78,7 @@ function changes(c: OpsCard, prev: OpsCard): Toast[] {
 export function OpsNotifications() {
   const toast = useToast();
   const push = (items: Toast[]) =>
-    toast(items.map((t) => ({ tone: TONE[t.kind], label: LABEL[t.kind], title: t.title, text: t.text, href: t.href, actionLabel: "Acompanhar operação" })));
+    toast(items.map((t) => ({ tone: TONE[t.kind], label: LABEL[t.kind], title: t.title, text: t.text, href: t.href, key: t.key, actionLabel: "Acompanhar operação" })));
 
   useOpsStream({
     card: (c, prev) => {

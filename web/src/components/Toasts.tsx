@@ -22,11 +22,16 @@ export interface ToastInput {
   text?: string;
   href?: string;
   actionLabel?: string;
+  /**
+   * Aviso com a mesma chave de um que ainda está na tela atualiza aquele (texto novo, tempo de vida renovado) em vez
+   * de abrir outro. Ex.: erros de bipagem do mesmo colaborador.
+   */
+  key?: string;
 }
 type Toast = ToastInput & { id: number };
 
 const LIFE_MS = 9000;
-const MAX = 4;
+const MAX = 2;
 
 type Push = (items: ToastInput | ToastInput[]) => void;
 const Ctx = createContext<Push | null>(null);
@@ -34,34 +39,55 @@ const Ctx = createContext<Push | null>(null);
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const seq = useRef(0);
+  // a lista atual fora do estado: decide na hora se um aviso com chave atualiza um que já está na tela
+  const current = useRef<Toast[]>([]);
   const timers = useRef(new Map<number, ReturnType<typeof setTimeout>>());
 
   const dismiss = useCallback((id: number) => {
     const t = timers.current.get(id);
     if (t) clearTimeout(t);
     timers.current.delete(id);
-    setToasts((list) => list.filter((x) => x.id !== id));
+    current.current = current.current.filter((x) => x.id !== id);
+    setToasts(current.current);
   }, []);
-  const arm = useCallback((id: number) => timers.current.set(id, setTimeout(() => dismiss(id), LIFE_MS)), [dismiss]);
   const hold = (id: number) => {
     const t = timers.current.get(id);
     if (t) clearTimeout(t);
   };
-
+  const arm = useCallback(
+    (id: number) => {
+      hold(id);
+      timers.current.set(id, setTimeout(() => dismiss(id), LIFE_MS));
+    },
+    [dismiss],
+  );
   const push = useCallback<Push>(
     (items) => {
-      const fresh = (Array.isArray(items) ? items : [items]).map((t) => ({ ...t, id: ++seq.current }));
-      if (!fresh.length) return;
-      fresh.forEach((t) => arm(t.id));
-      setToasts((list) => {
-        const next = [...list, ...fresh];
-        next.slice(0, Math.max(0, next.length - MAX)).forEach((t) => {
-          const tm = timers.current.get(t.id);
-          if (tm) clearTimeout(tm);
-          timers.current.delete(t.id);
-        });
-        return next.slice(-MAX);
-      });
+      const input = Array.isArray(items) ? items : [items];
+      if (!input.length) return;
+      let next = [...current.current];
+      for (const t of input) {
+        const same = t.key ? next.findIndex((x) => x.key === t.key) : -1;
+        if (same >= 0) {
+          // mesmo aviso (mesmo id: atualiza no lugar, sem abrir outro), agora o mais novo da pilha
+          const id = next[same].id;
+          next.splice(same, 1);
+          next.push({ ...t, id });
+          arm(id);
+        } else {
+          const id = ++seq.current;
+          next.push({ ...t, id });
+          arm(id);
+        }
+      }
+      // só os mais novos ficam (os de fora saem já, sem esperar o tempo de vida)
+      for (const t of next.slice(0, Math.max(0, next.length - MAX))) {
+        hold(t.id);
+        timers.current.delete(t.id);
+      }
+      next = next.slice(-MAX);
+      current.current = next;
+      setToasts(next);
     },
     [arm],
   );
