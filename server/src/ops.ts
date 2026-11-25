@@ -204,6 +204,32 @@ async function startOp(
   return r.rows[0].id;
 }
 
+/** Ninguém logado no coletor por esse tempo, com carga aberta: a carga é encerrada como "left". */
+export const OPS_ABANDON_MS = 120_000;
+
+/**
+ * O app perdeu a sessão sem mandar "saiu" (app reiniciado, tela pausada e retomada: o rastreador recomeça do zero e
+ * não sabe que havia alguém) e o coletor segue mandando sinal de vida sem usuário: a carga ficaria aberta para
+ * sempre. Encerra quando não há sinal de ninguém logado há OPS_ABANDON_MS, na hora do último sinal com usuário.
+ * Devolve true se não sobrou carga aberta.
+ */
+async function closeAbandoned(c: Client, deviceId: string, at: number, notes: OpsNotes): Promise<boolean> {
+  const open = (await c.query<{ id: string; started_at: Date }>("SELECT id, started_at FROM ops_operations WHERE device_id = $1 AND ended_at IS NULL FOR UPDATE", [deviceId]))
+    .rows[0];
+  if (!open) return true;
+  const last = (
+    await c.query<{ at: Date | null }>(
+      `SELECT max(at) AS at FROM ops_events
+       WHERE device_id = $1 AND at >= $2 AND at <= $3 AND (type <> 'heartbeat' OR data->>'user' IS NOT NULL)`,
+      [deviceId, open.started_at, ts(at)],
+    )
+  ).rows[0].at;
+  const since = (last ?? open.started_at).getTime();
+  if (at - since < OPS_ABANDON_MS) return false;
+  await closeOp(c, open.id, since, "left", notes);
+  return true;
+}
+
 /** Aplica um evento ao estado do coletor e às operações. Devolve a operação a que o evento pertence. */
 async function applyEvent(c: Client, notes: OpsNotes, deviceId: string, st: State, e: OpsEvent): Promise<string | null> {
   if (!st.last_event_at || st.last_event_at.getTime() < e.at) st.last_event_at = ts(e.at);
@@ -282,6 +308,9 @@ async function applyEvent(c: Client, notes: OpsNotes, deviceId: string, st: Stat
       st.screen = e.screen;
       if (e.user !== undefined) st.ssw_user = e.user;
       if (!st.last_heartbeat_at || st.last_heartbeat_at.getTime() < e.at) st.last_heartbeat_at = ts(e.at);
+      if (e.user === null && e.screen !== "bipagem" && st.operation_id) {
+        if (await closeAbandoned(c, deviceId, e.at, notes)) st.operation_id = null;
+      }
       return st.operation_id;
     }
   }

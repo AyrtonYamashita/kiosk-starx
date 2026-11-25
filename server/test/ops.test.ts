@@ -189,6 +189,38 @@ describe("carga de manifesto, diagnóstico da tela e leitor entregue pela API (0
     expect((await t.api("GET", "/v1/admin/ops/scans?code=99900011122233")).json.results).toHaveLength(0);
   });
 
+  it("app perdeu a sessão sem avisar (sinal de vida sem usuário): a carga fecha depois de 2 min, na hora do último sinal com usuário", async () => {
+    const base = { fn: "coleta", plate: "ARMAMAN" };
+    const hb = (sec: number, user: string | null, screen: string) => ({ id: id(), at: at(sec), type: "heartbeat", screen, user, ...(screen === "bipagem" ? base : {}) });
+    expect(
+      (
+        await send([
+          { id: id(), at: at(0), type: "session", user: "bthiago", domain: "ALT", branch: "CGB" },
+          { id: id(), at: at(1), type: "op_start", ...base, total: tot(0) },
+          hb(15, "bthiago", "bipagem"),
+          // app reiniciado: o rastreador recomeça sem usuário e cai no login, sem mandar "session null"
+          hb(19, null, "outra"),
+          hb(20, null, "login"),
+          hb(90, null, "login"),
+        ])
+      ).status,
+    ).toBe(200);
+    expect((await op()).ended_at).toBeNull(); // menos de 2 min: pode ser a página carregando de novo
+    // de volta à mesma bipagem antes dos 2 min: continua a mesma carga
+    expect((await send([hb(100, "bthiago", "bipagem"), hb(130, null, "outra"), hb(200, null, "login")])).status).toBe(200);
+    expect((await op()).ended_at).toBeNull();
+    expect((await send([hb(260, null, "login")])).status).toBe(200);
+    const o = await op();
+    expect(o.end_reason).toBe("left");
+    expect(o.ended_at.getTime()).toBe(at(100));
+    expect((await state()).operation_id).toBeNull();
+    const card = (await t.api("GET", "/v1/admin/ops/cards")).json.cards.find((c: { deviceId: string }) => c.deviceId === deviceId);
+    expect(card.operation).toBeNull();
+    // sinal de vida sem usuário na própria bipagem não fecha nada (a página ainda não mandou o retrato)
+    expect((await send([{ id: id(), at: at(300), type: "op_start", ...base, total: tot(1) }, hb(500, null, "bipagem")])).status).toBe(200);
+    expect((await op()).ended_at).toBeNull();
+  });
+
   it("erros de bipagem: mensagem do SSW guardada, agrupada por tipo, contada na carga e filtrável", async () => {
     const sc = (code: string, kind: string, sid: string, error?: string) => ({ scan: { id: `e-${sid}`, code, kind, ageMs: 0, ...(error ? { error } : {}) } });
     const base = { fn: "coleta", plate: "ARMAZEM" };
