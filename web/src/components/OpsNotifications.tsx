@@ -25,6 +25,9 @@ const TITLE: Record<string, (who: string, fn: string) => string> = {
   left: (who, fn) => `${who} saiu de ${fn} sem concluir`,
   replaced: (who, fn) => `${who} trocou de placa em ${fn}`,
   signal_lost: (who, fn) => `${who}: ${fn} encerrada (coletor sem sinal)`,
+  // motivo avisado pelo coletor antes de calar
+  tela_apagada: (who, fn) => `${who}: ${fn} encerrada (tela apagada)`,
+  desligado: (who, fn) => `${who}: ${fn} encerrada (coletor desligado)`,
 };
 
 /** Aviso de carga encerrada, com o motivo de verdade (o canal ao vivo pode trazer o fim antes da última contagem). */
@@ -37,7 +40,7 @@ async function ended(c: OpsCard, prev: OpsCard, was: Op): Promise<Toast> {
   const done = reason === "concluded";
   return {
     kind: done ? "done" : "stopped",
-    title: TITLE[reason ?? ""]?.(who, was.fnLabel) ?? `${was.fnLabel} encerrada`,
+    title: TITLE[(reason === "signal_lost" && info?.endDetail) || reason || ""]?.(who, was.fnLabel) ?? `${was.fnLabel} encerrada`,
     text: `${was.realPlate || was.plate} · ${read}/${total} volumes${!done && total > read ? ` · faltaram ${total - read}` : ""} · ${c.deviceName}`,
     href: `/operations/${c.deviceId}?op=${was.id}`,
   };

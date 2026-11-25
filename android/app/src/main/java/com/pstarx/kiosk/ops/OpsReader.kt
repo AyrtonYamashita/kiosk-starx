@@ -1,6 +1,9 @@
 package com.pstarx.kiosk.ops
 
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.net.Uri
 import android.util.Log
 import android.webkit.JavascriptInterface
@@ -58,6 +61,8 @@ object OpsReader {
             prefs.edit().putLong("offset_ms", offset).putLong("last_ts", last).apply()
         }
         queue = OpsQueue(File(app.filesDir, "ops/queue.jsonl"))
+        // coletor desligando: avisa o servidor ("desligado") antes de cair, para o card mostrar o motivo
+        runCatching { app.registerReceiver(shutdown, IntentFilter(Intent.ACTION_SHUTDOWN)) }
         sender = OpsSender(
             queue = queue,
             clock = clock,
@@ -91,6 +96,29 @@ object OpsReader {
         tickTask?.cancel(false)
         tickTask = null
         Log.i(TAG, "Leitura do SSW parada")
+    }
+
+    /** Tela apagada ou acesa de novo (thread principal): sinal de vida na hora com o estado da tela. */
+    fun onScreen(on: Boolean) {
+        if (!running) return
+        val at = System.currentTimeMillis()
+        logic.execute { safely { emit(tracker.onPower(clock.now(at), if (on) null else "apagada")) } }
+    }
+
+    /** Desligando: o aviso vai antes de o Android encerrar o app (o sistema espera alguns segundos pelo receiver). */
+    private val shutdown = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action != Intent.ACTION_SHUTDOWN || !running) return
+            val pending = goAsync()
+            val at = System.currentTimeMillis()
+            logic.execute {
+                safely { emit(tracker.onPower(clock.now(at), "desligado")) }
+                net.execute {
+                    safely { flush() }
+                    pending.finish()
+                }
+            }
+        }
     }
 
     /** Página fora do SSW (erro, outro site): para o rastreador, é como sair da tela. */

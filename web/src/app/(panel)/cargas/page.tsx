@@ -2,7 +2,7 @@ import Link from "next/link";
 import { api, type OpsHistory } from "@/lib/api";
 import { FilterSheet } from "@/components/FilterSheet";
 import { dateTime, dayTime } from "@/lib/format";
-import { END_LABEL, fmtDuration, fmtMoney, fmtQty, localDay } from "@/lib/opsFormat";
+import { endLabel, fmtDuration, fmtMoney, fmtQty, localDay } from "@/lib/opsFormat";
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +33,7 @@ function Status({ o }: { o: OpsHistory["operations"][number] }) {
   const tone = o.endReason === "concluded" ? "ok" : o.endReason === "signal_lost" || o.endReason === "left" ? "warn" : "off";
   return (
     <span className={`badge ${tone}`}>
-      <span className="dot" /> {END_LABEL[o.endReason ?? ""] ?? "encerrada"}
+      <span className="dot" /> {endLabel(o.endReason, o.endDetail)}
     </span>
   );
 }

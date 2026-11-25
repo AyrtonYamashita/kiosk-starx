@@ -15,6 +15,7 @@ interface Row {
   total_qty: string;
   ended_at: Date | null;
   end_reason: string | null;
+  end_detail?: string | null;
 }
 
 const ENDED: Record<string, (who: string, fn: string) => string> = {
@@ -23,6 +24,11 @@ const ENDED: Record<string, (who: string, fn: string) => string> = {
   left: (who, fn) => `${who} saiu de ${fn} sem concluir`,
   replaced: (who, fn) => `${who} trocou de placa em ${fn}`,
   signal_lost: (who, fn) => `${who}: ${fn} encerrada (coletor sem sinal)`,
+};
+/** Carga encerrada por falta de sinal, com o motivo que o coletor avisou antes de calar. */
+const QUIET_TITLE: Record<string, (who: string, fn: string) => string> = {
+  tela_apagada: (who, fn) => `${who}: ${fn} encerrada (tela apagada)`,
+  desligado: (who, fn) => `${who}: ${fn} encerrada (coletor desligado)`,
 };
 
 const qty = (v: string) => Math.round(Number(v));
@@ -44,7 +50,7 @@ export function opsMessage(o: Row, kind: "start" | "end"): { event: PushEvent; m
   return {
     event: done ? "done" : "stopped",
     msg: {
-      title: ENDED[o.end_reason ?? ""]?.(who, fn) ?? `${fn} encerrada`,
+      title: (o.end_detail ? QUIET_TITLE[o.end_detail] : undefined)?.(who, fn) ?? ENDED[o.end_reason ?? ""]?.(who, fn) ?? `${fn} encerrada`,
       body: `${plate} · ${read}/${total} volumes${!done && total > read ? ` · faltaram ${total - read}` : ""} · ${o.device_name}`,
       url: `/operations/${o.device_id}?op=${o.id}`,
       tag: `op-${o.id}`,
@@ -64,7 +70,7 @@ export async function notifyOps(db: Db, push: Push, started: string[], ended: st
     const rows = (
       await db.query<Row>(
         `SELECT o.id, o.tenant_id, o.device_id, d.name AS device_name, o.fn, o.plate, o.real_plate, o.ssw_user, o.read_qty, o.total_qty,
-                o.ended_at, o.end_reason
+                o.ended_at, o.end_reason, o.end_detail
          FROM ops_operations o JOIN devices d ON d.id = o.device_id WHERE o.id = ANY ($1::uuid[])`,
         [ids],
       )

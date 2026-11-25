@@ -43,6 +43,8 @@ export const SCREEN_LABEL: Record<string, string> = {
   menu: "no menu",
   login: "na tela de login",
   outra: "em outra tela",
+  apagada: "com a tela apagada",
+  desligado: "desligado",
 };
 
 /** Tipo de um código de barras bipado: [classe do selo, texto]. */
@@ -60,6 +62,21 @@ export const END_LABEL: Record<string, string> = {
   replaced: "trocou de placa",
   signal_lost: "perdeu o sinal",
 };
+
+/** Motivo que o coletor avisou antes de ficar sem sinal (carga encerrada por falta de sinal). */
+export const END_DETAIL: Record<string, string> = {
+  tela_apagada: "tela apagada",
+  desligado: "coletor desligado",
+};
+
+/** Como a carga terminou, com o motivo quando o coletor avisou (ex.: "encerrada: tela apagada"). */
+export function endLabel(reason: string | null | undefined, detail?: string | null): string {
+  if (reason === "signal_lost" && detail && END_DETAIL[detail]) return END_DETAIL[detail];
+  return END_LABEL[reason ?? ""] ?? "encerrada";
+}
+
+/** Selo do coletor sem sinal: o motivo quando ele avisou antes de calar. */
+export const QUIET_BADGE: Record<string, string> = { apagada: "tela apagada", desligado: "desligado" };
 
 /** Sem sinal há mais que isso, o coletor não conta como "logado" no Acompanhamento (o último estado fica velho). */
 export const STALE_AFTER_MS = 15 * 60_000;

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Num } from "@/components/Num";
 import { ApiError, api, type OpsDetail } from "@/lib/api";
-import { CODE_KIND, END_LABEL, fmtClock, fmtDuration, fmtQty, fmtTime, localDay, SCREEN_LABEL } from "@/lib/opsFormat";
+import { CODE_KIND, END_LABEL, endLabel, fmtClock, fmtDuration, fmtQty, fmtTime, localDay, SCREEN_LABEL } from "@/lib/opsFormat";
 import { Elapsed, Eta, LiveDetail, SinceClock } from "./LiveDetail";
 import { ProgressChart } from "./ProgressChart";
 
@@ -73,7 +73,7 @@ export default async function OpsDetailPage({ params, searchParams }: { params: 
                 </span>
               ) : (
                 <span className={`badge ${op.endReason === "concluded" ? "ok" : "off"}`}>
-                  <span className="dot" /> {END_LABEL[op.endReason ?? ""] ?? "encerrada"} às {fmtTime(op.endedAt)}
+                  <span className="dot" /> {endLabel(op.endReason, op.endDetail)} às {fmtTime(op.endedAt)}
                 </span>
               )}
             </>

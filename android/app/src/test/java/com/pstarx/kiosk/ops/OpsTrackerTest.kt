@@ -226,4 +226,21 @@ class OpsTrackerTest {
         t.onSnapshot(at(1002.0), Snapshot("placa", user = "maria", fn = "coleta"))
         assertFalse(t.busy(at(1003.0))) // concluiu e saiu da bipagem
     }
+
+    @Test
+    fun `tela apagada e desligando avisam no sinal de vida, sem encerrar a carga`() {
+        t.onSnapshot(at(0.0), bip(1))
+        val off = t.onPower(at(10.0), "apagada")
+        assertEquals(1, off.size)
+        assertEquals("apagada", off[0].getString("screen"))
+        assertEquals("maria", off[0].getString("user"))
+        assertEquals("ABC1D23", off[0].getString("plate"))
+        assertTrue(t.onPower(at(11.0), "apagada").isEmpty()) // repetido não manda de novo
+        // os sinais de vida seguintes continuam dizendo "apagada"
+        assertEquals("apagada", t.tick(at(40.0)).first { it.getString("type") == "heartbeat" }.getString("screen"))
+        assertTrue(t.hasOpenOperation)
+        // acendeu: volta a mandar a tela do SSW
+        assertEquals("bipagem", t.onPower(at(50.0), null)[0].getString("screen"))
+        assertEquals("desligado", t.onPower(at(60.0), "desligado")[0].getString("screen"))
+    }
 }

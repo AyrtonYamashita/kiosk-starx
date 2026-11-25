@@ -181,12 +181,13 @@ export function scheduleOpsRetention(
 export async function closeStaleOps(db: Db, afterMin: number): Promise<{ devices: string[]; operations: string[] }> {
   const r = await db.query<{ device_id: string; id: string }>(
     `WITH stale AS (
-       SELECT o.id, o.device_id, COALESCE(o.last_scan_at, o.started_at) AS at
+       SELECT o.id, o.device_id, COALESCE(o.last_scan_at, o.started_at) AS at,
+              CASE s.screen WHEN 'apagada' THEN 'tela_apagada' WHEN 'desligado' THEN 'desligado' END AS detail
        FROM ops_operations o JOIN ops_device_state s ON s.device_id = o.device_id
        WHERE o.ended_at IS NULL
          AND GREATEST(COALESCE(s.last_event_at, '-infinity'), COALESCE(s.last_heartbeat_at, '-infinity')) < now() - make_interval(mins => $1)
        FOR UPDATE OF o SKIP LOCKED)
-     UPDATE ops_operations o SET ended_at = GREATEST(stale.at, o.started_at), end_reason = 'signal_lost', updated_at = now()
+     UPDATE ops_operations o SET ended_at = GREATEST(stale.at, o.started_at), end_reason = 'signal_lost', end_detail = stale.detail, updated_at = now()
      FROM stale WHERE o.id = stale.id
      RETURNING o.device_id, o.id`,
     [afterMin],
@@ -198,13 +199,13 @@ export async function closeStaleOps(db: Db, afterMin: number): Promise<{ devices
   return { devices: ids, operations: r.rows.map((x) => x.id) };
 }
 
-/** Confere a cada 5 min (e 1 min depois de subir). Devolve a função que para. */
+/** Confere a cada 30 s (e 1 min depois de subir). Devolve a função que para. */
 export function scheduleStaleOps(
   db: Db,
   afterMin: number,
   onClosed: (deviceIds: string[], operationIds: string[]) => void,
   log: { info: (obj: object, msg: string) => void; error: (obj: object, msg: string) => void },
-  everyMs = 5 * 60_000,
+  everyMs = 30_000,
 ): () => void {
   const run = async () => {
     try {

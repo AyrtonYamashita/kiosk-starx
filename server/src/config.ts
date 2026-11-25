@@ -155,7 +155,8 @@ export function loadConfig(): Config {
     opsRetentionDays: days("OPS_RETENTION_DAYS", 90),
     opsHeartbeatRetentionDays: days("OPS_HEARTBEAT_RETENTION_DAYS", 7),
     opsScanRetentionDays: days("OPS_SCAN_RETENTION_DAYS", 365),
-    opsSignalLostMin: minutes("OPS_SIGNAL_LOST_MIN", 120),
+    // 3 min: o card fecha logo e mostra o motivo; se o coletor voltar na mesma placa, a carga é reaberta
+    opsSignalLostMin: minutes("OPS_SIGNAL_LOST_MIN", 3),
     retention: {
       operationIdentifiedDays: days("OPS_OPERATION_IDENTIFIED_DAYS", 365),
       screenshotDays: days("SCREENSHOT_RETENTION_DAYS", 7),

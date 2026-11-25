@@ -176,7 +176,7 @@ export async function opsAdminRoutes(app: FastifyInstance, opts: { db: Db; confi
     }
     const r = await db.query(
       `SELECT o.id, o.device_id, d.name AS device_name, o.fn, o.plate, o.real_plate, o.ssw_user, o.branch, o.units,
-              o.started_at, o.ended_at, o.end_reason, o.total_qty, o.read_qty, o.total_value, o.read_value, o.scans,
+              o.started_at, o.ended_at, o.end_reason, o.end_detail, o.total_qty, o.read_qty, o.total_value, o.read_value, o.scans,
               o.scan_interval_sum_ms, o.scan_interval_count, o.scan_errors,
               extract(epoch FROM COALESCE(o.ended_at, now()) - o.started_at)::int AS duration_sec
        FROM ops_operations o JOIN devices d ON d.id = o.device_id
@@ -206,6 +206,7 @@ export async function opsAdminRoutes(app: FastifyInstance, opts: { db: Db; confi
         startedAt: o.started_at,
         endedAt: o.ended_at,
         endReason: o.end_reason,
+        endDetail: o.end_detail,
         durationSec: o.duration_sec,
         totalQty: Number(o.total_qty),
         readQty: Number(o.read_qty),
@@ -348,6 +349,7 @@ export async function opsAdminRoutes(app: FastifyInstance, opts: { db: Db; confi
             startedAt: op.started_at,
             endedAt: op.ended_at,
             endReason: op.end_reason,
+            endDetail: op.end_detail,
             scans: op.scans,
             scanErrors: op.scan_errors,
             firstScanAt: op.first_scan_at,

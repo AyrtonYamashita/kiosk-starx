@@ -221,6 +221,40 @@ describe("carga de manifesto, diagnóstico da tela e leitor entregue pela API (0
     expect((await op()).ended_at).toBeNull();
   });
 
+  it("tela apagada: sem sinal fecha a carga com o motivo, o card mostra; voltando na mesma bipagem, reabre", async () => {
+    const { closeStaleOps } = await import("../src/opsRetention.js");
+    const base = { fn: "manifesto", plate: "TELA1A1" };
+    expect(
+      (
+        await send([
+          { id: id(), at: at(0), type: "session", user: "ana", domain: "ALT", branch: "CGB" },
+          { id: id(), at: at(1), type: "op_start", ...base, total: tot(5), read: tot(2) },
+          // o coletor avisa que apagou a tela (ainda com a colaboradora logada) e cala
+          { id: id(), at: at(30), type: "heartbeat", screen: "apagada", user: "ana", ...base },
+        ])
+      ).status,
+    ).toBe(200);
+    expect((await op()).ended_at).toBeNull(); // "apagada" com alguém logado não é saída
+    await t.db.query("UPDATE ops_device_state SET last_event_at = now() - interval '4 minutes', last_heartbeat_at = now() - interval '4 minutes' WHERE device_id = $1", [deviceId]);
+    expect((await closeStaleOps(t.db, 3)).operations).toHaveLength(1);
+    expect(await op()).toMatchObject({ end_reason: "signal_lost", end_detail: "tela_apagada" });
+    const card = (await t.api("GET", "/v1/admin/ops/cards")).json.cards.find((c: { deviceId: string }) => c.deviceId === deviceId);
+    expect(card.operation).toBeNull();
+    expect(card).toMatchObject({ screen: "apagada", lastEnded: { plate: "TELA1A1", endReason: "signal_lost", endDetail: "tela_apagada", fnLabel: "Descarga de Manifesto" } });
+    expect((await t.api("GET", `/v1/admin/ops/devices/${deviceId}`)).json.operation).toMatchObject({ endReason: "signal_lost", endDetail: "tela_apagada" });
+
+    // acendeu a tela na mesma bipagem: o sinal de vida já reabre (sem esperar leitura) e o motivo some
+    expect((await send([{ id: id(), at: at(300), type: "heartbeat", screen: "bipagem", user: "ana", ...base }])).status).toBe(200);
+    expect(await op()).toMatchObject({ ended_at: null, end_reason: null, end_detail: null });
+    expect((await state()).operation_id).toBe((await op()).id);
+
+    // desligado: o mesmo, com outro motivo
+    expect((await send([{ id: id(), at: at(320), type: "heartbeat", screen: "desligado", user: "ana", ...base }])).status).toBe(200);
+    await t.db.query("UPDATE ops_device_state SET last_event_at = now() - interval '4 minutes', last_heartbeat_at = now() - interval '4 minutes' WHERE device_id = $1", [deviceId]);
+    await closeStaleOps(t.db, 3);
+    expect((await op()).end_detail).toBe("desligado");
+  });
+
   it("erros de bipagem: mensagem do SSW guardada, agrupada por tipo, contada na carga e filtrável", async () => {
     const sc = (code: string, kind: string, sid: string, error?: string) => ({ scan: { id: `e-${sid}`, code, kind, ageMs: 0, ...(error ? { error } : {}) } });
     const base = { fn: "coleta", plate: "ARMAZEM" };

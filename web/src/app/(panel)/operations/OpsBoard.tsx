@@ -8,7 +8,7 @@ import { ScanBarcode } from "@/components/animate-ui/icons/scan-barcode";
 import { Num } from "@/components/Num";
 import type { OpsCard } from "@/lib/api";
 import { setClockOffset, useClockValue } from "@/lib/clock";
-import { fmtAgo, fmtDuration, fmtTime, isOffline, SCREEN_LABEL, STALE_AFTER_MS } from "@/lib/opsFormat";
+import { endLabel, fmtAgo, fmtDuration, fmtTime, isOffline, QUIET_BADGE, SCREEN_LABEL, STALE_AFTER_MS } from "@/lib/opsFormat";
 import { useOpsStream } from "@/lib/useOpsStream";
 
 /** Cards ao vivo, um por coletor: em operação primeiro, depois logados, depois o resto. */
@@ -155,7 +155,7 @@ const OpsCardView = memo(function OpsCardView({ c, serverNow }: { c: OpsCard; se
         <strong className="ops-user">{c.user ?? "Ninguém logado"}</strong>
         {offlineFor ? (
           <span className="badge off">
-            <span className="dot" /> sem sinal {offlineFor}
+            <span className="dot" /> {QUIET_BADGE[c.screen ?? ""] ?? "sem sinal"} {offlineFor}
           </span>
         ) : op ? (
           <span className="badge ok">
@@ -225,6 +225,11 @@ const OpsCardView = memo(function OpsCardView({ c, serverNow }: { c: OpsCard; se
             </div>
           )}
         </>
+      ) : c.lastEnded ? (
+        <p className="ops-idle">
+          {c.lastEnded.fnLabel} <span className="mono">{c.lastEnded.plate}</span> encerrada às {fmtTime(c.lastEnded.endedAt)}:{" "}
+          <strong>{endLabel(c.lastEnded.endReason, c.lastEnded.endDetail)}</strong>
+        </p>
       ) : (
         <p className="ops-idle">
           {c.user ? (

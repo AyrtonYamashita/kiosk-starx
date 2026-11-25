@@ -94,6 +94,8 @@ class OpsTracker(private val newId: () -> String = { UUID.randomUUID().toString(
     private var lastBipagemAt = Long.MIN_VALUE / 2
     private var lastDiagKey: String? = null
     private var lastDiagAt = 0L
+    /** Tela apagada ou coletor desligando (o sinal de vida avisa no lugar da tela do SSW; null = tela acesa). */
+    private var power: String? = null
 
     val currentUser get() = user
     val hasOpenOperation get() = op != null
@@ -196,6 +198,16 @@ class OpsTracker(private val newId: () -> String = { UUID.randomUUID().toString(
         return out
     }
 
+    /**
+     * Tela apagada ("apagada"), coletor desligando ("desligado") ou tela acesa de novo (null): sinal de vida na hora,
+     * para o servidor saber o motivo antes de o coletor ficar sem sinal.
+     */
+    fun onPower(now: Long, state: String?): List<JSONObject> {
+        if (state == power) return emptyList()
+        power = state
+        return listOf(heartbeat(now))
+    }
+
     /** Toque em Concluir ou Interromper na bipagem. */
     fun onAction(now: Long, name: String) {
         if (op == null || screen != "bipagem") return
@@ -224,7 +236,7 @@ class OpsTracker(private val newId: () -> String = { UUID.randomUUID().toString(
 
     private fun heartbeat(now: Long): JSONObject {
         lastHeartbeat = now
-        val e = event(now, "heartbeat").put("screen", screen).put("user", user ?: JSONObject.NULL)
+        val e = event(now, "heartbeat").put("screen", power ?: screen).put("user", user ?: JSONObject.NULL)
         op?.let { e.put("fn", it.fn).put("plate", it.plate) }
         return e
     }

@@ -47,6 +47,10 @@ export interface OpsCard {
     scanErrors: number;
     lastError: { at: string; code: string; message: string | null } | null;
   };
+  /**
+   * Sem carga aberta: a última encerrada nas últimas 2 h (o card mostra que fechou e por quê, ex.: tela apagada).
+   */
+  lastEnded: null | { id: string; fnLabel: string; plate: string; endedAt: string; endReason: string | null; endDetail: string | null };
 }
 
 const n = (v: unknown) => Number(v ?? 0);
@@ -76,13 +80,20 @@ const CARD_SQL = `
          GREATEST(s.last_event_at, s.last_heartbeat_at) AS last_seen_at,
          o.id AS op_id, o.fn, o.plate, o.real_plate, o.units, o.started_at, o.total_qty, o.total_kg, o.total_value,
          o.read_qty, o.read_kg, o.read_value, o.scans, o.last_scan_at, o.scan_interval_sum_ms, o.scan_interval_count,
-         o.scan_errors, le.at AS last_error_at, le.code AS last_error_code, le.error AS last_error
+         o.scan_errors, le.at AS last_error_at, le.code AS last_error_code, le.error AS last_error,
+         lo.id AS lo_id, lo.fn AS lo_fn, lo.plate AS lo_plate, lo.real_plate AS lo_real_plate, lo.ended_at AS lo_ended_at,
+         lo.end_reason AS lo_end_reason, lo.end_detail AS lo_end_detail
   FROM ops_device_state s
   JOIN devices d ON d.id = s.device_id
   LEFT JOIN ops_operations o ON o.id = s.operation_id AND o.ended_at IS NULL
   LEFT JOIN LATERAL (
     SELECT x.at, x.code, x.error FROM ops_scans x WHERE o.scan_errors > 0 AND x.operation_id = o.id AND x.kind = 'erro' ORDER BY x.at DESC, x.id DESC LIMIT 1
-  ) le ON true`;
+  ) le ON true
+  LEFT JOIN LATERAL (
+    SELECT x.id, x.fn, x.plate, x.real_plate, x.ended_at, x.end_reason, x.end_detail FROM ops_operations x
+    WHERE o.id IS NULL AND x.device_id = s.device_id AND x.ended_at > now() - interval '2 hours'
+    ORDER BY x.ended_at DESC LIMIT 1
+  ) lo ON true`;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function toCard(r: any): OpsCard {
@@ -108,6 +119,16 @@ function toCard(r: any): OpsCard {
           ...opMetrics(r),
           scanErrors: r.scan_errors ?? 0,
           lastError: r.last_error_at ? { at: new Date(r.last_error_at).toISOString(), code: r.last_error_code, message: r.last_error } : null,
+        }
+      : null,
+    lastEnded: r.lo_id
+      ? {
+          id: r.lo_id,
+          fnLabel: FN_LABEL[r.lo_fn] ?? r.lo_fn,
+          plate: r.lo_real_plate || r.lo_plate,
+          endedAt: new Date(r.lo_ended_at).toISOString(),
+          endReason: r.lo_end_reason,
+          endDetail: r.lo_end_detail,
         }
       : null,
   };

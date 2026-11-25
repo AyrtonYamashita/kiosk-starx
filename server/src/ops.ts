@@ -17,7 +17,13 @@ export const OPS_MAX_SKEW_MS = 5 * 60_000;
 /** Descarga (manifesto/coleta/romaneio) e carga (carga_*). */
 export const OPS_FUNCTIONS = ["manifesto", "coleta", "romaneio", "carga_manifesto", "carga_coleta", "carga_romaneio"] as const;
 const Fn = z.enum(OPS_FUNCTIONS);
-const Screen = z.enum(["bipagem", "placa", "menu", "login", "outra"]);
+/**
+ * Tela do SSW no coletor. "apagada" e "desligado" (app 0.5.6) não são do SSW: o coletor avisa na hora de apagar a
+ * tela ou desligar, antes de ficar sem sinal (o card mostra o motivo e a carga encerrada por falta de sinal o guarda).
+ */
+const Screen = z.enum(["bipagem", "placa", "menu", "login", "outra", "apagada", "desligado"]);
+/** Tela avisada pelo coletor antes de calar → motivo guardado na carga encerrada por falta de sinal. */
+export const QUIET_DETAIL: Record<string, string> = { apagada: "tela_apagada", desligado: "desligado" };
 const Num = z.number().finite().min(0).max(1e10);
 const Totals = z.object({ qty: Num, kg: Num, value: Num });
 const Str = (max: number) => z.string().trim().max(max);
@@ -168,7 +174,7 @@ async function openOp(c: Client, deviceId: string): Promise<Open | null> {
  */
 async function reopenLost(c: Client, deviceId: string, fn: string, plate: string): Promise<Open | null> {
   const r = await c.query<Open>(
-    `UPDATE ops_operations SET ended_at = NULL, end_reason = NULL, updated_at = now()
+    `UPDATE ops_operations SET ended_at = NULL, end_reason = NULL, end_detail = NULL, updated_at = now()
      WHERE id = (SELECT id FROM ops_operations WHERE device_id = $1 ORDER BY started_at DESC LIMIT 1)
        AND end_reason = 'signal_lost' AND fn = $2 AND plate = $3 AND ended_at > now() - interval '24 hours'
      RETURNING id, fn, plate, read_qty, last_scan_at`,
@@ -308,7 +314,13 @@ async function applyEvent(c: Client, notes: OpsNotes, deviceId: string, st: Stat
       st.screen = e.screen;
       if (e.user !== undefined) st.ssw_user = e.user;
       if (!st.last_heartbeat_at || st.last_heartbeat_at.getTime() < e.at) st.last_heartbeat_at = ts(e.at);
-      if (e.user === null && e.screen !== "bipagem" && st.operation_id) {
+      // voltou (tela acesa, sinal de volta) na mesma bipagem que a API encerrou por falta de sinal: reabre já, sem
+      // esperar a próxima leitura
+      if (e.screen === "bipagem" && e.fn && e.plate && !st.operation_id) {
+        const back = (await openOp(c, deviceId)) ?? (await reopenLost(c, deviceId, e.fn, e.plate));
+        if (back && back.fn === e.fn && back.plate === e.plate) st.operation_id = back.id;
+      }
+      if (e.user === null && e.screen !== "bipagem" && !(e.screen in QUIET_DETAIL) && st.operation_id) {
         if (await closeAbandoned(c, deviceId, e.at, notes)) st.operation_id = null;
       }
       return st.operation_id;

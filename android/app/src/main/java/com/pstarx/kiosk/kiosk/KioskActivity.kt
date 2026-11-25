@@ -126,6 +126,7 @@ class KioskActivity : Activity() {
         }
         ensureLockTask()
         refresh()
+        OpsReader.onScreen(true)
         // acender a tela não é uso: quem passou do prazo com a tela apagada sai agora (ou vê o aviso com o que sobrou)
         IdleAlarmReceiver.cancel(this)
         // mudanças da página com a tela apagada não são leituras do colaborador
@@ -156,6 +157,8 @@ class KioskActivity : Activity() {
         IdleVibration.stop(this)
         cancelCountdown()
         handler.removeCallbacks(idleTick)
+        // tela apagada: o servidor fica sabendo na hora (o card mostra "tela apagada" em vez de "sem sinal")
+        if (getSystemService(android.os.PowerManager::class.java)?.isInteractive == false) OpsReader.onScreen(false)
         // tela apagada (ou outra tela por cima): o prazo continua correndo; o alarme desconecta se ninguém voltar
         val (eligible, limitMs) = idleRule()
         if (eligible) idle.logoutAt(limitMs)?.let { IdleAlarmReceiver.schedule(this, it) }
@@ -236,6 +239,7 @@ class KioskActivity : Activity() {
             when (idle.tick(SystemClock.elapsedRealtime(), limitMs, eligible)) {
                 IdleLogout.Action.LOGOUT -> {
                     hideIdle()
+                    wakeScreen()
                     logoutSsw()
                 }
                 // acordou antes do prazo (alarme adiantado pelo Android): agenda de novo
@@ -243,6 +247,21 @@ class KioskActivity : Activity() {
                 else -> Unit
             }
         }
+    }
+
+    /**
+     * Acende a tela (saída por inatividade com a tela apagada): o colaborador vê que foi desconectado e, com o coletor
+     * acordado, o "saiu" chega ao servidor na hora. A tela volta a apagar sozinha pelo tempo normal do aparelho.
+     */
+    @Suppress("DEPRECATION")
+    private fun wakeScreen() {
+        runCatching {
+            val pm = getSystemService(android.os.PowerManager::class.java)
+            pm.newWakeLock(
+                android.os.PowerManager.SCREEN_BRIGHT_WAKE_LOCK or android.os.PowerManager.ACQUIRE_CAUSES_WAKEUP or android.os.PowerManager.ON_AFTER_RELEASE,
+                "starx:idle-logout",
+            ).acquire(10_000)
+        }.onFailure { Log.w(TAG, "Não acendeu a tela: ") }
     }
 
     private fun idleLabel(now: Long) = "Confirmo minha presença (${idle.secondsLeft(now)})"

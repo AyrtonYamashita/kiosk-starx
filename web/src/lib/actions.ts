@@ -702,11 +702,11 @@ export async function opsStreamTicket(): Promise<{ ticket?: string; url?: string
 }
 
 /** Como terminou uma carga (para o aviso em tempo real): motivo e volumes lidos/total. */
-export async function opsOperationEnd(deviceId: string, opId: string): Promise<{ endReason: string | null; read: number; total: number } | null> {
+export async function opsOperationEnd(deviceId: string, opId: string): Promise<{ endReason: string | null; endDetail: string | null; read: number; total: number } | null> {
   try {
     const d = await api<OpsDetail>(`/v1/admin/ops/devices/${encodeURIComponent(deviceId)}?op=${encodeURIComponent(opId)}`);
     const o = d.operation;
-    return o && o.id === opId ? { endReason: o.endReason, read: o.read.qty, total: o.total.qty } : null;
+    return o && o.id === opId ? { endReason: o.endReason, endDetail: o.endDetail ?? null, read: o.read.qty, total: o.total.qty } : null;
   } catch {
     return null;
   }

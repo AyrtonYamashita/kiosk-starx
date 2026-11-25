@@ -438,6 +438,8 @@ export interface OpsCard {
     scanErrors: number;
     lastError: { at: string; code: string; message: string | null } | null;
   };
+  /** Sem carga aberta: a última encerrada nas últimas 2 h, com o motivo (ex.: tela apagada). */
+  lastEnded: null | { id: string; fnLabel: string; plate: string; endedAt: string; endReason: string | null; endDetail: string | null };
 }
 export type OpsCodeKind = "lido" | "outra" | "nao_contou" | "erro";
 
@@ -482,6 +484,8 @@ export interface OpsDetail {
     startedAt: string;
     endedAt: string | null;
     endReason: string | null;
+    /** motivo avisado pelo coletor antes de ficar sem sinal: tela_apagada | desligado */
+    endDetail?: string | null;
     scans: number;
     scanErrors: number;
     firstScanAt: string | null;
@@ -529,6 +533,7 @@ export interface OpsHistory {
     startedAt: string;
     endedAt: string | null;
     endReason: string | null;
+    endDetail?: string | null;
     durationSec: number;
     totalQty: number;
     readQty: number;

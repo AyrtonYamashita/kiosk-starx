@@ -73,6 +73,18 @@ A tela não mostra a hora de cada bipagem: cada aumento de "Lidos" é uma bipage
   - sair da bipagem sem Concluir/Interromper: voltando à mesma placa em até 2 min, segue a mesma carga; senão
     `op_end` "left" (painel: "saiu sem concluir");
   - sinal de vida a cada 15 s e quando a tela muda (a tela do coletor não apaga: só escurece).
+- **Coletor calado** (app 0.5.6 + API):
+  - apagar a tela pelo botão → sinal de vida com `screen: "apagada"`; desligar → `screen: "desligado"` (receiver de
+    ACTION_SHUTDOWN, tenta enviar antes de o Android encerrar). O card mostra "tela apagada há X"/"desligado há X" no
+    lugar de "sem sinal".
+  - 3 min sem sinal (`OPS_SIGNAL_LOST_MIN`, conferido a cada 30 s): a API encerra a carga como `signal_lost`, com o
+    motivo em `ops_operations.end_detail` (`tela_apagada`/`desligado`; vazio = queda de rede). Sem carga aberta, o card
+    mostra a última encerrada nas últimas 2 h e o motivo.
+  - voltou na mesma placa (leitura ou só o sinal de vida na bipagem, em até 24 h): a carga é reaberta.
+  - inatividade conta com a tela apagada: um alarme desconecta no prazo (limite + 30 s do aviso) e acende a tela.
+  - app perdeu a sessão sem avisar (sinal de vida sem usuário, fora da bipagem) por 2 min com carga aberta: "left".
+- **Sessão e internet** (app 0.5.6): ao ligar o coletor (boot novo), cookies, dados da página e cache são apagados
+  antes do primeiro carregamento; o site só abre com a internet funcionando (tela de espera com o passo).
 - **Fila e envio** (`OpsQueue.kt`, `OpsSender.kt`): eventos gravados no aparelho antes de sair (até 5.000; sinal de
   vida só o último, na memória), lote ~0,3 s depois da mudança, até 200 por lote, respostas tratadas como abaixo
   (lote com evento inválido é dividido até achar o culpado, que é descartado).
