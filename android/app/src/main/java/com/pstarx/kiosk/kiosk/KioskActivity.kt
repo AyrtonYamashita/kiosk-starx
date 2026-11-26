@@ -67,7 +67,6 @@ class KioskActivity : Activity() {
     private val onChange: () -> Unit = { if (resumed) refresh() }
     /** Piloto da leitura do SSW ligado/desligado no painel: liga ou para o leitor sem recarregar o site. */
     private val onPanelChange: () -> Unit = { applyOps() }
-    /** Leitor novo entregue pela API: substitui o que está na página aberta (o leitor troca a versão antiga sozinho). */
     /** Leitor novo da API: entra na página aberta, mas só depois da carga aberta terminar (não muda nada no meio dela). */
     private val onReaderChange: () -> Unit = { if (OpsReader.isBusy()) readerPending = true else webView?.let { injectReader(it) } }
     private var readerPending = false
