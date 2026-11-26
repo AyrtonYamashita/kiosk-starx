@@ -55,7 +55,7 @@
 | Dados comuns | código de barras do volume, horário, classificação (lido/outra/erro/não contou), mensagem de erro que o SSW mostrou ao recusar o código (ex.: "CTRC 4711 já foi lido"), vínculo com carga e colaborador |
 | Dados sensíveis | Não (o código identifica o volume; não foi verificado se codifica dados do destinatário: **validação externa**). A mensagem de erro é texto do SSW sobre o volume/CTRC; não foi verificado se alguma mensagem traz dado de pessoa: **validação externa** |
 | Origem | observado (leitura da tela) |
-| Sistemas | `ops_scans` (`error`, `error_key`); rotas `/v1/admin/ops/scans` e `/v1/admin/ops/scan-errors`; notificação `scan_error` |
+| Sistemas | `ops_scans` (`error`, `error_key`); rotas `/v1/admin/ops/scans` e `/v1/admin/ops/scan-errors`; notificação `scan_error`. Captura da tela com o alerta de erro grave (`ops_scan_shots`, JPEG: mostra o usuário logado, a placa, a hora, a mensagem — que pode trazer o usuário de outra carga — e o fundo da tela do SSW); apagada em 90 d (`OPS_RETENTION_DAYS`) e no pedido de anonimização do colaborador da carga |
 | Terceiros e papel | VPS, Vercel, Cloudflare (**operadores**) |
 | Retenção | 365 d (`OPS_SCAN_RETENTION_DAYS`) — justificar em L3/retenção |
 | Alto risco? | integra A001/A002 no RIPD |

@@ -131,8 +131,10 @@ export interface DeviceSummary {
   infoUpdatedAt: string | null;
   /** Usuário logado no SSW (lido pelo app com a leitura do SSW ligada). */
   loggedUser: string | null;
-  /** Piloto da leitura do SSW ligado neste coletor. */
+  /** Leitura do SSW (obrigatória: sempre ligada). */
   opsReader: boolean;
+  /** Coletor piloto: recebe antes as versões publicadas para os pilotos. */
+  pilot: boolean;
   kioskActive: boolean | null;
   kioskMode: string | null;
   kioskEnabled: boolean | null;
@@ -177,12 +179,10 @@ export interface DeviceDetail {
   managedApps: string[];
   managedStatus: Record<string, { versionCode: number | null; error: string | null; at?: string }>;
   lastScreenshotAt: string | null;
-  /** Piloto da leitura do SSW ligado neste coletor. */
+  /** Leitura do SSW (obrigatória: sempre ligada). */
   opsReader: boolean;
-  /** Escolha feita neste coletor (null = segue a chave geral). */
-  opsReaderChoice: boolean | null;
-  /** Chave geral: leitura em todos os coletores. */
-  opsReaderAll: boolean;
+  /** Coletor piloto: recebe antes as versões publicadas para os pilotos. */
+  pilot: boolean;
   /** Usuário logado no SSW agora (última leitura). */
   sswUser: string | null;
 }
@@ -405,12 +405,6 @@ export async function apiAnon<T>(path: string, body?: unknown): Promise<{ status
 // ---------------------------------------------------------------- acompanhamento de operações (fase 2)
 
 export type OpsTotals = { qty: number; kg: number; value: number };
-/** Chave geral da leitura do SSW. */
-export interface OpsSettings {
-  readerAll: boolean;
-  devices: { total: number; reading: number; custom: number };
-}
-
 export interface OpsCard {
   deviceId: string;
   deviceName: string;
@@ -449,6 +443,8 @@ export interface OpsCode {
   kind: OpsCodeKind;
   /** mensagem que o SSW mostrou ao recusar o código (tipo "erro") */
   error?: string | null;
+  /** captura da tela com o alerta de erro grave (app 0.5.6+) */
+  shotId?: string | null;
   readQty: number | null;
 }
 
@@ -556,6 +552,8 @@ export interface OpsScanErrors {
     message: string | null;
     /** tipo de erro: a mensagem normalizada (números viram #) */
     type: string | null;
+    /** captura da tela com o alerta de erro grave (app 0.5.6+) */
+    shotId: string | null;
     readQty: number | null;
     device: { id: string; name: string };
     operation: null | { id: string; fn: string; fnLabel: string; plate: string; realPlate: string | null; user: string | null; branch: string | null };
@@ -565,4 +563,49 @@ export interface OpsScanErrors {
   types: { type: string | null; message: string | null; count: number; lastAt: string }[];
   users: string[];
   devices: { id: string; name: string }[];
+}
+// ---------------------------------------------------------------- versões: pilotos, todos e agendamentos
+
+export type ReleaseKind = "kiosk" | "reader";
+export type ReleaseChannel = "pilot" | "all";
+
+/** /v1/admin/releases: app do kiosk e leitor do SSW, o que pilotos e todos recebem, agendamentos e coletores. */
+export interface Releases {
+  kiosk: {
+    all: number | null;
+    pilot: number | null;
+    versions: {
+      versionCode: number;
+      versionName: string;
+      sizeBytes: number;
+      sha256: string;
+      /** o que a versão muda (escrito no build, dentro do APK) */
+      notes: string[];
+      /** dá para voltar à versão anterior sem perder nada? (null: não informado no APK) */
+      reversible: boolean | null;
+      reversibleNote: string | null;
+      uploadedBy: string | null;
+      uploadedAt: string;
+      /** coletores (da empresa) nesta versão agora */
+      devices: number;
+    }[];
+  };
+  reader: {
+    all: string | null;
+    pilot: string | null;
+    /** o leitor que veio no deploy atual da API */
+    deployed: string | null;
+    versions: { sha256: string; version: string | null; firstSeenAt: string }[];
+  };
+  schedules: {
+    id: string;
+    kind: ReleaseKind;
+    channel: ReleaseChannel;
+    ref: string;
+    runAt: string;
+    createdBy: string | null;
+    doneAt: string | null;
+    result: string | null;
+  }[];
+  devices: { id: string; name: string; tenant: string | null; pilot: boolean; appVersion: string | null; appVersionCode: number | null; lastSeenAt: string | null }[];
 }

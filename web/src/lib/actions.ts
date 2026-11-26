@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import QRCode from "qrcode";
 import { api, ApiError, apiAnon, apiLogin, apiMfa, apiRevokeToken, MFA_COOKIE, MFA_INFO_COOKIE, SESSION_COOKIE, TRUST_COOKIE, type CommandType, type Enrollment, type OpsDetail } from "./api";
+import { TZ } from "./format";
 
 export type FormState = { error?: string; ok?: string } | undefined;
 
@@ -81,30 +82,15 @@ export async function renameDevice(_: FormState, form: FormData): Promise<FormSt
   }
 }
 
-/** Leitura do SSW no coletor: ligar, desligar ou seguir a chave geral (o coletor é avisado na hora). */
-export async function setOpsReader(_: FormState, form: FormData): Promise<FormState> {
+/** Marca/desmarca o coletor como piloto (recebe antes as versões publicadas para os pilotos). */
+export async function setPilot(_: FormState, form: FormData): Promise<FormState> {
   const id = String(form.get("id"));
-  const choice = String(form.get("on"));
-  const on = choice === "default" ? null : choice === "1";
+  const pilot = form.get("pilot") === "1";
   try {
-    await api(`/v1/admin/devices/${id}`, { method: "PATCH", body: { opsReader: on } });
+    await api(`/v1/admin/devices/${id}`, { method: "PATCH", body: { pilot } });
     revalidatePath(`/devices/${id}`);
-    revalidatePath("/");
-    return { ok: on === null ? "Este coletor voltou a seguir a chave geral." : on ? "Leitura ligada: o coletor começa a ler o SSW em instantes." : "Leitura desligada neste coletor." };
-  } catch (e) {
-    return { error: message(e) };
-  }
-}
-
-/** Chave geral da leitura do SSW (só administradores). */
-export async function setOpsReaderAll(_: FormState, form: FormData): Promise<FormState> {
-  const all = form.get("all") === "1";
-  try {
-    await api("/v1/admin/ops/settings", { method: "PUT", body: { readerAll: all } });
-    revalidatePath("/operations");
-    revalidatePath("/");
-    revalidatePath("/profiles");
-    return { ok: all ? "Leitura ligada em todos os coletores (menos os desligados um a um)." : "Leitura só nos coletores ligados um a um." };
+    revalidatePath("/apps");
+    return { ok: pilot ? "Coletor marcado como piloto." : "Coletor fora dos pilotos: segue a versão de todos." };
   } catch (e) {
     return { error: message(e) };
   }
@@ -354,21 +340,56 @@ export async function deleteAppVersion(_: FormState, form: FormData): Promise<Fo
 
 // ---------------------------------------------------------------- app do kiosk
 
-export async function publishKiosk(_: FormState): Promise<FormState> {
+/**
+ * Publica uma versão (app do kiosk ou leitor do SSW) para os pilotos ou para todos, agora ou na hora agendada
+ * (`at`: "AAAA-MM-DDTHH:MM" no fuso do navegador, convertido no formulário para ISO com fuso).
+ */
+export async function publishRelease(_: FormState, form: FormData): Promise<FormState> {
+  const kind = String(form.get("kind"));
+  const channel = String(form.get("channel"));
+  const ref = String(form.get("ref"));
+  const label = String(form.get("label") ?? ref);
+  const at = String(form.get("at") ?? "").trim();
+  const who = channel === "pilot" ? "os pilotos" : "todos os coletores";
   try {
-    const r = await api<{ release: { versionName: string; versionCode: number } }>("/v1/admin/kiosk-release/publish", { method: "POST" });
+    await api("/v1/admin/releases/publish", { method: "POST", body: { kind, channel, ref, ...(at ? { at } : {}) } });
     revalidatePath("/apps");
-    return { ok: `Publicada a ${r.release.versionName} (${r.release.versionCode}). Os aparelhos com 0.4.0 ou mais nova se atualizam no próximo contato.` };
+    if (at) {
+      const when = new Date(at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short", timeZone: TZ });
+      return { ok: `${label} agendada para ${who} em ${when}.` };
+    }
+    return { ok: `${label} publicada para ${who}. Os coletores recebem no próximo contato (e só depois de fechar uma carga aberta).` };
   } catch (e) {
     return { error: message(e) };
   }
 }
 
-export async function discardKiosk(_: FormState): Promise<FormState> {
+export async function cancelReleaseSchedule(_: FormState, form: FormData): Promise<FormState> {
   try {
-    await api("/v1/admin/kiosk-release/pending", { method: "DELETE" });
+    await api(`/v1/admin/releases/schedules/${String(form.get("id"))}`, { method: "DELETE" });
     revalidatePath("/apps");
-    return { ok: "Versão pendente descartada." };
+    return { ok: "Agendamento cancelado." };
+  } catch (e) {
+    return { error: message(e) };
+  }
+}
+
+/** Encerra o teste: os pilotos voltam à versão de todos. */
+export async function clearReleasePilot(_: FormState, form: FormData): Promise<FormState> {
+  try {
+    await api(`/v1/admin/releases/pilot/${String(form.get("kind"))}`, { method: "DELETE" });
+    revalidatePath("/apps");
+    return { ok: "Os pilotos voltaram à versão de todos." };
+  } catch (e) {
+    return { error: message(e) };
+  }
+}
+
+export async function discardKioskVersion(_: FormState, form: FormData): Promise<FormState> {
+  try {
+    await api(`/v1/admin/releases/kiosk/${String(form.get("code"))}`, { method: "DELETE" });
+    revalidatePath("/apps");
+    return { ok: "Versão descartada." };
   } catch (e) {
     return { error: message(e) };
   }

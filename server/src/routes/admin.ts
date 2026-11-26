@@ -60,11 +60,11 @@ function tooMany(reply: FastifyReply, sec: number) {
   });
 }
 const ChangePassword = z.object({ current: z.string().min(1), next: z.string().min(10).max(256) });
-/** Renomear e/ou escolher a leitura do SSW neste coletor (null = seguir a chave geral). */
+/** Renomear e/ou marcar como piloto (recebe antes as versões novas do app e do leitor do SSW). */
 const DevicePatch = z
   // nome vazio = volta ao nome padrão do cadastro (modelo + 4 últimos do serial)
-  .object({ name: z.string().trim().max(80).optional(), opsReader: z.boolean().nullable().optional() })
-  .refine((b) => b.name !== undefined || b.opsReader !== undefined);
+  .object({ name: z.string().trim().max(80).optional(), pilot: z.boolean().optional() })
+  .refine((b) => b.name !== undefined || b.pilot !== undefined);
 const CreateCode = z.object({
   name: z.string().trim().min(1).max(80),
   maxUses: z.number().int().min(1).max(100_000).nullable().optional(),
@@ -305,7 +305,7 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
                 d.config->'kiosk'->>'mode' AS kiosk_mode, (d.config->'kiosk'->>'enabled')::boolean AS kiosk_enabled,
                 d.last_seen_at > now() - make_interval(secs => $1) AS online,
                 d.profile_id, p.name AS profile_name, p.config AS profile_config, d.config_overrides, d.config_nonce, d.applied_hash, d.failed_hash,
-                d.ops_reader, ${OPS_READER_ON_SQL} AS ops_reader_on, s.ssw_user, d.transferred_at
+                ${OPS_READER_ON_SQL} AS ops_reader_on, d.pilot, s.ssw_user, d.transferred_at
          FROM devices d LEFT JOIN profiles p ON p.id = d.profile_id LEFT JOIN ops_device_state s ON s.device_id = d.id
          WHERE d.tenant_id = $2 ORDER BY d.name`,
         [onlineWindowSec(config), tenantOf(req)],
@@ -340,6 +340,7 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
           // usuário logado no SSW (leitura da fase 2.4); antes dela, info.session.user (reservado)
           loggedUser: d.ssw_user ?? (typeof d.session?.user === "string" && d.session.user ? d.session.user : null),
           opsReader: d.ops_reader_on === true,
+          pilot: d.pilot === true,
           kioskActive: d.app?.kioskActive ?? null,
           kioskMode: d.kiosk_mode,
           kioskEnabled: d.kiosk_enabled,
@@ -361,7 +362,7 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
         `SELECT d.*, e.name AS enrollment_name, d.last_seen_at > now() - make_interval(secs => $2) AS online,
                 p.name AS profile_name, p.config AS profile_config, p.managed_apps,
                 (SELECT ssw_user FROM ops_device_state s WHERE s.device_id = d.id) AS ssw_user,
-                ${OPS_READER_ON_SQL} AS ops_reader_on, (SELECT reader_all FROM ops_settings os WHERE os.tenant_id = d.tenant_id) AS ops_reader_all
+                ${OPS_READER_ON_SQL} AS ops_reader_on
          FROM devices d LEFT JOIN enrollment_codes e ON e.id = d.enrollment_code_id LEFT JOIN profiles p ON p.id = d.profile_id
          WHERE d.id = $1 AND d.tenant_id = $3`,
         [id, onlineWindowSec(config), tenantOf(req)],
@@ -400,10 +401,9 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
         managedApps: (d.managed_apps as string[] | null) ?? [],
         managedStatus: d.managed_status ?? {},
         lastScreenshotAt: d.last_screenshot_at,
-        // leitura do SSW: o que vale agora, a escolha deste coletor (null = segue a chave geral) e a chave geral
+        // leitura do SSW: obrigatória (sempre ligada)
         opsReader: d.ops_reader_on === true,
-        opsReaderChoice: d.ops_reader ?? null,
-        opsReaderAll: d.ops_reader_all === true,
+        pilot: d.pilot === true,
         sswUser: d.ssw_user ?? null,
         transferredAt: d.transferred_at,
       };
@@ -413,21 +413,20 @@ export async function adminRoutes(app: FastifyInstance, opts: { db: Db; config: 
       const { id } = req.params as { id: string };
       const body = DevicePatch.safeParse(req.body);
       if (!body.success || !z.uuid().safeParse(id).success) return reply.code(400).send({ error: "invalid_body" });
-      const { name, opsReader } = body.data;
+      const { name, pilot } = body.data;
       const r = await db.query(
         `UPDATE devices d SET name = CASE WHEN $2::text IS NULL THEN d.name
                                           WHEN $2 = '' THEN COALESCE(NULLIF(concat_ws(' ', d.model, right(d.serial, 4)), ''), 'Aparelho')
                                           ELSE $2 END,
-                              ops_reader = CASE WHEN $4 THEN $3::boolean ELSE d.ops_reader END
-         FROM (SELECT id, ops_reader AS before FROM devices WHERE id = $1 AND tenant_id = $5 FOR UPDATE) o
+                              pilot = COALESCE($3::boolean, d.pilot)
+         FROM (SELECT id, pilot AS before FROM devices WHERE id = $1 AND tenant_id = $4 FOR UPDATE) o
          WHERE d.id = o.id RETURNING o.before`,
-        [id, name ?? null, opsReader ?? null, opsReader !== undefined, tenantOf(req)],
+        [id, name ?? null, pilot ?? null, tenantOf(req)],
       );
       if (!r.rowCount) return reply.code(404).send({ error: "not_found" });
-      if (opsReader !== undefined && opsReader !== r.rows[0].before) {
-        const event = opsReader === null ? "ops_reader_default" : opsReader ? "ops_reader_on" : "ops_reader_off";
-        await audit(db, req, event, { adminId: req.admin?.id ?? null, details: { deviceId: id } });
-        // o coletor fica sabendo no próximo check-in; o aviso antecipa
+      if (pilot !== undefined && pilot !== r.rows[0].before) {
+        await audit(db, req, pilot ? "device_pilot_on" : "device_pilot_off", { adminId: req.admin?.id ?? null, details: { deviceId: id } });
+        // o coletor recebe a versão do novo grupo no próximo check-in; o aviso antecipa
         waker.wake([id]);
       }
       return { ok: true };

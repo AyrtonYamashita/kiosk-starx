@@ -90,7 +90,7 @@ beforeAll(async () => {
   const enr = await t.api("POST", "/v1/device/enroll", { code: code.code, info: info("ISO-A1") }, "");
   A.deviceId = enr.json.deviceId;
   A.deviceToken = enr.json.token;
-  expect((await t.api("PATCH", `/v1/admin/devices/${A.deviceId}`, { opsReader: true })).status).toBe(200);
+  expect((await t.api("PATCH", `/v1/admin/devices/${A.deviceId}`, { pilot: false })).status).toBe(200);
   const t0 = Date.now() - 60_000;
   await sendEvents({ id: A.deviceId, token: A.deviceToken }, [
     { id: uid(), at: t0, type: "session", user: "joana", domain: "ALT", branch: "OTI" },

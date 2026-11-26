@@ -213,14 +213,14 @@ class OpsTrackerTest {
     }
 
     @Test
-    fun `ocupado - na bipagem ou com carga aberta, até 15 min sem mudar a tela`() {
+    fun `ocupado - na bipagem ou com carga aberta, mesmo parada`() {
         assertFalse(t.busy(at(0.0)))
         t.onSnapshot(at(0.0), Snapshot("menu", user = "maria"))
         assertFalse(t.busy(at(1.0)))
         t.onSnapshot(at(10.0), bip(1))
         assertTrue(t.busy(at(11.0)))
         assertTrue(t.busy(at(10.0 + 14 * 60)))
-        assertFalse(t.busy(at(10.0 + 15 * 60))) // parado na bipagem: a atualização pode entrar
+        assertTrue(t.busy(at(10.0 + 5 * 3600))) // parado na bipagem: continua esperando (quem fecha é a inatividade)
         t.onSnapshot(at(1000.0), bip(2))
         t.onAction(at(1001.0), "concluir")
         t.onSnapshot(at(1002.0), Snapshot("placa", user = "maria", fn = "coleta"))

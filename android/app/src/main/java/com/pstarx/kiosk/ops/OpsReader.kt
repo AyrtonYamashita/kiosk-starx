@@ -49,6 +49,9 @@ object OpsReader {
         private set
     fun isBusy() = running && busyNow
 
+    /** Chamado (na thread principal) quando a carga aberta termina: o que esperou por ela (recarregar, atualizar) sai. */
+    @Volatile var onBusyEnd: (() -> Unit)? = null
+
     /** Chamado (na thread principal) quando chega um leitor novo da API: a tela injeta de novo na página aberta. */
     @Volatile var onScriptChanged: (() -> Unit)? = null
 
@@ -95,6 +98,7 @@ object OpsReader {
         busyNow = false
         tickTask?.cancel(false)
         tickTask = null
+        ErrorAlarm.stop()
         Log.i(TAG, "Leitura do SSW parada")
     }
 
@@ -123,6 +127,7 @@ object OpsReader {
 
     /** Página fora do SSW (erro, outro site): para o rastreador, é como sair da tela. */
     fun onLeftSsw() {
+        ErrorAlarm.stop()
         if (!running) return
         val at = System.currentTimeMillis()
         logic.execute { safely { emit(tracker.onSnapshot(clock.now(at), Snapshot("outra"))) } }
@@ -149,6 +154,21 @@ object OpsReader {
             val at = System.currentTimeMillis()
             if (!running || !pageIsSsw()) return
             logic.execute { safely { tracker.onAction(clock.now(at), name.take(20)) } }
+        }
+
+        /** Alerta de erro grave aberto na página (ssw_reader.js): alarme, vibração e captura da tela para o registro. */
+        @JavascriptInterface
+        fun alert(scanId: String, kind: String) {
+            if (!running || !pageIsSsw()) return
+            Log.i(TAG, "alerta de erro na bipagem: ${kind.take(30)}")
+            ErrorAlarm.start(app)
+            ScanShots.capture(app, scanId.take(40))
+        }
+
+        /** Alerta fechado ("Entendi" ou a página saiu). */
+        @JavascriptInterface
+        fun alertEnd() {
+            ErrorAlarm.stop()
         }
     }
 
@@ -228,7 +248,13 @@ object OpsReader {
 
     /** Na thread `logic`. Sinal de vida fica só na memória (o último); o resto vai para a fila no disco. */
     private fun emit(events: List<JSONObject>) {
+        val was = busyNow
         busyNow = tracker.busy(clock.now())
+        if (was && !busyNow) {
+            android.os.Handler(android.os.Looper.getMainLooper()).post { onBusyEnd?.invoke() }
+            // a atualização do app adiada sai no próximo check-in: antecipa
+            com.pstarx.kiosk.panel.PanelSync.now(app, "busy-end")
+        }
         if (events.isEmpty()) return
         val (beats, rest) = events.partition { it.optString("type") == "heartbeat" }
         beats.lastOrNull()?.let { sender.heartbeat = it }
@@ -250,7 +276,11 @@ object OpsReader {
         repeat(30) {
             when (val o = sender.flushOnce()) {
                 OpsSender.Outcome.Idle, OpsSender.Outcome.Stop -> return
-                is OpsSender.Outcome.Sent -> if (!o.more) return
+                is OpsSender.Outcome.Sent -> if (!o.more) {
+                    // rede de volta: capturas de erro que ficaram no disco
+                    ScanShots.uploadSoon(app)
+                    return
+                }
                 is OpsSender.Outcome.Retry -> if (o.delayMs > 0) {
                     retryAt = System.currentTimeMillis() + o.delayMs
                     kick(o.delayMs)

@@ -40,7 +40,7 @@ beforeAll(async () => {
   const r = await t.api("POST", "/v1/device/enroll", { code, info: info("OPS1") }, "");
   deviceId = r.json.deviceId;
   token = r.json.token;
-  expect((await t.api("PATCH", `/v1/admin/devices/${deviceId}`, { opsReader: true })).status).toBe(200);
+  expect((await t.api("PATCH", `/v1/admin/devices/${deviceId}`, { pilot: false })).status).toBe(200);
 });
 beforeEach(async () => {
   await t.db.query("DELETE FROM ops_events");
@@ -401,98 +401,64 @@ describe("eventos do leitor do SSW: abuso", () => {
   it("aparelho removido no painel deixa de mandar eventos", async () => {
     const code = (await t.api("POST", "/v1/admin/enrollments", { name: "Lote 2" })).json.code;
     const other = await t.api("POST", "/v1/device/enroll", { code, info: info("OPS2") }, "");
-    await t.api("PATCH", `/v1/admin/devices/${other.json.deviceId}`, { opsReader: true });
+    await t.api("PATCH", `/v1/admin/devices/${other.json.deviceId}`, { pilot: false });
     const ev = [{ id: id(), at: at(0), type: "heartbeat", screen: "menu" }];
     expect((await send(ev, { device: other.json.deviceId, token: other.json.token })).status).toBe(200);
     expect((await t.api("DELETE", `/v1/admin/devices/${other.json.deviceId}`)).status).toBe(200);
     expect((await send([{ ...ev[0], id: id() }], { device: other.json.deviceId, token: other.json.token })).status).toBe(401);
   });
 
-  it("piloto: só coletor marcado no painel manda eventos; o check-in informa o app", async () => {
-    const code = (await t.api("POST", "/v1/admin/enrollments", { name: "Piloto" })).json.code;
+  it("leitura do SSW obrigatória: todo coletor lê, sem escolha no painel", async () => {
+    const code = (await t.api("POST", "/v1/admin/enrollments", { name: "Novo" })).json.code;
     const other = (await t.api("POST", "/v1/device/enroll", { code, info: info("OPS3") }, "")).json;
-    const dev = { device: other.deviceId, token: other.token };
     const checkin = async () => (await t.api("POST", "/v1/device/checkin", { appVersion: "0.5.0" }, other.token)).json;
-    const ev = () => [{ id: id(), at: Date.now(), type: "heartbeat", screen: "menu" }];
-
-    expect((await checkin()).opsReader).toBe(false);
-    expect((await t.api("GET", `/v1/admin/devices/${other.deviceId}`)).json.opsReader).toBe(false);
-    const off = await send(ev(), dev);
-    expect(off.status).toBe(403);
-    expect(off.json.error).toBe("ops_disabled");
-
-    expect((await t.api("PATCH", `/v1/admin/devices/${other.deviceId}`, { opsReader: true })).status).toBe(200);
     expect((await checkin()).opsReader).toBe(true);
-    expect((await t.api("GET", `/v1/admin/devices/${other.deviceId}`)).json).toMatchObject({ opsReader: true, name: expect.any(String) });
-    expect((await send(ev(), dev)).status).toBe(200);
-    const log = await t.db.query("SELECT event FROM auth_events WHERE details->>'deviceId' = $1", [other.deviceId]);
-    expect(log.rows.map((r) => r.event)).toEqual(["ops_reader_on"]);
-
-    // renomear não mexe no piloto; corpo vazio é recusado
-    expect((await t.api("PATCH", `/v1/admin/devices/${other.deviceId}`, { name: "Coletor piloto" })).status).toBe(200);
-    expect((await checkin()).opsReader).toBe(true);
-    expect((await t.api("PATCH", `/v1/admin/devices/${other.deviceId}`, {})).status).toBe(400);
-
-    await t.api("PATCH", `/v1/admin/devices/${other.deviceId}`, { opsReader: false });
-    expect((await send(ev(), dev)).status).toBe(403);
+    expect((await t.api("GET", `/v1/admin/devices/${other.deviceId}`)).json.opsReader).toBe(true);
+    const ev = [{ id: id(), at: Date.now(), type: "heartbeat", screen: "menu" }];
+    expect((await send(ev, { device: other.deviceId, token: other.token })).status).toBe(200);
+    // o campo antigo não é mais aceito
+    expect((await t.api("PATCH", `/v1/admin/devices/${other.deviceId}`, { opsReader: false })).status).toBe(400);
   });
 
-  it("chave geral: lê em todos os coletores (menos os desligados um a um), avisa na hora e volta ao piloto", async () => {
-    const enroll = async (serial: string) => {
-      const code = (await t.api("POST", "/v1/admin/enrollments", { name: serial })).json.code;
-      return (await t.api("POST", "/v1/device/enroll", { code, info: info(serial) }, "")).json as { deviceId: string; token: string };
-    };
-    const a = await enroll("OPS4"); // segue a chave geral
-    const b = await enroll("OPS5"); // desligado só nele
-    const checkin = async (d: { token: string }) => (await t.api("POST", "/v1/device/checkin", { appVersion: "0.5.0" }, d.token)).json.opsReader;
-    const ev = () => [{ id: id(), at: Date.now(), type: "heartbeat", screen: "menu" }];
-    await t.api("PATCH", `/v1/admin/devices/${b.deviceId}`, { opsReader: false });
-    expect(await checkin(a)).toBe(false);
-    const before = (await t.api("GET", "/v1/admin/ops/settings")).json;
-    expect(before.readerAll).toBe(false);
+  it("piloto: marcar e desmarcar no painel (com registro); renomear não mexe", async () => {
+    const code = (await t.api("POST", "/v1/admin/enrollments", { name: "Piloto" })).json.code;
+    const other = (await t.api("POST", "/v1/device/enroll", { code, info: info("OPS4") }, "")).json;
+    expect((await t.api("GET", `/v1/admin/devices/${other.deviceId}`)).json.pilot).toBe(false);
+    expect((await t.api("PATCH", `/v1/admin/devices/${other.deviceId}`, { pilot: true })).status).toBe(200);
+    expect((await t.api("GET", `/v1/admin/devices/${other.deviceId}`)).json.pilot).toBe(true);
+    const list = (await t.api("GET", "/v1/admin/devices")).json.devices as { id: string; pilot: boolean }[];
+    expect(list.find((d) => d.id === other.deviceId)?.pilot).toBe(true);
+    expect((await t.api("PATCH", `/v1/admin/devices/${other.deviceId}`, { name: "Coletor piloto" })).status).toBe(200);
+    expect((await t.api("GET", `/v1/admin/devices/${other.deviceId}`)).json).toMatchObject({ pilot: true, name: "Coletor piloto" });
+    expect((await t.api("PATCH", `/v1/admin/devices/${other.deviceId}`, {})).status).toBe(400);
+    expect((await t.api("PATCH", `/v1/admin/devices/${other.deviceId}`, { pilot: false })).status).toBe(200);
+    const log = await t.db.query("SELECT event FROM auth_events WHERE details->>'deviceId' = $1 ORDER BY id", [other.deviceId]);
+    expect(log.rows.map((r) => r.event)).toEqual(["device_pilot_on", "device_pilot_off"]);
+  });
 
-    // ligar a chave geral acorda quem está esperando
-    const waiting = t.app.inject({ method: "GET", url: "/v1/device/wait?timeoutSec=30", headers: { authorization: `Bearer ${a.token}` } });
-    await new Promise((r) => setTimeout(r, 200));
-    const t0 = Date.now();
-    expect((await t.api("PUT", "/v1/admin/ops/settings", { readerAll: true })).status).toBe(200);
-    expect((await waiting).json()).toEqual({ wake: true });
-    expect(Date.now() - t0).toBeLessThan(5000);
-
-    expect(await checkin(a)).toBe(true);
-    expect(await checkin(b)).toBe(false);
-    expect((await send(ev(), { device: a.deviceId, token: a.token })).status).toBe(200);
-    expect((await send(ev(), { device: b.deviceId, token: b.token })).status).toBe(403);
-    expect((await t.api("GET", `/v1/admin/devices/${a.deviceId}`)).json).toMatchObject({ opsReader: true, opsReaderChoice: null, opsReaderAll: true });
-    expect((await t.api("GET", `/v1/admin/devices/${b.deviceId}`)).json).toMatchObject({ opsReader: false, opsReaderChoice: false, opsReaderAll: true });
-    const list = (await t.api("GET", "/v1/admin/devices")).json.devices as { id: string; opsReader: boolean }[];
-    expect(list.find((d) => d.id === a.deviceId)?.opsReader).toBe(true);
-    const after = (await t.api("GET", "/v1/admin/ops/settings")).json;
-    expect(after.readerAll).toBe(true);
-    // todos leem, menos os desligados um a um (b e o coletor do teste do piloto)
-    expect(after.devices.reading).toBe(after.devices.total - 2);
-
-    // b volta a seguir a chave geral
-    expect((await t.api("PATCH", `/v1/admin/devices/${b.deviceId}`, { opsReader: null })).status).toBe(200);
-    expect(await checkin(b)).toBe(true);
-    const log = await t.db.query(
-      "SELECT event FROM auth_events WHERE event LIKE 'ops_reader%' AND (details->>'deviceId' = $1 OR event LIKE 'ops_reader_all%') ORDER BY id",
-      [b.deviceId],
-    );
-    expect(log.rows.map((r) => r.event)).toEqual(["ops_reader_off", "ops_reader_all_on", "ops_reader_default"]);
-
-    // operador vê, mas não mexe na chave geral; corpo inválido é recusado
-    expect((await t.api("POST", "/v1/admin/users", { username: "op.ops", email: "op.ops@pstarx.com", role: "operator", password: "senha-do-operador-1" })).status).toBe(200);
-    const opToken = (await t.api("POST", "/v1/admin/login", { username: "op.ops", password: "senha-do-operador-1" }, "")).json.token;
-    expect((await t.api("GET", "/v1/admin/ops/settings", undefined, opToken)).status).toBe(200);
-    expect((await t.api("PUT", "/v1/admin/ops/settings", { readerAll: false }, opToken)).status).toBe(403);
-    expect((await t.api("PUT", "/v1/admin/ops/settings", { readerAll: "sim" })).status).toBe(400);
-
-    // de volta ao piloto: só quem foi ligado um a um continua
-    expect((await t.api("PUT", "/v1/admin/ops/settings", { readerAll: false })).status).toBe(200);
-    expect(await checkin(a)).toBe(false);
-    expect((await send(ev(), { device: a.deviceId, token: a.token })).status).toBe(403);
-    expect((await send(ev())).status).toBe(200); // o coletor principal destes testes foi ligado nele mesmo
+  it("captura do alerta de erro: guardada pela bipagem, aparece no erro e só para a empresa", async () => {
+    const jpeg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff]), Buffer.alloc(200, 7)]);
+    const up = (scan: string, tk = token) =>
+      t.app.inject({ method: "POST", url: `/v1/device/ops/shots?scan=${scan}&width=480&height=800`, payload: jpeg, headers: { "content-type": "image/jpeg", authorization: `Bearer ${tk}` } });
+    // a imagem pode chegar antes do registro da bipagem
+    expect((await up("shotabc123")).json()).toEqual({ ok: true, stored: true });
+    expect((await up("shotabc123")).json()).toEqual({ ok: true, stored: false });
+    expect((await up("NAO-VALE")).statusCode).toBe(400);
+    expect((await up("shotabc123", "token-errado")).statusCode).toBe(401);
+    const msg = "Este volume é do CTRC CGB379473-3, em carregamento na placa CNP por alissonm.";
+    const sent = await send([
+      { id: id(), at: Date.now() - 3000, type: "session", user: "maria" },
+      { id: id(), at: Date.now() - 2000, type: "op_start", fn: "coleta", plate: "SHOT1", total: tot(5), read: tot(0) },
+      { id: id(), at: Date.now() - 1000, type: "progress", fn: "coleta", plate: "SHOT1", read: tot(0), extra: { scan: { id: "shotabc123", code: "777", kind: "erro", ageMs: 10, error: msg } } },
+    ]);
+    expect(sent.json).toMatchObject({ accepted: 3 });
+    const errs = (await t.api("GET", "/v1/admin/ops/scan-errors?plate=SHOT1")).json.errors;
+    expect(errs[0]).toMatchObject({ code: "777", message: msg, shotId: expect.any(String) });
+    const img = await t.app.inject({ method: "GET", url: `/v1/admin/ops/shots/${errs[0].shotId}`, headers: { authorization: `Bearer ${t.adminToken}` } });
+    expect(img.statusCode).toBe(200);
+    expect(img.headers["content-type"]).toBe("image/jpeg");
+    expect(img.rawPayload.equals(jpeg)).toBe(true);
+    expect((await t.api("GET", "/v1/admin/ops/shots/00000000-0000-4000-8000-000000000000")).status).toBe(404);
   });
 
   it("limite de envios por coletor", async () => {

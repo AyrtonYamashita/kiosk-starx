@@ -8,7 +8,8 @@ import type { Config } from "../config.js";
 import { newToken, sha256 } from "../crypto.js";
 import { asSystem, setTenant, type Db } from "../db.js";
 import { authDevice } from "../deviceAuth.js";
-import { certChecksum, readPending, readRelease, writeJsonAtomic, type Release } from "../release.js";
+import { certChecksum, type Release } from "../release.js";
+import { addKioskVersion, cancelSchedule, clearPilot, discardKioskVersion, kioskAll, kioskNewest, publish, releasesView, RolloutError, schedule } from "../rollout.js";
 import { requirePlatform, tenantOf } from "../tenant.js";
 
 const KIOSK_PACKAGE = "com.pstarx.kiosk";
@@ -176,38 +177,108 @@ export async function kioskReleaseRoutes(app: FastifyInstance, opts: { db: Db; c
         [t],
       ))
     ).rows;
-    const pendingFile = path.join(config.apkDir, "pending.json");
-    const uploadedBy = fs.existsSync(pendingFile) ? (JSON.parse(fs.readFileSync(pendingFile, "utf8")).uploadedBy ?? null) : null;
+    const release = await kioskAll(db);
+    const newest = await kioskNewest(db);
+    const pending = newest && (!release || newest.versionCode > release.versionCode) ? newest : null;
+    const by = pending
+      ? ((await asSystem(() => db.query<{ uploaded_by: string | null }>("SELECT uploaded_by FROM kiosk_versions WHERE version_code = $1", [pending.versionCode]))).rows[0]?.uploaded_by ?? null)
+      : null;
     return {
-      release: readRelease(config.apkDir),
-      pending: readPending(config.apkDir),
-      pendingUploadedBy: uploadedBy,
+      release,
+      pending,
+      pendingUploadedBy: by,
       autoUpdate: config.autoUpdateApp,
       maxApkMb: config.maxApkMb,
       devices: versions.map((v) => ({ versionName: v.version_name, versionCode: v.version_code, devices: v.devices })),
     };
   });
 
-  /** Publica a versão pendente: vira o release.json (QR e atualização automática dos aparelhos). */
+  /** Publica para todos, agora, a versão enviada mais nova (atalho antigo; o painel usa /v1/admin/releases). */
   app.post("/v1/admin/kiosk-release/publish", { preHandler: requirePlatform }, async (req, reply) => {
-    const pending = readPending(config.apkDir);
-    if (!pending) return reply.code(404).send({ error: "no_pending", message: "nenhuma versão pendente" });
-    const current = readRelease(config.apkDir);
-    if (current && pending.versionCode <= current.versionCode) {
-      return reply.code(409).send({ error: "not_newer", message: "a versão pendente não é mais nova que a publicada" });
+    const release = await kioskAll(db);
+    const newest = await kioskNewest(db);
+    if (!newest || (release && newest.versionCode <= release.versionCode)) return reply.code(404).send({ error: "no_pending", message: "nenhuma versão pendente" });
+    try {
+      await publish(db, config.apkDir, "kiosk", "all", String(newest.versionCode), req.admin!.username);
+    } catch (e) {
+      if (e instanceof RolloutError) return reply.code(e.status).send({ error: e.code, message: e.message });
+      throw e;
     }
-    const { uploadedBy: _ignored, ...release } = JSON.parse(fs.readFileSync(path.join(config.apkDir, "pending.json"), "utf8"));
-    writeJsonAtomic(path.join(config.apkDir, "release.json"), release);
-    fs.rmSync(path.join(config.apkDir, "pending.json"), { force: true });
-    req.log.info({ versionCode: pending.versionCode, by: req.admin!.username }, "app do kiosk publicado");
-    return { release: readRelease(config.apkDir) };
+    req.log.info({ versionCode: newest.versionCode, by: req.admin!.username }, "app do kiosk publicado");
+    return { release: await kioskAll(db) };
   });
 
   app.delete("/v1/admin/kiosk-release/pending", { preHandler: requirePlatform }, async (req, reply) => {
-    const pending = readPending(config.apkDir);
-    if (!pending) return reply.code(404).send({ error: "no_pending" });
-    if (pending.file !== readRelease(config.apkDir)?.file) fs.rmSync(path.join(config.apkDir, pending.file), { force: true });
-    fs.rmSync(path.join(config.apkDir, "pending.json"), { force: true });
+    const release = await kioskAll(db);
+    const newest = await kioskNewest(db);
+    if (!newest || (release && newest.versionCode <= release.versionCode)) return reply.code(404).send({ error: "no_pending" });
+    try {
+      await discardKioskVersion(db, config.apkDir, newest.versionCode);
+    } catch (e) {
+      if (e instanceof RolloutError) return reply.code(e.status).send({ error: e.code, message: e.message });
+      throw e;
+    }
+    return { ok: true };
+  });
+
+  // ---------------------------------------------------------------- pilotos, todos e agendamentos (app e leitor)
+
+  /** O que a página de apps mostra: versões, o que pilotos e todos recebem, agendamentos e os coletores. */
+  app.get("/v1/admin/releases", async (req) => releasesView(db, req.admin!.tenantId));
+
+  const Publish = z
+    .object({
+      kind: z.enum(["kiosk", "reader"]),
+      channel: z.enum(["pilot", "all"]),
+      ref: z.string().trim().min(1).max(80),
+      // sem hora: agora
+      at: z.iso.datetime({ offset: true }).optional(),
+    })
+    .strict();
+
+  app.post("/v1/admin/releases/publish", { preHandler: requirePlatform }, async (req, reply) => {
+    const b = Publish.safeParse(req.body);
+    if (!b.success) return reply.code(400).send({ error: "invalid_body", message: "pedido inválido" });
+    const { kind, channel, ref, at } = b.data;
+    const by = req.admin!.username;
+    try {
+      if (at) {
+        const id = await schedule(db, kind, channel, ref, new Date(at), by);
+        req.log.info({ kind, channel, ref, at, by }, "publicação agendada");
+        return { scheduled: id };
+      }
+      await publish(db, config.apkDir, kind, channel, ref, by);
+    } catch (e) {
+      if (e instanceof RolloutError) return reply.code(e.status).send({ error: e.code, message: e.message });
+      throw e;
+    }
+    req.log.info({ kind, channel, ref, by }, "publicado");
+    return { ok: true };
+  });
+
+  /** Os pilotos voltam à versão de todos (teste abandonado). */
+  app.delete("/v1/admin/releases/pilot/:kind", { preHandler: requirePlatform }, async (req, reply) => {
+    const kind = z.enum(["kiosk", "reader"]).safeParse((req.params as { kind: string }).kind);
+    if (!kind.success) return reply.code(404).send({ error: "not_found" });
+    await clearPilot(db, kind.data);
+    return { ok: true };
+  });
+
+  app.delete("/v1/admin/releases/schedules/:id", { preHandler: requirePlatform }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    if (!z.uuid().safeParse(id).success || !(await cancelSchedule(db, id))) return reply.code(404).send({ error: "not_found", message: "agendamento não encontrado ou já aplicado" });
+    return { ok: true };
+  });
+
+  app.delete("/v1/admin/releases/kiosk/:code", { preHandler: requirePlatform }, async (req, reply) => {
+    const code = Number((req.params as { code: string }).code);
+    if (!Number.isInteger(code) || code <= 0) return reply.code(404).send({ error: "not_found" });
+    try {
+      await discardKioskVersion(db, config.apkDir, code);
+    } catch (e) {
+      if (e instanceof RolloutError) return reply.code(e.status).send({ error: e.code, message: e.message });
+      throw e;
+    }
     return { ok: true };
   });
 
@@ -271,7 +342,7 @@ export async function uploadRoutes(app: FastifyInstance, opts: { db: Db; config:
   }
 
   /**
-   * Versão nova do próprio app do kiosk. Fica pendente (pending.json) até "Publicar" no painel. Exige o mesmo
+   * Versão nova do próprio app do kiosk. Fica aguardando publicação (pilotos ou todos) no painel. Exige o mesmo
    * certificado da versão publicada (senão os aparelhos recusam a atualização) e versionCode maior.
    */
   app.post("/v1/upload/kiosk-apk", { bodyLimit }, async (req, reply) => {
@@ -292,7 +363,8 @@ export async function uploadRoutes(app: FastifyInstance, opts: { db: Db; config:
       return reply.code(400).send({ error: "not_kiosk", message: `este APK é ${apk.packageName}, não o StarX Kiosk (${KIOSK_PACKAGE}). Apps comuns vão no repositório abaixo.` });
     }
     const checksum = certChecksum(apk.signingCertSha256);
-    const current = readRelease(config.apkDir);
+    // comparada com a mais nova já enviada (publicada ou não)
+    const current = await kioskNewest(db);
     if (current && current.signatureChecksum !== checksum) {
       return reply.code(409).send({
         error: "signature_mismatch",
@@ -300,7 +372,7 @@ export async function uploadRoutes(app: FastifyInstance, opts: { db: Db; config:
       });
     }
     if (current && apk.versionCode <= current.versionCode) {
-      return reply.code(409).send({ error: "not_newer", message: `a versão publicada já é ${current.versionName} (${current.versionCode}): aumente o versionCode` });
+      return reply.code(409).send({ error: "not_newer", message: `já existe a ${current.versionName} (${current.versionCode}): aumente o versionCode` });
     }
     const file = `starx-kiosk-${apk.versionCode}.apk`;
     const sha = crypto.createHash("sha256").update(buf).digest("hex");
@@ -315,14 +387,12 @@ export async function uploadRoutes(app: FastifyInstance, opts: { db: Db; config:
       builtAt: new Date().toISOString(),
     };
     fs.mkdirSync(config.apkDir, { recursive: true });
-    // descarta um pendente anterior (outro arquivo)
-    const old = readPending(config.apkDir);
-    if (old && old.file !== file && old.file !== current?.file) fs.rmSync(path.join(config.apkDir, old.file), { force: true });
     const dest = path.join(config.apkDir, file);
     fs.writeFileSync(`${dest}.tmp`, buf);
     fs.renameSync(`${dest}.tmp`, dest);
-    writeJsonAtomic(path.join(config.apkDir, "pending.json"), { ...pending, uploadedBy: t.username });
-    req.log.info({ versionCode: apk.versionCode, by: t.username }, "APK do kiosk enviado (pendente)");
+    const notes = apk.releaseNotes;
+    await addKioskVersion(db, { ...pending, notes: notes?.notes ?? [], reversible: notes?.reversible ?? null, reversibleNote: notes?.reversibleNote ?? null, uploadedBy: t.username });
+    req.log.info({ versionCode: apk.versionCode, by: t.username }, "APK do kiosk enviado (aguardando publicação)");
     return { pending };
   });
 

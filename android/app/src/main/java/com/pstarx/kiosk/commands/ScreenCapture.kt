@@ -44,17 +44,29 @@ object ScreenCapture {
         override fun onActivityDestroyed(activity: Activity) = Unit
     }
 
-    /** Bloqueante (fila de comandos). */
-    fun captureAndUpload(ctx: Context, commandId: String): Commands.Outcome {
-        val activity = resumed?.get()
-            ?: return Commands.Outcome(false, "a tela atual não é do StarX Kiosk (app de terceiros na frente ou tela desligada): só dá para capturar a tela do kiosk")
-        val bitmap = capture(activity) ?: return Commands.Outcome(false, "o Android não entregou a imagem da tela")
+    /** Imagem JPEG da tela do kiosk. */
+    class Shot(val jpeg: ByteArray, val width: Int, val height: Int)
+
+    /** A activity deste app na frente agora (null: outro app na frente ou tela desligada). */
+    fun foreground(): Activity? = resumed?.get()
+
+    /** Captura a tela deste app em JPEG. Bloqueante: fora da thread principal. null se não deu. */
+    fun jpeg(activity: Activity): Shot? {
+        val bitmap = capture(activity) ?: return null
         val jpeg = ByteArrayOutputStream().use { out ->
             bitmap.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out)
             out.toByteArray()
         }
-        val (w, h) = bitmap.width to bitmap.height
-        bitmap.recycle()
+        return Shot(jpeg, bitmap.width, bitmap.height).also { bitmap.recycle() }
+    }
+
+    /** Bloqueante (fila de comandos). */
+    fun captureAndUpload(ctx: Context, commandId: String): Commands.Outcome {
+        val activity = resumed?.get()
+            ?: return Commands.Outcome(false, "a tela atual não é do StarX Kiosk (app de terceiros na frente ou tela desligada): só dá para capturar a tela do kiosk")
+        val shot = jpeg(activity) ?: return Commands.Outcome(false, "o Android não entregou a imagem da tela")
+        val jpeg = shot.jpeg
+        val (w, h) = shot.width to shot.height
         val s = PanelStore.get(ctx).state
         val url = s.serverUrl ?: return Commands.Outcome(false, "sem painel")
         val conn = URL("$url/v1/device/screenshots?commandId=$commandId&width=$w&height=$h").openConnection() as HttpURLConnection

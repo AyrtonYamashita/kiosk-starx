@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { api, type KioskRelease as KR, type Me, type RepoApp } from "@/lib/api";
+import { api, type KioskRelease as KR, type Me, type Releases, type RepoApp } from "@/lib/api";
 import { bytes, dateTime } from "@/lib/format";
 import { DeleteApp, DeleteVersion, RenameApp } from "./AppForms";
-import { KioskRelease } from "./KioskRelease";
+import { KioskVersions, PilotDevices, ReaderVersions } from "./Releases";
 import { UploadApk } from "./UploadApk";
 
 export const dynamic = "force-dynamic";
@@ -11,23 +11,55 @@ export default async function AppsPage() {
   const me = await api<Me>("/v1/admin/me");
   // usuário da plataforma: só o app do kiosk (o repositório de apps é de cada empresa)
   if (!me.tenant) {
-    const kiosk = await api<KR>("/v1/admin/kiosk-release");
+    const [kiosk, releases] = await Promise.all([api<KR>("/v1/admin/kiosk-release"), api<Releases>("/v1/admin/releases")]);
     return (
       <div className="stack">
-        <h1>App do kiosk</h1>
+        <h1>Versões</h1>
         <p className="muted" style={{ margin: 0 }}>
-          Conta da plataforma: o mesmo app vale para todas as empresas. Para ver uma empresa, entre nela em <Link href="/platform">Empresas</Link>.
+          Conta da plataforma: o app do kiosk e o leitor do SSW valem para todas as empresas. Para ver uma empresa, entre nela em <Link href="/platform">Empresas</Link>.
         </p>
-        <section className="card stack">
-          <h2>App do kiosk (StarX Kiosk)</h2>
-          <KioskRelease data={kiosk} canPublish={me.platform} />
-        </section>
+
+      <div className="card release-how">
+        <ol>
+          <li>
+            <strong>Enviar</strong>
+            <span className="muted small">o APK fica no servidor; nenhum coletor recebe</span>
+          </li>
+          <li>
+            <strong>Pilotos</strong>
+            <span className="muted small">só os coletores marcados como piloto recebem, em produção</span>
+          </li>
+          <li>
+            <strong>Todos</strong>
+            <span className="muted small">todos recebem; o teste acaba</span>
+          </li>
+        </ol>
+        <span className="muted small">
+          Cada passo pode ser agora ou agendado. Um coletor com carga aberta só recebe (e só recarrega a página) quando ela fechar.
+        </span>
+      </div>
+
+      <section className="card stack">
+        <h2>App do kiosk (StarX Kiosk)</h2>
+        <KioskVersions data={releases} canPublish={me.platform} maxApkMb={kiosk.maxApkMb} autoUpdate={kiosk.autoUpdate} />
+      </section>
+
+      <section className="card stack">
+        <h2>Leitor do SSW</h2>
+        <ReaderVersions data={releases} canPublish={me.platform} />
+      </section>
+
+      <section className="card stack">
+        <h2>Coletores piloto</h2>
+        <PilotDevices data={releases} />
+      </section>
       </div>
     );
   }
-  const [{ apps, maxApkMb }, kiosk] = await Promise.all([
+  const [{ apps, maxApkMb }, kiosk, releases] = await Promise.all([
     api<{ apps: RepoApp[]; maxApkMb: number }>("/v1/admin/apps"),
     api<KR>("/v1/admin/kiosk-release"),
+    api<Releases>("/v1/admin/releases"),
   ]);
   return (
     <div className="stack">
@@ -37,11 +69,42 @@ export default async function AppsPage() {
         instale avulso pela página do aparelho.
       </p>
 
+<div className="card release-how">
+        <ol>
+          <li>
+            <strong>Enviar</strong>
+            <span className="muted small">o APK fica no servidor; nenhum coletor recebe</span>
+          </li>
+          <li>
+            <strong>Pilotos</strong>
+            <span className="muted small">só os coletores marcados como piloto recebem, em produção</span>
+          </li>
+          <li>
+            <strong>Todos</strong>
+            <span className="muted small">todos recebem; o teste acaba</span>
+          </li>
+        </ol>
+        <span className="muted small">
+          Cada passo pode ser agora ou agendado. Um coletor com carga aberta só recebe (e só recarrega a página) quando ela fechar.
+        </span>
+      </div>
+
       <section className="card stack">
         <h2>App do kiosk (StarX Kiosk)</h2>
-        <KioskRelease data={kiosk} canPublish={me.platform} />
+        <KioskVersions data={releases} canPublish={me.platform} maxApkMb={kiosk.maxApkMb} autoUpdate={kiosk.autoUpdate} />
       </section>
 
+      <section className="card stack">
+        <h2>Leitor do SSW</h2>
+        <ReaderVersions data={releases} canPublish={me.platform} />
+      </section>
+
+      <section className="card stack">
+        <h2>Coletores piloto</h2>
+        <PilotDevices data={releases} />
+      </section>
+
+      <h2 style={{ margin: "8px 0 0" }}>Repositório de apps da empresa</h2>
       <section className="card stack">
         <h2>Enviar APK ao repositório</h2>
         <UploadApk maxApkMb={maxApkMb} />

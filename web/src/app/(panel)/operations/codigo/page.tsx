@@ -74,6 +74,11 @@ export default async function CodeSearchPage({ searchParams }: { searchParams: P
                         <td>
                           <span className={`badge ${cls}`}>{label}</span>
                           {r.error && <div className="small">{r.error}</div>}
+                          {r.shotId && (
+                        <a href={`/scan-shots/${r.shotId}`} target="_blank" rel="noopener" className="shot-link small">
+                          ver print
+                        </a>
+                      )}
                         </td>
                         <td>
                           {o ? (

@@ -4,7 +4,7 @@ import { AutoRefresh } from "@/components/AutoRefresh";
 import { LiquidGlassDefs } from "@/components/brand/LiquidGlass";
 import { api, ApiError, type CatalogApp, type Command, type DeviceDetail, type Profile, type RepoApp, type Screenshot } from "@/lib/api";
 import { ago, bytes, dateTime, defaultDeviceName, kioskModeLabel, networkLabel, uptime } from "@/lib/format";
-import { DeleteDevice, EditableName, OpsReaderToggle } from "./DeviceForms";
+import { DeleteDevice, EditableName, PilotToggle } from "./DeviceForms";
 import { MoreInfo } from "./MoreInfo";
 import { AppsTable } from "./AppsTable";
 import { AppForms, CommandButtons, ManagedAppsStatus } from "./DeviceCommands";
@@ -67,15 +67,22 @@ export default async function DevicePage({ params }: { params: Promise<{ id: str
     },
     {
       value: "ssw",
-      label: "Leitura SSW",
+      label: "SSW e piloto",
       content: (
-        <div className="stack" style={{ gap: 10 }}>
-          <span className="muted small">
-            Ligada, o app lê a tela do SSW neste coletor (quem está logado, a descarga e as bipagens) e manda para o{" "}
-            <Link href={d.opsReader ? `/operations/${d.id}` : "/operations"}>Acompanhamento</Link>. Só observa: não clica nem digita nada. Sem escolha
-            aqui, vale a chave geral, no fim da página de Aparelhos.
-          </span>
-          <OpsReaderToggle id={d.id} on={d.opsReader} choice={d.opsReaderChoice} all={d.opsReaderAll} appVersionCode={d.appVersionCode} />
+        <div className="stack" style={{ gap: 14 }}>
+          <div className="stack" style={{ gap: 6 }}>
+            <div className="row">
+              <strong className="small">Leitura do SSW</strong>
+              <span className="badge ok">
+                <span className="dot" /> sempre ligada
+              </span>
+            </div>
+            <span className="muted small">
+              Obrigatória em todos os coletores: o app lê a tela do SSW (quem está logado, a carga e as bipagens) e manda para o{" "}
+              <Link href={`/operations/${d.id}`}>Acompanhamento</Link>.
+            </span>
+          </div>
+          <PilotToggle id={d.id} pilot={d.pilot} />
         </div>
       ),
     },

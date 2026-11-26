@@ -13,6 +13,29 @@ export interface ApkInfo {
   /** SHA-256 (hex) do certificado de assinatura (DER) do primeiro signatário. */
   signingCertSha256: string;
   signatureScheme: 'v2' | 'v3' | 'v1';
+  /** Notas da versão que o build põe no APK (assets/release-notes.json); null se não houver ou estiver ilegível. */
+  releaseNotes: ReleaseNotes | null;
+}
+
+/** O que a versão muda e se dá para voltar à anterior (escrito no build, lido ao enviar o APK). */
+export interface ReleaseNotes {
+  notes: string[];
+  reversible: boolean | null;
+  reversibleNote: string | null;
+}
+
+function parseNotes(raw: Buffer): ReleaseNotes | null {
+  try {
+    const j = JSON.parse(raw.toString('utf8')) as { notes?: unknown; reversible?: unknown; reversibleNote?: unknown };
+    const notes = Array.isArray(j.notes) ? j.notes.filter((n): n is string => typeof n === 'string' && n.trim() !== '').map((n) => n.trim().slice(0, 300)).slice(0, 30) : [];
+    return {
+      notes,
+      reversible: typeof j.reversible === 'boolean' ? j.reversible : null,
+      reversibleNote: typeof j.reversibleNote === 'string' && j.reversibleNote.trim() ? j.reversibleNote.trim().slice(0, 500) : null,
+    };
+  } catch {
+    return null;
+  }
 }
 
 export class ApkError extends Error {}
@@ -282,5 +305,14 @@ export function parseApk(buf: Buffer): ApkInfo {
     minSdk: m.minSdk,
     signingCertSha256: createHash('sha256').update(cert).digest('hex'),
     signatureScheme: scheme,
+    releaseNotes: (() => {
+      const e = zip.entries.get('assets/release-notes.json');
+      if (!e || e.size > 64 * 1024) return null;
+      try {
+        return parseNotes(readEntry(buf, e));
+      } catch {
+        return null;
+      }
+    })(),
   };
 }

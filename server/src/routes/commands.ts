@@ -200,4 +200,24 @@ export async function deviceScreenshotRoutes(app: FastifyInstance, opts: { db: D
     );
     return { id: r.rows[0].id };
   });
+
+  /**
+   * Captura da tela com o alerta de erro grave na bipagem (app 0.5.6+), ligada à bipagem pelo id que o app deu a ela
+   * (o registro em ops_scans pode chegar antes ou depois). Uma por bipagem: a repetida é ignorada.
+   */
+  app.post("/v1/device/ops/shots", { bodyLimit: 1024 * 1024 }, async (req, reply) => {
+    const device = await authDevice(db, req);
+    if (!device) return reply.code(401).send({ error: "unauthorized" });
+    const buf = req.body;
+    if (!Buffer.isBuffer(buf) || buf.length < 100) return reply.code(400).send({ error: "invalid_body" });
+    const q = req.query as { scan?: string; width?: string; height?: string };
+    if (!q.scan || !/^[a-z0-9]{6,40}$/.test(q.scan)) return reply.code(400).send({ error: "invalid_scan" });
+    const dim = (v?: string) => (Number.isInteger(Number(v)) && Number(v) > 0 && Number(v) < 10_000 ? Number(v) : null);
+    const r = await db.query(
+      `INSERT INTO ops_scan_shots (tenant_id, device_id, scan_id, mime, width, height, data) VALUES ($1, $2, $3, 'image/jpeg', $4, $5, $6)
+       ON CONFLICT (device_id, scan_id) DO NOTHING RETURNING id`,
+      [device.tenant_id, device.id, q.scan, dim(q.width), dim(q.height), buf],
+    );
+    return { ok: true, stored: (r.rowCount ?? 0) > 0 };
+  });
 }

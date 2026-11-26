@@ -206,10 +206,12 @@ describe("repositório de apps", () => {
   it("app do kiosk se atualiza quando há versão publicada mais nova", async () => {
     const apk = Buffer.from("apk do kiosk");
     fs.writeFileSync(path.join(t.apkDir, "starx-kiosk-9.apk"), apk);
-    fs.writeFileSync(
-      path.join(t.apkDir, "release.json"),
-      JSON.stringify({ packageName: "com.pstarx.kiosk", versionCode: 9, versionName: "0.9.0", file: "starx-kiosk-9.apk", sizeBytes: apk.length, sha256: "ab".repeat(32), signatureChecksum: "x", builtAt: "2026-11-14T00:00:00Z" }),
+    // versão 9 publicada para todos
+    await t.db.query(
+      "INSERT INTO kiosk_versions (version_code, version_name, file, sha256, size_bytes, signature_checksum) VALUES (9, '0.9.0', 'starx-kiosk-9.apk', $1, $2, 'x')",
+      ["ab".repeat(32), apk.length],
     );
+    await t.db.query("INSERT INTO release_channels (kind, channel, ref) VALUES ('kiosk', 'all', '9') ON CONFLICT (kind, channel) DO UPDATE SET ref = '9'");
     const old = await checkin({ appVersionCode: 5 });
     expect(old.json.apps.find((a: { packageName: string }) => a.packageName === "com.pstarx.kiosk")).toMatchObject({ versionCode: 9, url: "/apks/starx-kiosk-9.apk" });
     const current = await checkin({ appVersionCode: 9 });

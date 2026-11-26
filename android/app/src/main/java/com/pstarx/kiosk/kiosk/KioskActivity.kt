@@ -68,7 +68,21 @@ class KioskActivity : Activity() {
     /** Piloto da leitura do SSW ligado/desligado no painel: liga ou para o leitor sem recarregar o site. */
     private val onPanelChange: () -> Unit = { applyOps() }
     /** Leitor novo entregue pela API: substitui o que está na página aberta (o leitor troca a versão antiga sozinho). */
-    private val onReaderChange: () -> Unit = { webView?.let { injectReader(it) } }
+    /** Leitor novo da API: entra na página aberta, mas só depois da carga aberta terminar (não muda nada no meio dela). */
+    private val onReaderChange: () -> Unit = { if (OpsReader.isBusy()) readerPending = true else webView?.let { injectReader(it) } }
+    private var readerPending = false
+    /** Mudança que recarregaria a página (configuração nova, "recarregar" do painel) esperando a carga aberta terminar. */
+    private var refreshPending = false
+    private val onBusyEnd: () -> Unit = {
+        if (refreshPending) {
+            refreshPending = false
+            if (resumed) refresh()
+        }
+        if (readerPending) {
+            readerPending = false
+            webView?.let { injectReader(it) }
+        }
+    }
     /** Endereço da página principal (lido pela ponte do leitor, fora da thread principal). */
     @Volatile private var pageUrl: String? = null
 
@@ -92,6 +106,7 @@ class KioskActivity : Activity() {
         kiosk.addListener(onChange)
         PanelStore.get(this).addListener(onPanelChange)
         OpsReader.onScriptChanged = onReaderChange
+        OpsReader.onBusyEnd = onBusyEnd
         IdleAlarmReceiver.onFire = onIdleAlarm
     }
 
@@ -100,6 +115,7 @@ class KioskActivity : Activity() {
         kiosk.removeListener(onChange)
         PanelStore.get(this).removeListener(onPanelChange)
         if (OpsReader.onScriptChanged === onReaderChange) OpsReader.onScriptChanged = null
+        if (OpsReader.onBusyEnd === onBusyEnd) OpsReader.onBusyEnd = null
         if (IdleAlarmReceiver.onFire === onIdleAlarm) IdleAlarmReceiver.onFire = null
         IdleAlarmReceiver.cancel(this)
         OpsReader.stop()
@@ -348,6 +364,12 @@ class KioskActivity : Activity() {
         // redesenha só se algo visível mudou (evita recarregar o site a cada aviso)
         val key = listOf(config.kiosk, config.appearance, config.security.exitCorner, config.security.exitTaps, appsVersion, kiosk.reloadNonce, systemBarsHidden).toString()
         if (key == renderedKey) return
+        // carga aberta no site: redesenhar recarregaria a página e tiraria o colaborador da bipagem; espera ela terminar
+        if (webView != null && previousMode == KioskConfig.Mode.WEB && OpsReader.isBusy()) {
+            refreshPending = true
+            return
+        }
+        refreshPending = false
         renderedKey = key
         root.removeAllViews()
         gate?.stop()
@@ -536,6 +558,13 @@ class KioskActivity : Activity() {
                 // só http(s) dentro do kiosk: tel:, intent:, market: etc. abririam outros apps
                 val scheme = request.url.scheme?.lowercase()
                 return scheme != "http" && scheme != "https"
+            }
+
+            // fontes das telas do kiosk por cima do SSW (alerta, confirmação), servidas do APK: nada sai para a rede
+            override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): android.webkit.WebResourceResponse? {
+                val u = request.url
+                if (u.path?.startsWith(KioskFonts.PATH) != true || !OpsReader.isSswUrl(u.toString())) return null
+                return KioskFonts.response(applicationContext, u.lastPathSegment)
             }
 
             override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {

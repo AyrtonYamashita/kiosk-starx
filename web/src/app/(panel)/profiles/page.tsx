@@ -1,8 +1,7 @@
 import Link from "next/link";
-import { api, type Me, type OpsSettings, type Profile } from "@/lib/api";
+import { api, type Profile } from "@/lib/api";
 import { dateTime, kioskModeLabel } from "@/lib/format";
 import type { Json } from "@/lib/api";
-import { ReaderAll } from "./ReaderAll";
 
 export const dynamic = "force-dynamic";
 
@@ -16,11 +15,7 @@ function summary(c: Record<string, Json>): string {
 }
 
 export default async function ProfilesPage() {
-  const [{ profiles }, settings, me] = await Promise.all([
-    api<{ profiles: Profile[] }>("/v1/admin/profiles"),
-    api<OpsSettings>("/v1/admin/ops/settings"),
-    api<Me>("/v1/admin/me"),
-  ]);
+  const { profiles } = await api<{ profiles: Profile[] }>("/v1/admin/profiles");
   return (
     <div className="stack">
       <div className="row">
@@ -33,14 +28,6 @@ export default async function ProfilesPage() {
       <div className="card small">
         Um <strong>perfil</strong> é a configuração do kiosk (modo, apps, site, PIN, restrições) aplicada a vários aparelhos. Ao salvar, os
         aparelhos do perfil recebem a configuração no próximo contato. Cada aparelho pode ter ajustes próprios por cima do perfil.
-      </div>
-      {/* chave geral da leitura do SSW (antes no cabeçalho de Aparelhos); o ajuste por coletor fica no detalhe do aparelho */}
-      <div className="card stack" style={{ gap: 10 }}>
-        <ReaderAll settings={settings} canEdit={me.role === "admin"} />
-        <span className="muted small">
-          Lendo em {settings.devices.reading} de {settings.devices.total} coletores. &quot;Todos&quot; liga a leitura em todos os coletores (menos os
-          desligados um a um); &quot;Pilotos&quot; lê só nos coletores ligados um a um no detalhe do aparelho.
-        </span>
       </div>
       {profiles.length === 0 ? (
         <div className="card">Nenhum perfil ainda.</div>

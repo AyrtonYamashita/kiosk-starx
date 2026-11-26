@@ -21,9 +21,10 @@ export async function opsAdminRoutes(app: FastifyInstance, opts: { db: Db; confi
     if (code.length < 3 || code.length > 80) return reply.code(400).send({ error: "invalid_code", message: "Digite pelo menos 3 caracteres do código." });
     const prefix = code.replace(/[\\%_]/g, (c) => "\\" + c) + "%";
     const r = await db.query(
-      `SELECT s.at, s.code, s.kind, s.read_qty, s.error, d.id AS device_id, d.name AS device_name,
+      `SELECT s.at, s.code, s.kind, s.read_qty, s.error, sh.id AS shot_id, d.id AS device_id, d.name AS device_name,
               o.id AS op_id, o.fn, o.plate, o.ssw_user, o.branch, o.started_at, o.ended_at, o.end_reason
        FROM ops_scans s JOIN devices d ON d.id = s.device_id LEFT JOIN ops_operations o ON o.id = s.operation_id
+       LEFT JOIN ops_scan_shots sh ON sh.device_id = s.device_id AND sh.scan_id = s.scan_id
        WHERE s.tenant_id = $3 AND (s.code = $1 OR s.code LIKE $2)
        ORDER BY (s.code = $1) DESC, s.at DESC LIMIT 100`,
       [code, prefix, tenantOf(req)],
@@ -34,6 +35,7 @@ export async function opsAdminRoutes(app: FastifyInstance, opts: { db: Db; confi
         code: x.code,
         kind: x.kind,
         error: x.error,
+        shotId: x.shot_id ?? null,
         readQty: x.read_qty === null ? null : Number(x.read_qty),
         device: { id: x.device_id, name: x.device_name },
         operation: x.op_id
@@ -96,9 +98,9 @@ export async function opsAdminRoutes(app: FastifyInstance, opts: { db: Db; confi
     const FROM = "FROM ops_scans s JOIN devices d ON d.id = s.device_id LEFT JOIN ops_operations o ON o.id = s.operation_id";
     const [list, summary, users, devices] = await Promise.all([
       db.query(
-        `SELECT s.id, s.at, s.code, s.error, s.error_key, s.read_qty, d.id AS device_id, d.name AS device_name,
+        `SELECT s.id, s.at, s.code, s.error, s.error_key, s.read_qty, sh.id AS shot_id, d.id AS device_id, d.name AS device_name,
                 o.id AS op_id, o.fn, o.plate, o.real_plate, o.ssw_user, o.branch
-         ${FROM} WHERE ${where.join(" AND ")} ORDER BY s.at DESC, s.id DESC LIMIT 101`,
+         ${FROM} LEFT JOIN ops_scan_shots sh ON sh.device_id = s.device_id AND sh.scan_id = s.scan_id WHERE ${where.join(" AND ")} ORDER BY s.at DESC, s.id DESC LIMIT 101`,
         args,
       ),
       db.query<{ key: string; sample: string; n: number; last_at: Date }>(
@@ -120,6 +122,8 @@ export async function opsAdminRoutes(app: FastifyInstance, opts: { db: Db; confi
         code: x.code,
         message: x.error,
         type: x.error_key,
+        // captura da tela com o alerta (erros graves, app 0.5.6+)
+        shotId: x.shot_id ?? null,
         readQty: x.read_qty === null ? null : Number(x.read_qty),
         device: { id: x.device_id, name: x.device_name },
         operation: x.op_id
@@ -256,6 +260,17 @@ export async function opsAdminRoutes(app: FastifyInstance, opts: { db: Db; confi
     return { ok: true };
   });
 
+  /** Captura da tela com o alerta de erro (JPEG). */
+  app.get("/v1/admin/ops/shots/:id", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    if (!z.uuid().safeParse(id).success) return reply.code(404).send({ error: "not_found" });
+    const s = (await db.query("SELECT mime, data FROM ops_scan_shots WHERE id = $1 AND tenant_id = $2", [id, tenantOf(req)])).rows[0];
+    if (!s) return reply.code(404).send({ error: "not_found" });
+    reply.header("content-type", s.mime);
+    reply.header("cache-control", "private, max-age=86400");
+    return reply.send(s.data);
+  });
+
   app.get("/v1/admin/ops/cards", async (req) => ({ cards: await allCards(db, tenantOf(req)), serverTime: Date.now() }));
 
   app.post("/v1/admin/ops/stream-ticket", async (req) => ({
@@ -287,10 +302,11 @@ export async function opsAdminRoutes(app: FastifyInstance, opts: { db: Db; confi
     const codes = op
       ? (
           await db.query(
-            "SELECT at, code, kind, read_qty, error FROM ops_scans WHERE operation_id = $1 ORDER BY at DESC, id DESC LIMIT 1000",
+            `SELECT s.at, s.code, s.kind, s.read_qty, s.error, sh.id AS shot_id FROM ops_scans s LEFT JOIN ops_scan_shots sh ON sh.device_id = s.device_id AND sh.scan_id = s.scan_id
+             WHERE s.operation_id = $1 ORDER BY s.at DESC, s.id DESC LIMIT 1000`,
             [op.id],
           )
-        ).rows.map((r) => ({ at: r.at, code: r.code, kind: r.kind, error: r.error, readQty: r.read_qty === null ? null : Number(r.read_qty) }))
+        ).rows.map((r) => ({ at: r.at, code: r.code, kind: r.kind, error: r.error, shotId: r.shot_id ?? null, readQty: r.read_qty === null ? null : Number(r.read_qty) }))
       : [];
 
     const today = (

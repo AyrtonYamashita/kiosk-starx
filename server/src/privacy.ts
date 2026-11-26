@@ -135,6 +135,11 @@ type Q = { query: Db["query"] };
 async function scrub(c: Q, tenantId: string, sswUser: string) {
   const n = async (sql: string) => (await c.query(sql, [sswUser, tenantId])).rowCount ?? 0;
   return {
+    // capturas do alerta de erro mostram o usuário na imagem: saem (antes de a carga perder o nome, que as liga a ele)
+    shots: await n(
+      `DELETE FROM ops_scan_shots sh USING ops_scans s, ops_operations o
+       WHERE sh.device_id = s.device_id AND sh.scan_id = s.scan_id AND o.id = s.operation_id AND o.tenant_id = $2 AND o.ssw_user = $1`,
+    ),
     operations: await n("UPDATE ops_operations SET ssw_user = NULL, updated_at = now() WHERE tenant_id = $2 AND ssw_user = $1"),
     current: await n("UPDATE ops_device_state SET ssw_user = NULL, updated_at = now() WHERE tenant_id = $2 AND ssw_user = $1"),
     events: await n("UPDATE ops_events SET data = data - 'user' WHERE tenant_id = $2 AND type IN ('session', 'heartbeat') AND data->>'user' = $1"),

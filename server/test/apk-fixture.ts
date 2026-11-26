@@ -64,11 +64,12 @@ function manifest(packageName: string, versionCode: number, versionName: string,
   return Buffer.concat([u16(0x0003), u16(8), u32(8 + body.length), body]);
 }
 
-export function makeTestApk(opts: { packageName: string; versionCode: number; versionName?: string; minSdk?: number; cert?: string }): Buffer {
+export function makeTestApk(opts: { packageName: string; versionCode: number; versionName?: string; minSdk?: number; cert?: string; releaseNotes?: unknown }): Buffer {
   const files: [string, Buffer][] = [
     ['AndroidManifest.xml', manifest(opts.packageName, opts.versionCode, opts.versionName ?? `${opts.versionCode}.0`, opts.minSdk ?? 21)],
     ['classes.dex', Buffer.from(`dex ${opts.packageName} ${opts.versionCode}`)],
   ];
+  if (opts.releaseNotes !== undefined) files.push(['assets/release-notes.json', Buffer.from(JSON.stringify(opts.releaseNotes))]);
   const locals: Buffer[] = [];
   const centrals: Buffer[] = [];
   let offset = 0;

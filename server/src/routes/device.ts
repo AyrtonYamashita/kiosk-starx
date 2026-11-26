@@ -6,8 +6,7 @@ import { asSystem, setTenant, type Db } from "../db.js";
 import { authDevice } from "../deviceAuth.js";
 import { desiredConfig } from "../kioskConfig.js";
 import { OPS_READER_ON_SQL } from "../ops.js";
-import { readerScript } from "../reader.js";
-import { readRelease } from "../release.js";
+import { kioskFor, readerFor } from "../rollout.js";
 import { latestArtifacts, type Artifact } from "./apps.js";
 import { CommandResult, commandsForDevice, recordResults } from "./commands.js";
 import type { Waker } from "../wake.js";
@@ -123,9 +122,10 @@ export async function deviceRoutes(app: FastifyInstance, opts: { db: Db; config:
    * Apps que o aparelho deve ter (versão mais nova do repositório) e o próprio app do kiosk, se houver versão
    * publicada mais nova. O aparelho instala o que estiver faltando ou mais velho; nunca rebaixa.
    */
-  async function managedArtifacts(tenantId: string, packages: string[], appVersionCode: number | null): Promise<Artifact[]> {
+  async function managedArtifacts(tenantId: string, packages: string[], appVersionCode: number | null, pilot: boolean): Promise<Artifact[]> {
     const list = await latestArtifacts(db, tenantId, packages.filter((p) => p !== KIOSK_PACKAGE));
-    const release = config.autoUpdateApp ? readRelease(config.apkDir) : null;
+    // a versão do grupo do coletor: pilotos recebem a dos pilotos (se houver), os demais a de todos
+    const release = config.autoUpdateApp ? await kioskFor(db, pilot) : null;
     if (release && appVersionCode !== null && release.versionCode > appVersionCode) {
       list.push({
         packageName: release.packageName,
@@ -296,7 +296,7 @@ export async function deviceRoutes(app: FastifyInstance, opts: { db: Db; config:
     // configuração do painel: vai só quando o aparelho ainda não aplicou a versão atual
     const row = (
       await db.query(
-        `SELECT p.config AS profile_config, p.managed_apps, d.config_overrides, d.config_nonce, d.failed_hash, d.applied_hash, d.app_version_code, ${OPS_READER_ON_SQL} AS ops_reader_on
+        `SELECT p.config AS profile_config, p.managed_apps, d.config_overrides, d.config_nonce, d.failed_hash, d.applied_hash, d.app_version_code, d.pilot, ${OPS_READER_ON_SQL} AS ops_reader_on
          FROM devices d LEFT JOIN profiles p ON p.id = d.profile_id WHERE d.id = $1`,
         [device.id],
       )
@@ -309,7 +309,7 @@ export async function deviceRoutes(app: FastifyInstance, opts: { db: Db; config:
       desired: sendDesired ? { hash: desired.hash, config: desired.config } : null,
       commands: await commandsForDevice(db, device.id),
       ackResults: (b.commandResults ?? []).map((r) => r.id),
-      apps: await managedArtifacts(device.tenant_id, (row.managed_apps as string[] | null) ?? [], row.app_version_code),
+      apps: await managedArtifacts(device.tenant_id, (row.managed_apps as string[] | null) ?? [], row.app_version_code, row.pilot === true),
       serverTime: new Date().toISOString(),
       name,
       checkinIntervalSec: config.checkinIntervalSec,
@@ -318,8 +318,8 @@ export async function deviceRoutes(app: FastifyInstance, opts: { db: Db; config:
       // leitura do SSW: o app só lê a tela e manda eventos quando ligada (no coletor ou pela chave geral)
       opsReader: row.ops_reader_on === true,
       // leitor do SSW: o app baixa em /v1/device/reader quando o sha256 muda
-      reader: (() => {
-        const r = readerScript();
+      reader: await (async () => {
+        const r = await readerFor(db, row.pilot === true);
         return r ? { sha256: r.sha256 } : null;
       })(),
     };
@@ -329,7 +329,8 @@ export async function deviceRoutes(app: FastifyInstance, opts: { db: Db; config:
   app.get("/v1/device/reader", async (req, reply) => {
     const device = await authDevice(db, req);
     if (!device) return reply.code(401).send({ error: "unauthorized" });
-    const r = readerScript();
+    const pilot = (await db.query<{ pilot: boolean }>("SELECT pilot FROM devices WHERE id = $1", [device.id])).rows[0]?.pilot === true;
+    const r = await readerFor(db, pilot);
     if (!r) return reply.code(404).send({ error: "not_found" });
     return reply.header("content-type", "application/javascript; charset=utf-8").header("x-sha256", r.sha256).header("cache-control", "no-store").send(r.body);
   });

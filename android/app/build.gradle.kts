@@ -11,7 +11,7 @@ plugins {
 }
 
 val appVersionCode = 18
-val appVersionName = "0.5.7"
+val appVersionName = "0.5.6"
 
 // ---------------------------------------------------------------------------------------------
 // Assinatura de release: keystore FORA do repositório e do OneDrive, com backup próprio.

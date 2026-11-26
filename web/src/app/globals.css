@@ -868,3 +868,58 @@ label.check-hit { display: contents; }
   /* o mapa é um card no celular: a atribuição fica no canto dele (antes subia acima da barra de abas) */
   .device-map .maplibregl-ctrl-bottom-left { bottom: 0; }
 }
+
+/* ---------------------------------------------------------------- versões: enviar → pilotos → todos (página Apps) */
+@layer components {
+.release-how { display: flex; flex-direction: column; gap: 10px; }
+.release-how ol { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 0; padding: 0; list-style: none; counter-reset: step; }
+.release-how li {
+  counter-increment: step; display: flex; flex-direction: column; gap: 2px; padding: 10px 12px 10px 40px; position: relative;
+  border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--surface);
+}
+.release-how li::before {
+  content: counter(step); position: absolute; left: 12px; top: 10px; width: 20px; height: 20px; display: grid; place-items: center;
+  border-radius: var(--radius-chip); background: var(--blue-tint); border: 1px solid var(--blue-edge); color: var(--blue-deep);
+  font-family: var(--font-mono); font-size: 11px;
+}
+.release-channels { display: flex; flex-wrap: wrap; gap: 8px; }
+.release-channels > div {
+  flex: 1 1 200px; display: flex; flex-direction: column; gap: 2px; padding: 10px 12px;
+  border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--subtle);
+}
+.release-channels > div strong { font-size: 15px; line-height: 20px; }
+.release-channels > .release-channels-action { flex: 0 0 auto; justify-content: center; background: none; border-style: dashed; }
+.release-schedules { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.release-schedules li { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.release-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.release-item {
+  display: flex; flex-direction: column; gap: 8px; padding: 12px 14px;
+  border: 1px solid var(--line); border-left-width: 3px; border-radius: var(--radius-card); background: var(--surface);
+}
+.release-item.all { border-left-color: var(--good); }
+.release-item.pilot { border-left-color: var(--blue); }
+.release-item.sent { border-left-color: var(--muted); }
+.release-item.old { border-left-color: var(--line); opacity: .78; }
+.release-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.release-head > strong { font-size: 13px; }
+.release-notes { margin: 0; padding-left: 18px; font-size: 12px; line-height: 18px; color: var(--mid); }
+.release-reversible { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.release-actions { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px; padding-top: 10px; border-top: 1px solid var(--rule); }
+.release-publish { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.release-publish .segmented label {
+  display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; border-radius: 3px; color: var(--soft); cursor: pointer;
+}
+.release-publish .segmented label:has(input:checked) { background: var(--surface); color: var(--ink); }
+.release-publish .segmented input { margin: 0; accent-color: var(--blue); }
+.release-publish input[type="datetime-local"] {
+  height: var(--control); padding: 0 10px; border: 1px solid var(--field-line); border-radius: var(--radius-field);
+  background: var(--surface); color: var(--ink); font: inherit; font-size: 12.5px;
+}
+@media (max-width: 720px) {
+  .release-how ol { grid-template-columns: 1fr; }
+}
+}
+
+@layer components {
+.shot-link { display: inline-block; margin-left: 6px; font-weight: 500; }
+}

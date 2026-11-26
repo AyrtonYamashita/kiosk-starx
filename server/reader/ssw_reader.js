@@ -1,11 +1,13 @@
 // Leitor da tela do SSW (fase 2.4). Injetado pelo app do kiosk nas páginas do SSW quando a leitura está ligada.
-// Só LÊ a página: não clica, não digita, não muda nada. Manda um retrato da tela ao app (StarXOps.report) quando
+// LÊ a página: não digita e não muda o que o SSW mostra. Manda um retrato da tela ao app (StarXOps.report) quando
 // algo muda, e avisa os toques em Concluir/Interromper (StarXOps.action) sem interferir neles.
+// Exceções (app 0.5.6+): o alerta de tela cheia em erros graves de bipagem e a confirmação de Concluir/Interromper,
+// por cima da página (ver "telas do kiosk por cima do SSW"). Elas repassam ao SSW o mesmo toque que o colaborador daria.
 // Entregue pela API (GET /v1/device/reader) e embutido no APK como reserva: ajustes de mapeamento não precisam de app novo.
 (function () {
   "use strict";
   // muda a cada versão do leitor: uma versão nova substitui a antiga já injetada na página
-  var VERSION = "2026-11-24.1";
+  var VERSION = "2026-11-25.1";
   if (window.__starxOps) {
     if (window.__starxOps.version === VERSION) {
       window.__starxOps.scan(true);
@@ -180,21 +182,30 @@
     return cut(text(byId("error_body")), 300);
   }
   /** O SSW mostrou uma mensagem: completa a bipagem a que ela pertence. */
+  /** Devolve o id do registro que ficou com a mensagem (null: mensagem ignorada ou da mesma bipagem). */
   function onError(err, code, now) {
-    if (now - sc.actionAt < ACTION_QUIET_MS) return;
-    if (sc.pending) return finish(sc.pending, "erro", now, null, err);
+    if (now - sc.actionAt < ACTION_QUIET_MS) return null;
+    if (sc.pending) {
+      var id = sc.pending.id;
+      finish(sc.pending, "erro", now, null, err);
+      return id;
+    }
     var d = sc.done;
     if (d && now - sc.doneAt <= ERROR_LATE_MS) {
       // chegou depois do prazo de 1,5 s: o "não contou" vira erro (mesmo registro)
       if (!d.error && d.kind === "nao_contou") {
         sc.done = { id: d.id, code: d.code, kind: "erro", ageMs: Math.min(600000, d.ageMs + (now - sc.doneAt)), error: err };
         sc.doneAt = now;
+        return d.id;
       }
       // senão é continuação da mesma bipagem (ex.: resposta a um botão da janela): não vira outro registro
-      return;
+      return null;
     }
     // bipagem que escapou dos dois sinais (ex.: código repetido sem o Enter visto): fica com o código de #last
-    if (code) finish({ id: newId(), code: code, at: now }, "erro", now, null, err);
+    if (!code) return null;
+    var p = { id: newId(), code: code, at: now };
+    finish(p, "erro", now, null, err);
+    return p.id;
   }
   function trackScan(s) {
     var now = Date.now();
@@ -239,7 +250,10 @@
       // o mesmo código que acabou de ser enviado pelo Enter já tem registro
       if (!(code === sc.lastTyped && now - sc.lastTypedAt <= ERROR_LATE_MS)) startScan(code, now, now);
     }
-    if (err && err !== sc.err) onError(err, code, now);
+    if (err && err !== sc.err) {
+      var errId = onError(err, code, now);
+      if (errId) raise(errId, err, s, sc.done && sc.done.id === errId ? sc.done.code : code);
+    }
     sc.err = err;
     if (sc.pending && now - sc.pending.at > SCAN_WAIT_MS) finish(sc.pending, "nao_contou", now);
   }
@@ -256,6 +270,421 @@
     sc.typed = v;
     sc.typedAt = now;
     soon();
+  }
+
+  // ------------------------------------------------------------ telas do kiosk por cima do SSW (leitor 2026-11-25, app 0.5.6)
+  // Duas telas, só com o app que tem a ponte nova (StarXOps.alert, app 0.5.6+); nos apps anteriores nada muda:
+  //  - alerta de tela cheia em erros que pedem atenção na hora (ALERTS): vermelho, ícone, a mensagem com os dados em
+  //    negrito, quem/qual placa/hora. O app toca um alarme alto, vibra no máximo e tira uma captura da tela com o
+  //    alerta, guardada no registro do erro. Leituras ficam bloqueadas até o toque em "Entendi", que fecha também a
+  //    janela de erro do SSW;
+  //  - confirmação de Concluir/Interromper: o toque no botão do SSW fica retido; o botão de confirmar libera depois de
+  //    3 s e repassa o toque ao botão original (o SSW faz o mesmo de sempre).
+  // Visual: identidade do StarX Kiosk (tokens, raio 4 px, Space Grotesk/Inter/IBM Plex Mono servidas pelo app, sem
+  // internet: /__starx/fonts/ no próprio endereço do SSW).
+  var FONT_BASE = "/__starx/fonts/";
+  var FONTS =
+    '@font-face{font-family:"StarX Inter";src:url("' + FONT_BASE + 'inter.ttf") format("truetype");font-weight:100 900;font-display:block}' +
+    '@font-face{font-family:"StarX Grotesk";src:url("' + FONT_BASE + 'spacegrotesk.ttf") format("truetype");font-weight:300 700;font-display:block}' +
+    '@font-face{font-family:"StarX Mono";src:url("' + FONT_BASE + 'plexmono-regular.ttf") format("truetype");font-weight:400;font-display:block}' +
+    '@font-face{font-family:"StarX Mono";src:url("' + FONT_BASE + 'plexmono-medium.ttf") format("truetype");font-weight:500 900;font-display:block}';
+  /** As fontes ficam no documento (@font-face dentro de shadow DOM não vale no Chromium). */
+  function loadFonts() {
+    if (!bridge.alert || byId("starx-fonts")) return;
+    var st = document.createElement("style");
+    st.id = "starx-fonts";
+    st.textContent = FONTS;
+    (document.head || document.documentElement).appendChild(st);
+  }
+  var TOKENS =
+    ":host{all:initial;--surface:#FFFFFF;--line:#E2E8F0;--soft:#516074;--mid:#334155;--ink:#0A1A2F;" +
+    "--blue:#1560D4;--blue-deep:#0C4399;--blue-tint:#EEF4FD;--blue-edge:#DCE9FC;" +
+    "--good:#15803D;--good-tint:#ECFDF3;--warn:#B45309;--warn-tint:#FFF7E6;--warn-edge:#FDE68A;--bad:#B91C1C;--bad-tint:#FEF1F1;--bad-edge:#FECACA;" +
+    "--radius:4px;--shadow-float:0 6px 20px rgb(10 26 47 / .16);" +
+    "--font-sans:'StarX Inter',Inter,Roboto,system-ui,sans-serif;--font-display:'StarX Grotesk','Space Grotesk','StarX Inter',Roboto,sans-serif;" +
+    "--font-mono:'StarX Mono','IBM Plex Mono','Roboto Mono',ui-monospace,monospace}";
+
+  function el(tag, cls, txt) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (txt != null) e.textContent = txt;
+    return e;
+  }
+  function two(n) {
+    return (n < 10 ? "0" : "") + n;
+  }
+  /** Hospedeiro com shadow DOM (o CSS do SSW não entra, o nosso não sai). */
+  function shadowHost(id, css) {
+    var host = el("div");
+    host.id = id;
+    var root = host.attachShadow ? host.attachShadow({ mode: "closed" }) : host;
+    var st = el("style");
+    st.textContent = TOKENS + css;
+    root.appendChild(st);
+    return { host: host, root: root };
+  }
+  /** O código do leitor não pode cair no campo da página com uma das telas aberta. */
+  function blurPage() {
+    try {
+      if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    } catch (e) {}
+  }
+  function focusBarcode() {
+    setTimeout(function () {
+      var bc = byId("barcode");
+      try {
+        if (bc) bc.focus();
+      } catch (e) {}
+    }, 150);
+  }
+
+  // ---- alerta de erro
+  var ALERTS = [
+    {
+      key: "outra_placa",
+      // "Este volume é do CTRC CGB379473-3, em carregamento na placa CNP por alissonm."
+      re: /^(este volume [eé] do ctrc\s+)([^\s,]+)(,?\s+em carregamento na placa\s+)([^\s,]+?)(?:(\s+por\s+)([^\s,]+?))?(\.?)$/i,
+      title: "Volume de outra carga",
+    },
+  ];
+  var ALERT_ARM_MS = 900;
+  var al = { host: null };
+  var ALERT_CSS =
+    ".ov{position:fixed;inset:0;z-index:2147483647;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;" +
+    "padding:14px 14px 12px;overflow:auto;color:#fff;text-align:center;font-family:var(--font-sans);-webkit-font-smoothing:antialiased;" +
+    "background:rgba(200,16,16,.72);-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;" +
+    "animation:flash .45s ease-in-out 6 alternate}" +
+    "@keyframes flash{from{background:rgba(200,16,16,.72)}to{background:rgba(130,8,8,.84)}}" +
+    ".mid{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:space-evenly;width:100%;max-width:440px}" +
+    ".ico{flex:none;width:min(96px,19vh);height:min(96px,19vh);border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;" +
+    "box-shadow:0 0 0 8px rgba(255,255,255,.22);animation:pop .5s cubic-bezier(.3,1.6,.5,1) both,shake .45s .5s ease-in-out 2}" +
+    ".ico svg{width:72%;height:72%}" +
+    "@keyframes pop{from{transform:scale(.4);opacity:0}to{transform:scale(1);opacity:1}}" +
+    "@keyframes shake{0%,100%{transform:rotate(0)}25%{transform:rotate(-9deg)}75%{transform:rotate(9deg)}}" +
+    ".title,.msg,.who{text-shadow:0 1px 3px rgba(0,0,0,.55),0 0 1px rgba(0,0,0,.6)}" +
+    ".title{margin:0;font-family:var(--font-display);font-size:22px;line-height:1.1;font-weight:700;letter-spacing:-.01em;text-transform:uppercase}" +
+    ".msg{margin:0;font-size:18px;line-height:1.4;font-weight:400}.msg b{font-weight:800;white-space:nowrap}" +
+    ".facts{width:100%;box-sizing:border-box;margin:0;padding:4px 14px;border-radius:var(--radius);background:rgba(0,0,0,.24);text-align:left}" +
+    ".facts div{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:6px 0;font-size:14px}" +
+    ".facts dt{opacity:.85}.facts dd{margin:0;font-family:var(--font-mono);font-size:16px;font-weight:500;text-align:right;word-break:break-all}" +
+    ".who{font-size:13px;opacity:.92}.who b{font-family:var(--font-mono);font-weight:500}" +
+    "button{flex:none;width:100%;max-width:440px;min-height:56px;margin-top:10px;border:0;border-radius:var(--radius);background:#fff;color:#b10f0f;" +
+    "font:700 20px/1 var(--font-display);letter-spacing:.08em;text-transform:uppercase;box-shadow:0 6px 18px rgba(0,0,0,.25)}" +
+    "button:disabled{opacity:.55}button:active{transform:scale(.98)}";
+  // caminhão com um volume e um X: o volume é de outra carga/placa
+  var ALERT_ICON =
+    '<svg viewBox="0 0 96 96" fill="none" stroke="#c81010" stroke-width="5" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true">' +
+    '<path d="M6 40h46v28H6z"/><path d="M52 50h16l10 10v8H52z"/><circle cx="20" cy="72" r="7" fill="#fff"/><circle cx="66" cy="72" r="7" fill="#fff"/>' +
+    '<rect x="18" y="48" width="18" height="14" rx="2"/>' +
+    '<circle cx="72" cy="24" r="16" fill="#c81010" stroke="none"/><path d="M65 17l14 14M79 17 65 31" stroke="#fff" stroke-width="5"/></svg>';
+
+  function ruleFor(err) {
+    for (var i = 0; i < ALERTS.length; i++) {
+      var m = err.match(ALERTS[i].re);
+      if (m) return { rule: ALERTS[i], m: m };
+    }
+    return null;
+  }
+  /** A mensagem do SSW como apareceu, com os dados (CTRC, placa, quem) em negrito. */
+  function alertMessage(hit, err) {
+    var p = el("p", "msg");
+    var m = hit.m;
+    if (!m || m.length < 2) {
+      p.textContent = err;
+      return p;
+    }
+    for (var i = 1; i < m.length; i++) {
+      if (!m[i]) continue;
+      // grupos pares: os dados; ímpares: o texto em volta
+      if (i % 2 === 0) p.appendChild(el("b", null, m[i]));
+      else p.appendChild(document.createTextNode(m[i]));
+    }
+    return p;
+  }
+
+  /** Abre o alerta para a mensagem do SSW, se ela for de um tipo que pede (ALERTS). */
+  function raise(id, err, s, code) {
+    if (!bridge.alert) return;
+    var hit = ruleFor(err);
+    if (!hit) return;
+    closeAlert(false);
+    closeConfirm();
+    loadFonts();
+    var now = new Date();
+    var sh = shadowHost("starx-alert", ALERT_CSS);
+    var ov = el("div", "ov");
+    ov.setAttribute("role", "alertdialog");
+    ov.setAttribute("aria-modal", "true");
+    var mid = el("div", "mid");
+    var ico = el("div", "ico");
+    ico.innerHTML = ALERT_ICON;
+    mid.appendChild(ico);
+    mid.appendChild(el("h1", "title", hit.rule.title));
+    mid.appendChild(alertMessage(hit, err));
+    if (code) {
+      var dl = el("dl", "facts");
+      var row = el("div");
+      row.appendChild(el("dt", null, "Código bipado"));
+      row.appendChild(el("dd", null, code));
+      dl.appendChild(row);
+      mid.appendChild(dl);
+    }
+    // quem, em qual carga e quando: ficam na captura da tela
+    var who = el("div", "who");
+    var parts = [
+      ["", (s && s.user) || "—"],
+      ["placa ", (s && (s.realPlate || s.plate)) || "—"],
+      ["", two(now.getDate()) + "/" + two(now.getMonth() + 1) + " " + two(now.getHours()) + ":" + two(now.getMinutes()) + ":" + two(now.getSeconds())],
+    ];
+    for (var j = 0; j < parts.length; j++) {
+      if (j) who.appendChild(document.createTextNode(" · "));
+      if (parts[j][0]) who.appendChild(document.createTextNode(parts[j][0]));
+      who.appendChild(el("b", null, parts[j][1]));
+    }
+    mid.appendChild(who);
+    var ok = el("button", null, "Entendi");
+    ok.type = "button";
+    ok.disabled = true;
+    ok.addEventListener("click", function () {
+      if (!ok.disabled) closeAlert(true);
+    });
+    ov.appendChild(mid);
+    ov.appendChild(ok);
+    sh.root.appendChild(ov);
+    blurPage();
+    (document.body || document.documentElement).appendChild(sh.host);
+    var host = sh.host;
+    al.host = host;
+    // um toque que já vinha (o dedo na tela) não fecha o alerta sem ele ser lido
+    setTimeout(function () {
+      if (al.host === host) ok.disabled = false;
+    }, ALERT_ARM_MS);
+    // alarme, vibração e captura: depois de o alerta aparecer na tela (e as fontes carregarem, para a captura)
+    var fire = function () {
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          if (al.host !== host) return;
+          try {
+            bridge.alert(id, hit.rule.key);
+          } catch (e) {}
+        });
+      });
+    };
+    var fired = false;
+    var once = function () {
+      if (!fired) {
+        fired = true;
+        fire();
+      }
+    };
+    try {
+      document.fonts.ready.then(once);
+    } catch (e) {}
+    setTimeout(once, 400);
+  }
+  /** Fecha o alerta; pelo "Entendi", fecha também a janela de erro do SSW e volta o cursor ao campo do código. */
+  function closeAlert(byUser) {
+    if (!al.host) return;
+    var host = al.host;
+    al.host = null;
+    if (host.parentNode) host.parentNode.removeChild(host);
+    try {
+      bridge.alertEnd();
+    } catch (e) {}
+    if (!byUser) return;
+    var btn = byId("btn_errormsg_fechar");
+    try {
+      if (btn) btn.click();
+    } catch (e) {}
+    focusBarcode();
+  }
+
+  // ---- confirmação de Concluir/Interromper
+  var CONFIRM_WAIT_MS = 3000;
+  var cf = { host: null, timer: null, pass: false };
+  function lucide(paths) {
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + paths + "</svg>";
+  }
+  var CONFIRM = {
+    concluir: { title: "Concluir a carga?", text: "Essa ação é irreversível.", ok: "Concluir", tone: "blue", icon: lucide('<path d="M21.801 10A10 10 0 1 1 17 3.335"/><path d="m9 11 3 3L22 4"/>') },
+    interromper: {
+      title: "Interromper a carga?",
+      text: "Você sai da carga sem concluir.",
+      ok: "Interromper",
+      tone: "bad",
+      icon: lucide('<circle cx="12" cy="12" r="10"/><line x1="10" x2="10" y1="15" y2="9"/><line x1="14" x2="14" y1="15" y2="9"/>'),
+    },
+  };
+  var CONFIRM_CSS =
+    ".ov{position:fixed;inset:0;z-index:2147483646;box-sizing:border-box;display:flex;align-items:center;justify-content:center;padding:16px;" +
+    "background:rgb(4 10 20 / .55);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);font-family:var(--font-sans);color:var(--ink);" +
+    "-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;animation:fade .16s ease-out}" +
+    "@keyframes fade{from{opacity:0}to{opacity:1}}" +
+    "@keyframes in{from{opacity:0;transform:translateY(6px) scale(.98)}to{opacity:1;transform:none}}" +
+    ".box{width:100%;max-width:420px;box-sizing:border-box;display:flex;flex-direction:column;gap:16px;padding:18px;background:var(--surface);" +
+    "border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow-float);animation:in .16s ease-out}" +
+    ".head{display:flex;gap:12px;align-items:center}" +
+    ".icon{flex:none;width:40px;height:40px;display:grid;place-items:center;border-radius:var(--radius);border:1px solid}" +
+    ".icon svg{width:22px;height:22px}" +
+    ".icon.blue{background:var(--blue-tint);border-color:var(--blue-edge);color:var(--blue-deep)}" +
+    ".icon.bad{background:var(--bad-tint);border-color:var(--bad-edge);color:var(--bad)}" +
+    ".texts{display:flex;flex-direction:column;gap:2px;min-width:0}" +
+    "h2{margin:0;font-family:var(--font-display);font-size:19px;line-height:24px;font-weight:600;letter-spacing:-.02em}" +
+    ".texts p{margin:0;font-size:14px;line-height:20px;color:var(--mid)}" +
+    ".load{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:14px;color:var(--mid)}" +
+    ".load b{font-family:var(--font-mono);font-weight:500;color:var(--ink)}" +
+    ".badge{display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border-radius:var(--radius);font-size:12px;line-height:16px;font-weight:500;border:1px solid;white-space:nowrap}" +
+    ".badge.ok{color:var(--good);background:var(--good-tint);border-color:#9fd3b2}" +
+    ".badge.warn{color:var(--warn);background:var(--warn-tint);border-color:#e2b98a}" +
+    ".dot{width:6px;height:6px;border-radius:50%;background:currentColor}" +
+    ".nums{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--line);border-radius:var(--radius)}" +
+    ".nums div{padding:8px 10px;border-left:1px solid var(--line)}.nums div:first-child{border-left:0}" +
+    ".nums small{display:block;font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--soft)}" +
+    ".nums strong{display:block;margin-top:2px;font-family:var(--font-mono);font-size:20px;line-height:26px;font-weight:500;font-variant-numeric:tabular-nums}" +
+    ".alert{display:flex;align-items:flex-start;gap:8px;margin:0;padding:10px 12px;border-radius:var(--radius);font-size:14px;line-height:20px;font-weight:500;" +
+    "color:var(--warn);background:var(--warn-tint);border:1px solid var(--warn-edge)}" +
+    ".alert::before{content:'';width:6px;height:6px;border-radius:50%;flex:none;margin-top:7px;background:var(--warn)}" +
+    ".actions{display:flex;gap:8px}" +
+    "button{height:52px;padding:0 10px;display:inline-flex;align-items:center;justify-content:center;gap:8px;position:relative;overflow:hidden;" +
+    "font:500 16px/1 var(--font-sans);border-radius:var(--radius);border:1px solid var(--line);background:var(--surface);color:var(--mid);white-space:nowrap}" +
+    "button:active:not(:disabled){transform:scale(.98)}" +
+    ".back{flex:0 0 34%}.go{flex:1 1 auto}" +
+    "button.blue{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:600}" +
+    "button.bad{background:var(--bad);border-color:var(--bad);color:#fff;font-weight:600}" +
+    "button.blue:disabled{background:var(--blue-tint);border-color:var(--blue-edge);color:var(--blue-deep)}" +
+    "button.bad:disabled{background:var(--bad-tint);border-color:var(--bad-edge);color:var(--bad)}" +
+    "button .n{font-family:var(--font-mono);font-variant-numeric:tabular-nums}button .n:empty{display:none}" +
+    "button .bar{position:absolute;left:0;bottom:0;height:3px;border-radius:0 2px 2px 0;background:currentColor;transition:width .1s linear}";
+
+  function closeConfirm() {
+    if (!cf.host) return;
+    if (cf.host.parentNode) cf.host.parentNode.removeChild(cf.host);
+    clearInterval(cf.timer);
+    cf.host = null;
+    cf.timer = null;
+  }
+  function showConfirm(kind, target) {
+    closeConfirm();
+    loadFonts();
+    var k = CONFIRM[kind];
+    var sh = shadowHost("starx-confirm", CONFIRM_CSS);
+    var ov = el("div", "ov");
+    ov.setAttribute("role", "alertdialog");
+    ov.setAttribute("aria-modal", "true");
+    var box = el("div", "box");
+    var head = el("div", "head");
+    var ic = el("div", "icon " + k.tone);
+    ic.innerHTML = k.icon;
+    head.appendChild(ic);
+    var tx = el("div", "texts");
+    tx.appendChild(el("h2", null, k.title));
+    tx.appendChild(el("p", null, k.text));
+    head.appendChild(tx);
+    box.appendChild(head);
+
+    var plate = input("placa_real") || input("placa") || plateFromPath();
+    var fn = text(byId("navbar_title"));
+    var tot = text(byId("total_qtde"));
+    var cap = text(byId("cap_qtde"));
+    var fal = text(byId("fal_qtde"));
+    var falN = intNum(fal) || 0;
+    var load = el("div", "load");
+    var where = el("span");
+    where.appendChild(document.createTextNode(fn + (plate ? " · " : "")));
+    if (plate) where.appendChild(el("b", null, plate));
+    load.appendChild(where);
+    if (tot) {
+      var bd = el("span", "badge " + (falN > 0 ? "warn" : "ok"));
+      bd.appendChild(el("span", "dot"));
+      bd.appendChild(document.createTextNode(falN > 0 ? "faltam " + fal : "tudo lido"));
+      load.appendChild(bd);
+    }
+    box.appendChild(load);
+    if (tot) {
+      var nums = el("div", "nums");
+      var cells = [
+        ["Total", tot],
+        ["Lidos", cap],
+        ["Faltam", fal],
+      ];
+      for (var i = 0; i < cells.length; i++) {
+        var d = el("div");
+        d.appendChild(el("small", null, cells[i][0]));
+        d.appendChild(el("strong", null, cells[i][1] || "0"));
+        nums.appendChild(d);
+      }
+      box.appendChild(nums);
+    }
+    if (falN > 0) box.appendChild(el("p", "alert", kind === "concluir" ? "Ainda faltam " + fal + " volumes para ler." : "Faltam " + fal + " volumes: a carga fica incompleta."));
+
+    var act = el("div", "actions");
+    var back = el("button", "back", "Voltar");
+    back.type = "button";
+    var go = el("button", "go " + k.tone);
+    go.type = "button";
+    go.disabled = true;
+    var n = el("span", "n");
+    var bar = el("i", "bar");
+    go.appendChild(el("span", null, k.ok));
+    go.appendChild(n);
+    go.appendChild(bar);
+    act.appendChild(back);
+    act.appendChild(go);
+    box.appendChild(act);
+    ov.appendChild(box);
+    sh.root.appendChild(ov);
+    blurPage();
+    (document.body || document.documentElement).appendChild(sh.host);
+    cf.host = sh.host;
+
+    var t0 = Date.now();
+    var tick = function () {
+      var gone = Date.now() - t0;
+      var left = CONFIRM_WAIT_MS - gone;
+      if (left > 0) {
+        n.textContent = Math.ceil(left / 1000) + "s";
+        bar.style.width = 100 - (gone * 100) / CONFIRM_WAIT_MS + "%";
+        return;
+      }
+      clearInterval(cf.timer);
+      cf.timer = null;
+      go.disabled = false;
+      n.textContent = "";
+      bar.style.width = "0";
+    };
+    cf.timer = setInterval(tick, 100);
+    tick();
+    back.addEventListener("click", function () {
+      closeConfirm();
+      focusBarcode();
+    });
+    go.addEventListener("click", function () {
+      if (go.disabled) return;
+      closeConfirm();
+      // o mesmo toque, agora para o SSW (e para o aviso de Concluir/Interromper ao app, em onClick)
+      cf.pass = true;
+      try {
+        target.click();
+      } finally {
+        cf.pass = false;
+      }
+    });
+  }
+  /** Toque em Concluir/Interromper (fase de captura na janela: antes do SSW e do onClick abaixo). */
+  function guardActions(e) {
+    if (cf.pass || !bridge.alert) return;
+    var t = e.target && e.target.closest ? e.target.closest("#btn_concluir, #btn_sair") : null;
+    if (!t) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    if (al.host) return;
+    showConfirm(t.id === "btn_concluir" ? "concluir" : "interromper", t);
+  }
+  /** Com uma das telas aberta, teclas (o leitor de código é um teclado) não chegam à página. */
+  function blockKeys(e) {
+    if (!al.host && !cf.host) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
   }
 
   /** O que impede de ler a tela (null = nada): bipagem sem função/placa/total ou tela do SSW desconhecida. */
@@ -332,6 +761,10 @@
 
   document.addEventListener("click", onClick, true);
   document.addEventListener("keydown", onKey, true);
+  window.addEventListener("click", guardActions, true);
+  window.addEventListener("keydown", blockKeys, true);
+  window.addEventListener("keypress", blockKeys, true);
+  window.addEventListener("keyup", blockKeys, true);
   try {
     observer = new MutationObserver(soon);
     observer.observe(document.documentElement, { subtree: true, childList: true, characterData: true });
@@ -342,11 +775,21 @@
   window.__starxOps = {
     version: VERSION,
     scan: scan,
+    // teste no navegador: abre o alerta com uma mensagem qualquer
+    preview: function (err, code) {
+      raise("preview", String(err || ""), snapshot(), code || "");
+    },
     stop: function () {
       clearInterval(timer);
       if (observer) observer.disconnect();
       document.removeEventListener("click", onClick, true);
       document.removeEventListener("keydown", onKey, true);
+      window.removeEventListener("click", guardActions, true);
+      window.removeEventListener("keydown", blockKeys, true);
+      window.removeEventListener("keypress", blockKeys, true);
+      window.removeEventListener("keyup", blockKeys, true);
+      closeAlert(false);
+      closeConfirm();
       delete window.__starxOps;
     },
   };

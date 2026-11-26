@@ -12,6 +12,7 @@ import { deviceRoutes } from "./routes/device.js";
 import { Waker } from "./wake.js";
 import { OpsBus } from "./ops.js";
 import { scheduleStaleOps } from "./opsRetention.js";
+import { scheduleReleases, syncReleases } from "./rollout.js";
 import { opsDeviceRoutes } from "./routes/ops.js";
 import { OpsLive } from "./opsLive.js";
 import { opsStreamRoutes } from "./routes/opsAdmin.js";
@@ -87,6 +88,10 @@ export async function buildApp(config: Config, db: Db, waker = new Waker(), mail
     void notifyOps(db, push, [], operations);
   }, app.log);
   app.addHook("onClose", async () => stopStale());
+  // versões do app e do leitor (pilotos/todos): registra o leitor deste deploy e aplica os agendamentos na hora
+  await syncReleases(db, config.apkDir);
+  const stopReleases = scheduleReleases(db, config.apkDir, app.log);
+  app.addHook("onClose", async () => stopReleases());
   await app.register(opsStreamRoutes, { db, config, live });
   await app.register(deviceAppRoutes, { db, config });
   await app.register(deviceScreenshotRoutes, { db });

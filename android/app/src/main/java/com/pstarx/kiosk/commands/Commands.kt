@@ -138,7 +138,15 @@ object Commands {
             "screenshot" -> ScreenCapture.captureAndUpload(ctx, id)
             "reload" -> {
                 Handler(Looper.getMainLooper()).post { KioskController.get(ctx).reload() }
-                Outcome(true, if (KioskController.get(ctx).enforced) "kiosk recarregado" else "kiosk desligado: nada a recarregar")
+                // carga aberta: a tela só recarrega quando ela terminar (KioskActivity.refresh)
+                Outcome(
+                    true,
+                    when {
+                        !KioskController.get(ctx).enforced -> "kiosk desligado: nada a recarregar"
+                        com.pstarx.kiosk.ops.OpsReader.isBusy() -> "aguardando a bipagem terminar: recarrega quando a carga fechar"
+                        else -> "kiosk recarregado"
+                    },
+                )
             }
             "install_app" -> {
                 val a = Artifact.fromJson(p.getJSONObject("artifact"))

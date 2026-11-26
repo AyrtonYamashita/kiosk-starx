@@ -27,11 +27,15 @@ A tela não mostra a hora de cada bipagem: cada aumento de "Lidos" é uma bipage
 
 ## Leitor no app (2.4, app 0.5.0)
 
-- **Quem lê**: a **chave geral** (fim da página do Acompanhamento, só administradores) diz "só no piloto" ou "todos os
-  coletores". Na página de cada coletor dá para ligar ou desligar só nele, ou voltar a seguir a chave geral
-  (`devices.ops_reader`: null = segue a chave, true/false = escolha do coletor; `ops_settings.reader_all` = chave). O
-  check-in informa o app (`opsReader`, o que vale) e, a cada mudança, a API avisa os coletores na hora (~0,5 s). Com a
-  leitura desligada, a API recusa os eventos (`403 ops_disabled`) e o app para e descarta a fila.
+- **Quem lê**: todos os coletores (obrigatório desde 2026-11-25; a chave geral e a escolha por coletor saíram do
+  painel, `OPS_READER_ON_SQL = true`). As colunas `devices.ops_reader` e `ops_settings.reader_all` ficaram sem uso.
+- **Alerta de erro grave e confirmação** (leitor 2026-11-25.1, app 0.5.6): mensagens do SSW em `ALERTS`
+  (hoje: "Este volume é do CTRC … em carregamento na placa … por …") abrem um alerta de tela cheia por cima do SSW; o
+  app toca alarme alto (volume de alarme no máximo enquanto toca), vibra no máximo e tira uma captura da tela com o
+  alerta (`POST /v1/device/ops/shots?scan=<id>` → `ops_scan_shots`, ligada à bipagem pelo id; "ver print" nos erros).
+  Concluir/Interromper pedem confirmação com 3 s de espera; o toque é repassado ao botão do SSW. Os dois só aparecem
+  com a ponte nova (`StarXOps.alert`, app 0.5.6+). Fontes da identidade servidas pelo app em `/__starx/fonts/`.
+- **Versões do leitor**: ver "enviar → pilotos → todos" em [comandos-e-apps.md](./comandos-e-apps.md).
 - **Leitor da página** (`server/reader/ssw_reader.js`): injetado só em páginas `https://*.ssw.inf.br`. Desde a 0.5.1
   vem da API: o check-in informa `reader.sha256`, o app baixa `GET /v1/device/reader`, confere o sha256 e troca o
   leitor na página aberta (a versão nova para a antiga). O mesmo arquivo vai no APK como reserva. **Ajuste de

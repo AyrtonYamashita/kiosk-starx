@@ -8,7 +8,7 @@ import { ProgressChart } from "./ProgressChart";
 
 export const dynamic = "force-dynamic";
 
-type Row = { at: string; kind: string; codes: string[]; qty: number | null; delta: number; intervalSec: number | null; counted: boolean; error: string | null };
+type Row = { at: string; kind: string; codes: string[]; qty: number | null; delta: number; intervalSec: number | null; counted: boolean; error: string | null; shotId: string | null };
 
 /**
  * Uma linha por bipagem (o "lidos" subiu), com o código lido nela, mais os códigos que não contaram (outra carga,
@@ -25,11 +25,11 @@ function scanRows(d: OpsDetail): Row[] {
   const rows: Row[] = d.scans.map((s) => {
     const codes: string[] = [];
     for (let q = s.qty - Math.max(1, s.delta) + 1; q <= s.qty; q++) codes.push(...(lido.get(q) ?? []));
-    return { at: s.at, kind: "lido", codes, qty: s.qty, delta: s.delta, intervalSec: s.intervalSec, counted: true, error: null };
+    return { at: s.at, kind: "lido", codes, qty: s.qty, delta: s.delta, intervalSec: s.intervalSec, counted: true, error: null, shotId: null };
   });
   for (const c of d.codes ?? []) {
     if (c.kind === "lido") continue;
-    rows.push({ at: c.at, kind: c.kind, codes: [c.code], qty: c.readQty, delta: 0, intervalSec: null, counted: false, error: c.error ?? null });
+    rows.push({ at: c.at, kind: c.kind, codes: [c.code], qty: c.readQty, delta: 0, intervalSec: null, counted: false, error: c.error ?? null, shotId: c.shotId ?? null });
   }
   return rows.sort((a, b) => b.at.localeCompare(a.at));
 }
@@ -272,7 +272,16 @@ export default async function OpsDetailPage({ params, searchParams }: { params: 
                               <span className="dot" /> {label}
                             </span>
                           </td>
-                          {errorRows > 0 && <td className="small">{r.error ?? ""}</td>}
+                          {errorRows > 0 && (
+                            <td className="small">
+                              {r.error ?? ""}
+                              {r.shotId && (
+                        <a href={`/scan-shots/${r.shotId}`} target="_blank" rel="noopener" className="shot-link small">
+                          ver print
+                        </a>
+                      )}
+                            </td>
+                          )}
                           <td className="mono" style={{ textAlign: "right" }}>
                             {r.qty === null ? "—" : fmtQty(r.qty)}
                             {r.delta > 1 && <span className="muted"> (+{r.delta})</span>}

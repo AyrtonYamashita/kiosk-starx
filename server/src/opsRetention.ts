@@ -76,13 +76,15 @@ export interface PruneResult {
   heartbeats: number;
   curves: number;
   scans: number;
+  /** capturas da tela com o alerta de erro (prazo dos eventos: eventDays) */
+  shots: number;
 }
 
 /** Uma rodada de limpeza. */
 export async function pruneOpsEvents(db: Db, o: PruneOptions): Promise<PruneResult> {
   const batch = o.batch ?? 5_000;
   let budget = o.maxBatches ?? 200;
-  const res: PruneResult = { events: 0, heartbeats: 0, curves: 0, scans: 0 };
+  const res: PruneResult = { events: 0, heartbeats: 0, curves: 0, scans: 0, shots: 0 };
 
   // 1. sinais de vida
   while (budget-- > 0) {
@@ -139,6 +141,9 @@ export async function pruneOpsEvents(db: Db, o: PruneOptions): Promise<PruneResu
     res.scans += n;
     if (n < batch) break;
   }
+
+  // 5. capturas da tela com o alerta de erro (mostram o usuário: saem antes de a carga perder o nome)
+  res.shots = (await db.query("DELETE FROM ops_scan_shots WHERE created_at < now() - make_interval(days => $1)", [o.eventDays])).rowCount ?? 0;
   return res;
 }
 
@@ -155,7 +160,7 @@ export function scheduleOpsRetention(
     running = true;
     try {
       const r = await pruneOpsEvents(db, o);
-      if (r.events || r.heartbeats || r.curves || r.scans) log.info({ ...r, eventDays: o.eventDays, heartbeatDays: o.heartbeatDays }, "limpeza dos eventos do SSW");
+      if (r.events || r.heartbeats || r.curves || r.scans || r.shots) log.info({ ...r, eventDays: o.eventDays, heartbeatDays: o.heartbeatDays }, "limpeza dos eventos do SSW");
     } catch (err) {
       log.error({ err }, "falha na limpeza dos eventos do SSW");
     } finally {

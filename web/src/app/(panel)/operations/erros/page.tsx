@@ -147,7 +147,14 @@ export default async function ScanErrorsPage({ searchParams }: { searchParams: P
                 {data.errors.map((e, i) => (
                   <tr key={`${e.at}-${i}`}>
                     <td className="mono">{dateTime(e.at)}</td>
-                    <td>{e.message ?? <span className="muted">sem mensagem</span>}</td>
+                    <td>
+                      {e.message ?? <span className="muted">sem mensagem</span>}
+                      {e.shotId && (
+                        <a href={`/scan-shots/${e.shotId}`} target="_blank" rel="noopener" className="shot-link small">
+                          ver print
+                        </a>
+                      )}
+                    </td>
                     <td className="mono">
                       <Link href={`/operations/codigo?code=${encodeURIComponent(e.code)}`}>{e.code}</Link>
                     </td>
@@ -181,6 +188,11 @@ export default async function ScanErrorsPage({ searchParams }: { searchParams: P
                   <span className="carga-fn">{e.operation ? `${e.operation.fnLabel} · ${e.operation.realPlate || e.operation.plate}` : e.device.name}</span>
                 </Link>
                 <div className="bad small">{e.message ?? "sem mensagem"}</div>
+                {e.shotId && (
+                        <a href={`/scan-shots/${e.shotId}`} target="_blank" rel="noopener" className="shot-link small">
+                          ver print
+                        </a>
+                      )}
                 <div className="carga-meta muted small">
                   {dayTime(e.at)}
                   {e.operation?.user && ` · ${e.operation.user}`} · {e.device.name}

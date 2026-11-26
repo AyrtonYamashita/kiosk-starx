@@ -91,7 +91,6 @@ class OpsTracker(private val newId: () -> String = { UUID.randomUUID().toString(
     private var pendingEnd: PendingEnd? = null
     private var awaySince: Long? = null
     private var lastHeartbeat = 0L
-    private var lastBipagemAt = Long.MIN_VALUE / 2
     private var lastDiagKey: String? = null
     private var lastDiagAt = 0L
     /** Tela apagada ou coletor desligando (o sinal de vida avisa no lugar da tela do SSW; null = tela acesa). */
@@ -101,16 +100,17 @@ class OpsTracker(private val newId: () -> String = { UUID.randomUUID().toString(
     val hasOpenOperation get() = op != null
 
     /**
-     * Alguém bipando: na tela de bipagem (ou com a carga aberta) e a tela mudou há menos de 15 min. O app adia a
-     * própria atualização enquanto isso (a instalação reinicia o app e tiraria o colaborador da bipagem).
+     * Bipagem em aberto: na tela de bipagem ou com uma carga aberta, sem prazo (parada também conta: quem sai é a
+     * inatividade, que desconecta e fecha a carga). Enquanto isso nada recarrega a página: a atualização do app, o
+     * "recarregar" do painel e a configuração nova esperam a carga terminar.
      */
-    fun busy(now: Long) = (screen == "bipagem" || op != null) && now - lastBipagemAt < BUSY_IDLE_MS
+    @Suppress("UNUSED_PARAMETER")
+    fun busy(now: Long) = screen == "bipagem" || op != null
 
     fun onSnapshot(now: Long, s: Snapshot): List<JSONObject> {
         val out = mutableListOf<JSONObject>()
         val screenChanged = s.screen != screen
         screen = s.screen
-        if (s.screen == "bipagem") lastBipagemAt = now
 
         // tela que o leitor não entendeu: a estrutura vai ao servidor (uma vez por tela a cada 10 min)
         s.diag?.let { d ->
@@ -250,7 +250,6 @@ class OpsTracker(private val newId: () -> String = { UUID.randomUUID().toString(
         const val HEARTBEAT_MS = 15_000L
         const val END_CONFIRM_MS = 10_000L
         const val AWAY_MS = 120_000L
-        const val BUSY_IDLE_MS = 15 * 60_000L
         const val DIAG_REPEAT_MS = 10 * 60_000L
         private val DIAG_FIELDS = listOf("reason", "path", "title", "ids", "inputs", "texts", "reader")
     }

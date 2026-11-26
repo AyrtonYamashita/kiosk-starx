@@ -64,11 +64,29 @@ no repositório é tentada na hora. A página do aparelho mostra a situação de
 Para o kiosk usar um app gerenciado (modo app único ou grade), coloque o pacote também na configuração do perfil.
 Enquanto o app não chega, a tela do kiosk mostra "aguardando a instalação".
 
-## Atualização do próprio app do kiosk
+## Atualização do próprio app do kiosk e do leitor do SSW: enviar → pilotos → todos
 
-Quando um APK novo do StarX Kiosk é publicado — no painel, em Apps → "App do kiosk" (enviar e depois Publicar), ou
-pelo terminal (`publishApk` → `deploy/data/apks`, veja [deploy/README.md](../deploy/README.md)) — os aparelhos com versão mais velha baixam e se atualizam no próximo
-contato. A atualização substitui o app sem tirar o Device Owner nem a configuração. O kiosk volta sozinho, e a
+Desde a 0.5.6 (API de 2026-11-25), o app do kiosk e o leitor do SSW passam por três etapas, na página **Apps**:
+
+1. **Enviar** (só o app): o APK fica no servidor (`kiosk_versions`) e não chega a nenhum coletor. As notas ("o que
+   muda") e o selo **pode voltar / não pode voltar** vêm de `android/app/src/main/assets/release-notes.json`, lido do
+   APK no envio. O leitor do SSW não tem esta etapa: chega com o deploy da API (`reader_versions`) e fica disponível.
+2. **Pilotos**: só os coletores marcados como **piloto** (página do coletor, aba "SSW e piloto"; `devices.pilot`)
+   recebem. Os outros continuam na versão de todos.
+3. **Todos**: todos recebem e o teste acaba (o canal dos pilotos some; `release_channels`).
+
+Cada etapa pode ser **agora** ou **agendada** (`release_schedules`; a API aplica a cada 30 s). Só a plataforma publica.
+"Encerrar teste" tira a versão dos pilotos. Regras: a versão do app para todos só anda para frente e a dos pilotos tem
+de ser mais nova que a de todos (o Android não instala versão mais velha por cima; voltar = build nova com o código
+antigo e número maior). O leitor pode voltar sempre (publicar de novo um anterior). O `release.json` (QR de cadastro)
+acompanha a versão de todos. **O APK vai pelo painel** (Apps → Enviar versão nova): copiar o arquivo para
+`deploy/data/apks` não publica mais nada.
+
+**Carga aberta**: nada recarrega a página de um coletor com carga aberta (na tela de bipagem ou com a carga aberta, sem
+prazo). A atualização do app, um leitor novo, uma configuração nova e o "Recarregar" do painel esperam a carga fechar
+(o comando responde "aguardando a bipagem terminar"); quem fecha uma carga parada é a saída por inatividade.
+
+Publicada a versão, os aparelhos do grupo com versão mais velha baixam e se atualizam no próximo contato. A atualização substitui o app sem tirar o Device Owner nem a configuração. O kiosk volta sozinho, e a
 versão nova aparece no painel no check-in seguinte. Para desligar: `AUTO_UPDATE_APP=false` no `.env` da VPS.
 
 **Aparelhos com serviços do Google (Play Protect):** o Play Protect recusa a instalação sem ninguém na tela

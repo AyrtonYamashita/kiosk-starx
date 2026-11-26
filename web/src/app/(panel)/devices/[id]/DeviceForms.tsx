@@ -3,7 +3,8 @@
 import { useActionToast } from "@/components/Toasts";
 import { useActionState, useRef, useState } from "react";
 import { PencilLine } from "lucide-react";
-import { deleteDevice, renameDevice, setOpsReader } from "@/lib/actions";
+import Link from "next/link";
+import { deleteDevice, renameDevice, setPilot } from "@/lib/actions";
 import { useConfirm } from "@/components/ConfirmDialog";
 
 /**
@@ -83,54 +84,47 @@ export function EditableName({ id, name, fallback }: { id: string; name: string;
 }
 
 /**
- * Leitura do SSW neste coletor: o que vale agora, de onde vem (chave geral ou escolha no coletor) e os botões para
- * ligar/desligar só neste coletor ou voltar a seguir a chave geral.
+ * Coletor piloto: recebe antes dos outros as versões novas do app do kiosk e do leitor do SSW que forem publicadas
+ * "para os pilotos" (página Apps). Os demais continuam na versão de todos até ela ser publicada para todos.
  */
-export function OpsReaderToggle({
-  id,
-  on,
-  choice,
-  all,
-  appVersionCode,
-}: {
-  id: string;
-  on: boolean;
-  choice: boolean | null;
-  all: boolean;
-  appVersionCode: number | null;
-}) {
-  const [state, action, pending] = useActionState(setOpsReader, undefined);
+export function PilotToggle({ id, pilot }: { id: string; pilot: boolean }) {
+  const ask = useConfirm();
+  const [state, action, pending] = useActionState(setPilot, undefined);
   useActionToast(state);
-  const oldApp = appVersionCode !== null && appVersionCode < OPS_MIN_VERSION_CODE;
-  const source = choice === null ? `pela chave geral (${all ? "todos os coletores" : "só no piloto"})` : "escolhido neste coletor";
   return (
-    <div className="row">
-      <span className={`badge ${on ? "ok" : "off"}`}>
-        <span className="dot" /> {on ? "ligada" : "desligada"}
-      </span>
-      <span className="muted small">{source}</span>
-      <form action={action}>
-        <input type="hidden" name="id" value={id} />
-        <input type="hidden" name="on" value={on ? "0" : "1"} />
-        <button disabled={pending} className={on ? undefined : "primary"}>
-          {on ? "Desligar neste coletor" : "Ligar neste coletor"}
-        </button>
-      </form>
-      {choice !== null && (
-        <form action={action}>
+    <div className="stack" style={{ gap: 6 }}>
+      <div className="row">
+        <strong className="small">Piloto</strong>
+        <span className={`badge ${pilot ? "blue" : "off"}`}>
+          <span className="dot" /> {pilot ? "piloto" : "segue a versão de todos"}
+        </span>
+        <span className="spacer" />
+        <form
+          action={action}
+          onSubmit={(e) =>
+            ask.submit(e, {
+              title: pilot ? "Tirar este coletor dos pilotos?" : "Marcar este coletor como piloto?",
+              message: pilot
+                ? "Ele volta para a versão de todos no próximo contato (se estava numa versão de teste do app, fica nela até a de todos passar à frente: o Android não rebaixa)."
+                : "Ele passa a receber as versões publicadas para os pilotos (app do kiosk e leitor do SSW) antes dos outros coletores.",
+              confirmLabel: pilot ? "Tirar dos pilotos" : "Marcar como piloto",
+            })
+          }
+        >
           <input type="hidden" name="id" value={id} />
-          <input type="hidden" name="on" value="default" />
-          <button disabled={pending}>Seguir a chave geral ({all ? "ligada" : "desligada"})</button>
+          <input type="hidden" name="pilot" value={pilot ? "0" : "1"} />
+          <button disabled={pending} className={pilot ? undefined : "primary"}>
+            {pilot ? "Tirar dos pilotos" : "Marcar como piloto"}
+          </button>
         </form>
-      )}
-      {on && oldApp && <span className="badge warn">precisa do app 0.5.0 ou mais novo</span>}
+      </div>
+      <span className="muted small">
+        Piloto recebe primeiro as versões novas publicadas para os pilotos em <Link href="/apps">Apps</Link>; os outros só quando a versão for publicada para todos.
+      </span>
       {state?.error && <span className="alert error">{state.error}</span>}
     </div>
   );
 }
-
-/** Primeira versão do app com o leitor do SSW (0.5.0). */
-const OPS_MIN_VERSION_CODE = 10;
 
 export function DeleteDevice({ id, name }: { id: string; name: string }) {
   const ask = useConfirm();
