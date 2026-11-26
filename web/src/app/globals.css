@@ -923,3 +923,18 @@ label.check-hit { display: contents; }
 @layer components {
 .shot-link { display: inline-block; margin-left: 6px; font-weight: 500; }
 }
+
+@layer components {
+.pager { display: flex; align-items: center; gap: 4px; }
+.pager .button { min-width: 36px; height: 36px; padding: 0 10px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.pager .button.current { background: var(--blue); border-color: var(--blue); color: var(--on-blue); }
+.pager .button[aria-disabled="true"] { color: var(--faint); background: var(--subtle); pointer-events: none; }
+.pager-gap { padding: 0 4px; }
+.error-types-more > summary { color: var(--blue-deep); margin: 4px 0; }
+.error-types-more > .error-types { margin-top: 8px; }
+}
+
+@layer components {
+.release-upload { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border: 1px dashed var(--blue-edge); border-radius: var(--radius-card); background: var(--blue-tint); }
+.release-upload-head { display: flex; flex-direction: column; gap: 2px; }
+}

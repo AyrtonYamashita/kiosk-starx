@@ -291,6 +291,11 @@ describe("carga de manifesto, diagnóstico da tela e leitor entregue pela API (0
     const all = (await t.api("GET", "/v1/admin/ops/scan-errors")).json;
     expect(all.errors).toHaveLength(3);
     expect(all.next).toBeNull();
+    expect(all).toMatchObject({ total: 3, page: 1 });
+    // páginas: 10 por página; a página 2 vem vazia, com o mesmo total
+    const p2 = (await t.api("GET", "/v1/admin/ops/scan-errors?size=10&page=2")).json;
+    expect(p2).toMatchObject({ total: 3, page: 2, size: 10, errors: [] });
+    expect((await t.api("GET", "/v1/admin/ops/scan-errors?size=5")).status).toBe(400);
     expect(all.errors[0]).toMatchObject({ code: "12346", message: "CTRC 4712 já foi lido", operation: { plate: "ARMAZEM", user: "ayrton", fnLabel: "Descarga de Coleta" } });
     expect(all.types).toEqual([
       expect.objectContaining({ type: "ctrc # ja foi lido", message: "CTRC 4712 já foi lido", count: 2 }),

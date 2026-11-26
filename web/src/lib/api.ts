@@ -559,6 +559,10 @@ export interface OpsScanErrors {
     operation: null | { id: string; fn: string; fnLabel: string; plate: string; realPlate: string | null; user: string | null; branch: string | null };
   }[];
   next: string | null;
+  /** total de erros com os filtros (para "página X de Y") */
+  total: number;
+  page: number | null;
+  size: number;
   /** tipos de erro no período (com os outros filtros), do mais frequente para o menos */
   types: { type: string | null; message: string | null; count: number; lastAt: string }[];
   users: string[];

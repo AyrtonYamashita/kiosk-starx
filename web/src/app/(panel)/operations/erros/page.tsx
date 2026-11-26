@@ -5,7 +5,21 @@ import { dateTime, dayTime } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
-type Search = { type?: string; user?: string; device?: string; plate?: string; from?: string; to?: string; before?: string };
+type Search = { type?: string; user?: string; device?: string; plate?: string; from?: string; to?: string; page?: string };
+
+/** Erros por página e tipos de erro que aparecem abertos no resumo (o resto fica em "mais tipos"). */
+const PAGE_SIZE = 25;
+const TYPES_OPEN = 6;
+
+/** Números de página em volta da atual: 1 … 4 5 [6] 7 8 … 20. */
+function pageWindow(page: number, pages: number): (number | null)[] {
+  const out: (number | null)[] = [];
+  for (let n = 1; n <= pages; n++) {
+    if (n === 1 || n === pages || Math.abs(n - page) <= 2) out.push(n);
+    else if (out[out.length - 1] !== null) out.push(null);
+  }
+  return out;
+}
 
 function qs(s: Search) {
   const p = new URLSearchParams();
@@ -20,7 +34,12 @@ function qs(s: Search) {
 export default async function ScanErrorsPage({ searchParams }: { searchParams: Promise<Search> }) {
   const s = await searchParams;
   const filters = { type: s.type, user: s.user, device: s.device, plate: s.plate, from: s.from, to: s.to };
-  const data = await api<OpsScanErrors>(`/v1/admin/ops/scan-errors?${qs({ ...filters, before: s.before })}`);
+  const pageNo = Math.max(1, Number(s.page) || 1);
+  const data = await api<OpsScanErrors>(`/v1/admin/ops/scan-errors?${qs({ ...filters, page: String(pageNo), size: String(PAGE_SIZE) } as Search)}`);
+  // API anterior (sem total): uma página só, com o que veio
+  const count = typeof data.total === "number" ? data.total : data.errors.length;
+  const pages = Math.max(1, Math.ceil(count / PAGE_SIZE));
+  const href = (n: number) => `/operations/erros?${qs({ ...filters, page: n > 1 ? String(n) : undefined })}`;
   const filtered = Object.values(filters).some(Boolean);
   const period = s.from || s.to ? "no período" : "nos últimos 7 dias";
   const total = data.types.reduce((n, t) => n + t.count, 0);
@@ -110,8 +129,8 @@ export default async function ScanErrorsPage({ searchParams }: { searchParams: P
             {total} {total === 1 ? "erro" : "erros"} {period}
             {s.type ? " (todos os tipos)" : ""}
           </h2>
-          <ul className="error-types">
-            {data.types.map((t) => {
+          {(() => {
+            const item = (t: OpsScanErrors["types"][number]) => {
               const active = s.type === t.type;
               return (
                 <li key={t.type ?? "?"}>
@@ -122,13 +141,41 @@ export default async function ScanErrorsPage({ searchParams }: { searchParams: P
                   </Link>
                 </li>
               );
-            })}
-          </ul>
+            };
+            const open = data.types.slice(0, TYPES_OPEN);
+            const rest = data.types.slice(TYPES_OPEN);
+            // o tipo escolhido fica sempre à vista
+            const chosen = rest.find((t) => t.type === s.type);
+            return (
+              <>
+                <ul className="error-types">
+                  {open.map(item)}
+                  {chosen && item(chosen)}
+                </ul>
+                {rest.length > 0 && (
+                  <details className="error-types-more">
+                    <summary className="small">
+                      mais {rest.length} {rest.length === 1 ? "tipo" : "tipos"} de erro
+                    </summary>
+                    <ul className="error-types">{rest.filter((t) => t !== chosen).map(item)}</ul>
+                  </details>
+                )}
+              </>
+            );
+          })()}
         </section>
       )}
 
       {data.errors.length === 0 ? (
-        <div className="card muted">{filtered ? "Nenhum erro com esses filtros." : "Nenhum erro de bipagem nos últimos 7 dias."}</div>
+        <div className="card muted">{pageNo > 1 && count > 0 ? (
+            <>
+              Esta página não existe mais. <Link href={href(1)}>Voltar à primeira</Link>.
+            </>
+          ) : filtered ? (
+            "Nenhum erro com esses filtros."
+          ) : (
+            "Nenhum erro de bipagem nos últimos 7 dias."
+          )}</div>
       ) : (
         <div className="card list-card">
           <div className="list-scroll">
@@ -202,19 +249,41 @@ export default async function ScanErrorsPage({ searchParams }: { searchParams: P
           </ol>
           <div className="list-foot">
             <span className="muted small">
-              {data.errors.length} {data.errors.length === 1 ? "erro" : "erros"}
-              {data.next || s.before ? " nesta página" : ""}
+              {(pageNo - 1) * PAGE_SIZE + 1}–{(pageNo - 1) * PAGE_SIZE + data.errors.length} de {count} {count === 1 ? "erro" : "erros"}
             </span>
             <span className="spacer" />
-            {s.before && (
-              <Link href={`/operations/erros?${qs(filters)}`} className="link-button">
-                voltar ao início
-              </Link>
-            )}
-            {data.next && (
-              <Link href={`/operations/erros?${qs({ ...filters, before: data.next })}`} className="button">
-                Mais antigos
-              </Link>
+            {pages > 1 && (
+              <nav className="pager" aria-label="Páginas">
+                {pageNo > 1 ? (
+                  <Link href={href(pageNo - 1)} className="button" aria-label="Página anterior">
+                    ‹
+                  </Link>
+                ) : (
+                  <span className="button" aria-disabled="true">
+                    ‹
+                  </span>
+                )}
+                {pageWindow(pageNo, pages).map((n, i) =>
+                  n === null ? (
+                    <span key={`gap-${i}`} className="pager-gap muted">
+                      …
+                    </span>
+                  ) : (
+                    <Link key={n} href={href(n)} className={`button${n === pageNo ? " current" : ""}`} aria-current={n === pageNo ? "page" : undefined}>
+                      {n}
+                    </Link>
+                  ),
+                )}
+                {pageNo < pages ? (
+                  <Link href={href(pageNo + 1)} className="button" aria-label="Próxima página">
+                    ›
+                  </Link>
+                ) : (
+                  <span className="button" aria-disabled="true">
+                    ›
+                  </span>
+                )}
+              </nav>
             )}
           </div>
         </div>

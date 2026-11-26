@@ -267,6 +267,20 @@ export function KioskVersions({ data, canPublish, maxApkMb, autoUpdate }: { data
       />
       <ScheduleList items={scheduled} label={label} />
 
+      {/* passo 1, à vista: enviar o APK (a versão entra na lista abaixo como "enviada") */}
+      {canPublish && (
+        <div className="release-upload">
+          <div className="release-upload-head">
+            <strong className="small">Enviar versão nova do app</strong>
+            <span className="muted small">
+              APK de release (<span className="mono">assembleRelease</span>, versionCode maior). As notas e o &quot;pode voltar&quot; vêm de dentro do APK. Enviar não
+              publica: a versão aparece abaixo como &quot;enviada&quot;.
+            </span>
+          </div>
+          <UploadApk maxApkMb={maxApkMb} target="kiosk" />
+        </div>
+      )}
+
       <ol className="release-list">
         {kiosk.versions.map((v) => {
           const stage = v.versionCode === kiosk.all ? "all" : v.versionCode === kiosk.pilot ? "pilot" : allV !== null && v.versionCode < allV ? "old" : "sent";
@@ -313,19 +327,6 @@ export function KioskVersions({ data, canPublish, maxApkMb, autoUpdate }: { data
         {kiosk.versions.length === 0 && <li className="muted">Nenhuma versão enviada ainda.</li>}
       </ol>
 
-      {canPublish && (
-        <details>
-          <summary className="small">Enviar versão nova do app do kiosk</summary>
-          <div className="stack" style={{ marginTop: 12 }}>
-            <UploadApk maxApkMb={maxApkMb} target="kiosk" />
-            <span className="muted small">
-              Gere com <span className="mono">./gradlew assembleRelease</span> (versionCode maior, keystore de release). As notas e o &quot;pode voltar&quot; vêm do
-              arquivo <span className="mono">assets/release-notes.json</span> do APK. Enviar não publica: a versão fica como &quot;enviada&quot; até você publicar para os
-              pilotos ou para todos.
-            </span>
-          </div>
-        </details>
-      )}
     </div>
   );
 }

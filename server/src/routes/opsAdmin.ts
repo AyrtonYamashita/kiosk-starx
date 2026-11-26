@@ -69,6 +69,9 @@ export async function opsAdminRoutes(app: FastifyInstance, opts: { db: Db; confi
     from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     before: z.string().regex(/^\d{13}_\d{1,19}$/).optional(),
+    // paginação por número de página (o painel); `before` continua para quem já usa o cursor
+    page: z.coerce.number().int().min(1).max(100_000).optional(),
+    size: z.coerce.number().int().min(10).max(100).optional(),
   });
   app.get("/v1/admin/ops/scan-errors", async (req, reply) => {
     const q = ErrorsQuery.safeParse(req.query);
@@ -96,12 +99,16 @@ export async function opsAdminRoutes(app: FastifyInstance, opts: { db: Db; confi
       where.push(`(s.at, s.id) < ($${args.length - 1}, $${args.length}::bigint)`);
     }
     const FROM = "FROM ops_scans s JOIN devices d ON d.id = s.device_id LEFT JOIN ops_operations o ON o.id = s.operation_id";
-    const [list, summary, users, devices] = await Promise.all([
+    const size = f.size ?? 100;
+    const page = f.before ? null : (f.page ?? 1);
+    const pageArgs = [...args, size + 1, page ? (page - 1) * size : 0];
+    const [list, summary, users, devices, count] = await Promise.all([
       db.query(
         `SELECT s.id, s.at, s.code, s.error, s.error_key, s.read_qty, sh.id AS shot_id, d.id AS device_id, d.name AS device_name,
                 o.id AS op_id, o.fn, o.plate, o.real_plate, o.ssw_user, o.branch
-         ${FROM} LEFT JOIN ops_scan_shots sh ON sh.device_id = s.device_id AND sh.scan_id = s.scan_id WHERE ${where.join(" AND ")} ORDER BY s.at DESC, s.id DESC LIMIT 101`,
-        args,
+         ${FROM} LEFT JOIN ops_scan_shots sh ON sh.device_id = s.device_id AND sh.scan_id = s.scan_id WHERE ${where.join(" AND ")} ORDER BY s.at DESC, s.id DESC
+         LIMIT $${pageArgs.length - 1} OFFSET $${pageArgs.length}`,
+        pageArgs,
       ),
       db.query<{ key: string; sample: string; n: number; last_at: Date }>(
         `SELECT s.error_key AS key, (array_agg(s.error ORDER BY s.at DESC))[1] AS sample, count(*)::int AS n, max(s.at) AS last_at
@@ -113,8 +120,10 @@ export async function opsAdminRoutes(app: FastifyInstance, opts: { db: Db; confi
         [tenantId],
       ),
       db.query<{ id: string; name: string }>("SELECT id, name FROM devices WHERE tenant_id = $1 ORDER BY name LIMIT 500", [tenantId]),
+      // total com os filtros (sem o cursor): para "página X de Y"
+      db.query<{ n: number }>(`SELECT count(*)::int AS n ${FROM} WHERE ${where.filter((w) => !w.startsWith("(s.at, s.id) <")).join(" AND ")}`, f.before ? args.slice(0, -2) : args),
     ]);
-    const rows = list.rows.slice(0, 100);
+    const rows = list.rows.slice(0, size);
     const last = rows[rows.length - 1];
     return {
       errors: rows.map((x) => ({
@@ -130,7 +139,10 @@ export async function opsAdminRoutes(app: FastifyInstance, opts: { db: Db; confi
           ? { id: x.op_id, fn: x.fn, fnLabel: FN_LABEL[x.fn] ?? x.fn, plate: x.plate, realPlate: x.real_plate, user: x.ssw_user, branch: x.branch }
           : null,
       })),
-      next: list.rows.length > 100 && last ? `${new Date(last.at).getTime()}_${last.id}` : null,
+      next: list.rows.length > size && last ? `${new Date(last.at).getTime()}_${last.id}` : null,
+      total: count.rows[0].n,
+      page,
+      size,
       types: summary.rows.map((t) => ({ type: t.key, message: t.sample, count: t.n, lastAt: t.last_at })),
       users: users.rows.map((u) => u.u),
       devices: devices.rows,
