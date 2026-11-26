@@ -162,6 +162,8 @@ export async function opsAdminRoutes(app: FastifyInstance, opts: { db: Db; confi
     from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     before: z.string().regex(/^\d{13}_[0-9a-f-]{36}$/).optional(),
+    // cargas com (ou sem) erro de bipagem
+    errors: z.enum(["with", "without"]).optional(),
   });
   app.get("/v1/admin/ops/operations", async (req, reply) => {
     const q = OpsListQuery.safeParse(req.query);
@@ -181,6 +183,8 @@ export async function opsAdminRoutes(app: FastifyInstance, opts: { db: Db; confi
     if (f.fn) add("o.fn = ?", f.fn);
     if (f.status === "open") where.push("o.ended_at IS NULL");
     else if (f.status) add("o.end_reason = ?", f.status);
+    if (f.errors === "with") where.push("o.scan_errors > 0");
+    else if (f.errors === "without") where.push("o.scan_errors = 0");
     // dia local: a data vira timestamp sem fuso e só então é lida no fuso da operação (date AT TIME ZONE
     // usaria o fuso da sessão do banco, UTC, e deslocava o dia)
     if (f.from) add(`o.started_at >= (?::date::timestamp AT TIME ZONE '${TZ}')`, f.from);

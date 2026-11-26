@@ -107,7 +107,7 @@ export default async function ScanErrorsPage({ searchParams }: { searchParams: P
   );
 
   return (
-    <div className="stack wide fit-page">
+    <div className="stack wide">
       <div className="row">
         <Link href="/operations" className="link-button" transitionTypes={["nav-back"]}>
           ← Acompanhamento
@@ -263,13 +263,16 @@ export default async function ScanErrorsPage({ searchParams }: { searchParams: P
                     ‹
                   </span>
                 )}
+                <span className="pager-of mono small">
+                  {pageNo} / {pages}
+                </span>
                 {pageWindow(pageNo, pages).map((n, i) =>
                   n === null ? (
-                    <span key={`gap-${i}`} className="pager-gap muted">
+                    <span key={`gap-${i}`} className="pager-gap pager-num muted">
                       …
                     </span>
                   ) : (
-                    <Link key={n} href={href(n)} className={`button${n === pageNo ? " current" : ""}`} aria-current={n === pageNo ? "page" : undefined}>
+                    <Link key={n} href={href(n)} className={`button pager-num${n === pageNo ? " current" : ""}`} aria-current={n === pageNo ? "page" : undefined}>
                       {n}
                     </Link>
                   ),

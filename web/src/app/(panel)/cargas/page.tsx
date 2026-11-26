@@ -6,7 +6,7 @@ import { endLabel, fmtDuration, fmtMoney, fmtQty, localDay } from "@/lib/opsForm
 
 export const dynamic = "force-dynamic";
 
-type Search = { plate?: string; user?: string; fn?: string; status?: string; from?: string; to?: string; before?: string };
+type Search = { plate?: string; user?: string; fn?: string; status?: string; errors?: string; from?: string; to?: string; before?: string };
 
 const STATUS: { value: string; label: string }[] = [
   { value: "open", label: "Em andamento" },
@@ -41,7 +41,7 @@ function Status({ o }: { o: OpsHistory["operations"][number] }) {
 /** Histórico de todas as cargas: placa, função, colaborador, coletor, volumes, duração e situação. */
 export default async function CargasPage({ searchParams }: { searchParams: Promise<Search> }) {
   const s = await searchParams;
-  const filters = { plate: s.plate, user: s.user, fn: s.fn, status: s.status, from: s.from, to: s.to };
+  const filters = { plate: s.plate, user: s.user, fn: s.fn, status: s.status, errors: s.errors, from: s.from, to: s.to };
   const data = await api<OpsHistory>(`/v1/admin/ops/operations?${qs({ ...filters, before: s.before })}`);
   const filtered = Object.values(filters).some(Boolean);
 
@@ -83,6 +83,14 @@ export default async function CargasPage({ searchParams }: { searchParams: Promi
                   {x.label}
                 </option>
               ))}
+            </select>
+          </label>
+          <label>
+            Erros de bipagem
+            <select name="errors" defaultValue={s.errors ?? ""}>
+              <option value="">Todas</option>
+              <option value="with">Com erros</option>
+              <option value="without">Sem erros</option>
             </select>
           </label>
           <label>

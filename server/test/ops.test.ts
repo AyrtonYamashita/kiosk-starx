@@ -281,6 +281,10 @@ describe("carga de manifesto, diagnóstico da tela e leitor entregue pela API (0
       { code: "12346", kind: "erro", error: "CTRC 4712 já foi lido", error_key: "ctrc # ja foi lido" },
     ]);
     expect((await op()).scan_errors).toBe(3);
+    // histórico de cargas: filtro "com erros" / "sem erros"
+    expect((await t.api("GET", "/v1/admin/ops/operations?errors=with")).json.operations).toHaveLength(1);
+    expect((await t.api("GET", "/v1/admin/ops/operations?errors=without")).json.operations).toHaveLength(0);
+    expect((await t.api("GET", "/v1/admin/ops/operations?errors=talvez")).status).toBe(400);
 
     const detail = (await t.api("GET", `/v1/admin/ops/devices/${deviceId}`)).json;
     expect(detail.operation.scanErrors).toBe(3);

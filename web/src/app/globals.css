@@ -938,3 +938,12 @@ label.check-hit { display: contents; }
 .release-upload { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border: 1px dashed var(--blue-edge); border-radius: var(--radius-card); background: var(--blue-tint); }
 .release-upload-head { display: flex; flex-direction: column; gap: 2px; }
 }
+
+@layer components {
+.list-foot:has(.pager) { flex-wrap: wrap; row-gap: 8px; }
+.pager-of { display: none; padding: 0 8px; color: var(--mid); }
+@media (max-width: 640px) {
+  .pager .pager-num { display: none; }
+  .pager-of { display: inline; }
+}
+}
