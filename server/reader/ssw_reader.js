@@ -7,7 +7,7 @@
 (function () {
   "use strict";
   // muda a cada versão do leitor: uma versão nova substitui a antiga já injetada na página
-  var VERSION = "2026-11-27.1";
+  var VERSION = "2026-11-27.2";
   if (window.__starxOps) {
     if (window.__starxOps.version === VERSION) {
       window.__starxOps.scan(true);
@@ -279,6 +279,8 @@
   //    alerta, guardada no registro do erro. Leituras ficam bloqueadas até o toque em "Entendi", que fecha também a
   //    janela de erro do SSW.
   // (A confirmação de Concluir/Interromper do leitor 2026-11-25.1 saiu no 2026-11-27.1: travava o botão do SSW.)
+  // CSS só com o que o WebView antigo dos coletores entende (Chrome ~70): nada de inset, min()/max(), gap em flex,
+  // :has(). O leitor 2026-11-25.1 usava inset:0 e o alerta ficava fora da tela (a captura saía sem ele).
   // Visual: identidade do StarX Kiosk (tokens, raio 4 px, Space Grotesk/Inter/IBM Plex Mono servidas pelo app, sem
   // internet: /__starx/fonts/ no próprio endereço do SSW).
   var FONT_BASE = "/__starx/fonts/";
@@ -347,15 +349,43 @@
     },
   ];
   var ALERT_ARM_MS = 900;
-  var al = { host: null };
+  var al = { host: null, fit: null };
+  var FIT_MIN = 0.35;
+
+  /**
+   * Página inteira na tela enquanto o alerta está aberto (para a captura mostrar o cabeçalho do SSW com o usuário
+   * logado, que a rolagem da bipagem esconde): volta ao topo e reduz a página (zoom no body) até caber na altura.
+   * O alerta fica fora do body e não é reduzido. Desfeito ao fechar o alerta.
+   */
+  function fitPage() {
+    var b = document.body;
+    if (!b || al.fit) return;
+    al.fit = { zoom: b.style.zoom, x: window.pageXOffset, y: window.pageYOffset };
+    try {
+      window.scrollTo(0, 0);
+      var h = Math.max(b.scrollHeight, document.documentElement.scrollHeight);
+      var w = Math.max(b.scrollWidth, document.documentElement.scrollWidth);
+      var z = Math.min(1, window.innerHeight / (h || 1), window.innerWidth / (w || 1));
+      if (z < 1) b.style.zoom = String(Math.max(FIT_MIN, Math.floor(z * 100) / 100));
+    } catch (e) {}
+  }
+  function unfitPage() {
+    var f = al.fit;
+    al.fit = null;
+    if (!f || !document.body) return;
+    try {
+      document.body.style.zoom = f.zoom || "";
+      window.scrollTo(f.x, f.y);
+    } catch (e) {}
+  }
   var ALERT_CSS =
-    ".ov{position:fixed;inset:0;z-index:2147483647;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;" +
+    ".ov{position:fixed;top:0;right:0;bottom:0;left:0;width:100%;height:100%;z-index:2147483647;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;" +
     "padding:14px 14px 12px;overflow:auto;color:#fff;text-align:center;font-family:var(--font-sans);-webkit-font-smoothing:antialiased;" +
     "background:rgba(200,16,16,.72);-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;" +
     "animation:flash .45s ease-in-out 6 alternate}" +
     "@keyframes flash{from{background:rgba(200,16,16,.72)}to{background:rgba(130,8,8,.84)}}" +
     ".mid{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:space-evenly;width:100%;max-width:440px}" +
-    ".ico{flex:none;width:min(96px,19vh);height:min(96px,19vh);border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;" +
+    ".ico{flex:none;width:96px;height:96px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;" +
     "box-shadow:0 0 0 8px rgba(255,255,255,.22);animation:pop .5s cubic-bezier(.3,1.6,.5,1) both,shake .45s .5s ease-in-out 2}" +
     ".ico svg{width:72%;height:72%}" +
     "@keyframes pop{from{transform:scale(.4);opacity:0}to{transform:scale(1);opacity:1}}" +
@@ -364,7 +394,10 @@
     ".title{margin:0;font-family:var(--font-display);font-size:22px;line-height:1.1;font-weight:700;letter-spacing:-.01em;text-transform:uppercase}" +
     ".msg{margin:0;font-size:18px;line-height:1.4;font-weight:400}.msg b{font-weight:800;white-space:nowrap}" +
     ".facts{width:100%;box-sizing:border-box;margin:0;padding:4px 14px;border-radius:var(--radius);background:rgba(0,0,0,.24);text-align:left}" +
-    ".facts div{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:6px 0;font-size:14px}" +
+    ".facts div{display:flex;justify-content:space-between;align-items:baseline;padding:6px 0;font-size:14px}" +
+    ".facts dt{margin-right:12px}" +
+    // tela baixa: o ícone encolhe (sem min(), que o WebView antigo dos coletores não entende)
+    "@media (max-height:520px){.ico{width:80px;height:80px}}" +
     ".facts dt{opacity:.85}.facts dd{margin:0;font-family:var(--font-mono);font-size:16px;font-weight:500;text-align:right;word-break:break-all}" +
     ".who{font-size:13px;opacity:.92}.who b{font-family:var(--font-mono);font-weight:500}" +
     "button{flex:none;width:100%;max-width:440px;min-height:56px;margin-top:10px;border:0;border-radius:var(--radius);background:#fff;color:#b10f0f;" +
@@ -450,7 +483,9 @@
     ov.appendChild(ok);
     sh.root.appendChild(ov);
     blurPage();
-    (document.body || document.documentElement).appendChild(sh.host);
+    // fora do body: a redução da página (fitPage) não pega o alerta
+    document.documentElement.appendChild(sh.host);
+    fitPage();
     var host = sh.host;
     al.host = host;
     // um toque que já vinha (o dedo na tela) não fecha o alerta sem ele ser lido
@@ -486,6 +521,7 @@
     var host = al.host;
     al.host = null;
     if (host.parentNode) host.parentNode.removeChild(host);
+    unfitPage();
     try {
       bridge.alertEnd();
     } catch (e) {}
