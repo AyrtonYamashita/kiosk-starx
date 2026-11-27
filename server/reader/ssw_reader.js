@@ -583,7 +583,7 @@
   // (zoom no body) até caber na largura e na altura, sem passar de FIT_AUTO_MIN (texto legível); se ainda não couber,
   // sobra só a rolagem vertical. A altura de referência é a maior vista (sem o teclado da tela, que encolhe a janela
   // por um instante e faria a página encolher junto). Com o alerta aberto, quem manda no zoom é o alerta (fitPage).
-  var FIT_AUTO_MIN = 0.75;
+  var FIT_AUTO_MIN = 0.9;
   var fitH = 0;
   var fitW = 0;
   function zoomOf(el) {
