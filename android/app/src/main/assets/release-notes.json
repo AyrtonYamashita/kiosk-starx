@@ -1,14 +1,8 @@
 {
   "notes": [
-    "Sessão limpa ao ligar o coletor: cache, cookies e login do SSW apagados a cada vez que ele liga.",
-    "O site só abre com internet: tela de espera com o estado da conexão (aguardando Wi-Fi, conectando, verificando).",
-    "Inatividade conta também com a tela apagada; no fim do prazo a tela acende e o usuário sai do SSW.",
-    "Avisa o painel quando a tela apaga ou o coletor é desligado (o card mostra o motivo).",
-    "Alerta de tela cheia para volume de outra carga, com alarme alto, vibração e a captura da tela guardada no erro.",
-    "Confirmação com 3 s de espera em Concluir e Interromper.",
-    "Nada recarrega a página com uma carga aberta: atualização do app, leitor novo, configuração nova e o Recarregar do painel esperam a carga terminar.",
-    "Fontes da identidade StarX (Inter, Space Grotesk, IBM Plex Mono) nas telas por cima do SSW."
+    "Removida a saída por inatividade: sem o aviso \"Usuário Inativo!\", sem vibração e sem desconectar o operador parado (nem com a tela apagada).",
+    "A confirmação de Concluir/Interromper saiu do leitor do SSW (2026-11-27.1), que já está publicado: não depende desta versão."
   ],
   "reversible": true,
-  "reversibleNote": "Nada salvo no coletor muda de formato. Para voltar à 0.5.5 é preciso gerar uma build nova com o código antigo e número maior (o Android não instala versão mais velha por cima)."
+  "reversibleNote": "Nada salvo no coletor muda de formato. Voltar à 0.5.6 exige uma build nova com número maior (o Android não instala versão mais velha por cima)."
 }

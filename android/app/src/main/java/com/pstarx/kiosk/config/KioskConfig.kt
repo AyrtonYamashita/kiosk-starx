@@ -75,10 +75,12 @@ data class KioskConfig(
         val allowZoom: Boolean = true,
         /** Botão de recarregar a página na tela do kiosk (para o operador sair de um erro sem chamar ninguém). */
         val reloadButton: Boolean = false,
-        /** Operador logado no SSW parado esse tempo (min), fora da bipagem: aviso de 30 s e depois sai do SSW (0 = nunca). */
-        val idleLogoutMin: Int = 1,
-        /** Mesmo aviso, na tela de bipagem (minutos sem tocar nem bipar; 0 = nunca na bipagem). */
-        val idleLogoutScanMin: Int = 3,
+        /**
+         * Saída por inatividade: removida na 0.5.7. Os dois campos continuam lidos (perfis antigos os têm e o painel
+         * manda 0 para os coletores ainda na 0.5.6), sem efeito neste app.
+         */
+        val idleLogoutMin: Int = 0,
+        val idleLogoutScanMin: Int = 0,
     )
 
     data class Display(

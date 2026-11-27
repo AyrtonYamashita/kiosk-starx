@@ -1,4 +1,4 @@
-package com.pstarx.kiosk
+﻿package com.pstarx.kiosk
 
 import com.pstarx.kiosk.config.ConfigPatch
 import com.pstarx.kiosk.config.KioskConfig
@@ -225,9 +225,9 @@ class PinTest {
     @Test
     fun inatividadeETelaLigada() {
         val d = KioskConfig.parse(JSONObject()).config
-        // padrões: 1 min fora da bipagem, 3 min na bipagem
-        assertEquals(1, d.kiosk.web.idleLogoutMin)
-        assertEquals(3, d.kiosk.web.idleLogoutScanMin)
+        // campos da inatividade (removida na 0.5.7): continuam lidos, padrão 0
+        assertEquals(0, d.kiosk.web.idleLogoutMin) // inatividade removida na 0.5.7: padrão 0
+        assertEquals(0, d.kiosk.web.idleLogoutScanMin)
         val c = KioskConfig.parse(JSONObject("""{"kiosk": {"web": {"idleLogoutMin": 2, "idleLogoutScanMin": 5}}}""")).config
         assertEquals(5, c.kiosk.web.idleLogoutScanMin)
         assertEquals(5, KioskConfig.parse(JSONObject(c.toJson().toString())).config.kiosk.web.idleLogoutScanMin)

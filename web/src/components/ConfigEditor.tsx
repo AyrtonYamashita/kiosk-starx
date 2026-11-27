@@ -14,7 +14,7 @@ type Cfg = Record<string, Json>;
 type PinMode = "device" | "keep" | "set" | "none";
 
 const DEFAULTS: Cfg = {
-  kiosk: { enabled: true, mode: "apps", app: null, apps: [], relaunchDelaySec: 3, web: { url: "", reloadOnErrorSec: 15, inactivityReturnSec: 0, allowZoom: true, reloadButton: false, idleLogoutMin: 1, idleLogoutScanMin: 3 } },
+  kiosk: { enabled: true, mode: "apps", app: null, apps: [], relaunchDelaySec: 3, web: { url: "", reloadOnErrorSec: 15, inactivityReturnSec: 0, allowZoom: true, reloadButton: false, idleLogoutMin: 0, idleLogoutScanMin: 0 } },
   display: {
     keepScreenOn: true,
     brightness: null,
@@ -321,14 +321,6 @@ export function ConfigEditor({
                 <label>
                   Voltar à página inicial após inatividade (s, 0 = nunca)
                   <input type="number" min={0} max={86400} value={k.web.inactivityReturnSec} onChange={(e) => set("kiosk.web.inactivityReturnSec", Number(e.target.value))} />
-                </label>
-                <label>
-                  Operador parado no SSW: aviso após (min, 0 = nunca)
-                  <input type="number" min={0} max={240} value={k.web.idleLogoutMin ?? 1} onChange={(e) => set("kiosk.web.idleLogoutMin", Number(e.target.value))} />
-                </label>
-                <label>
-                  Na tela de bipagem: aviso após (min, 0 = nunca)
-                  <input type="number" min={0} max={240} value={k.web.idleLogoutScanMin ?? 3} onChange={(e) => set("kiosk.web.idleLogoutScanMin", Number(e.target.value))} />
                 </label>
               </div>
               {check("kiosk.web.allowZoom", "Permitir zoom")}

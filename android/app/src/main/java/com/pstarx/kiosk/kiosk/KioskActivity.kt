@@ -85,18 +85,6 @@ class KioskActivity : Activity() {
     /** Endereço da página principal (lido pela ponte do leitor, fora da thread principal). */
     @Volatile private var pageUrl: String? = null
 
-    /** Operador parado no SSW: aviso de 30 s e saída (kiosk.web.idleLogoutMin). */
-    private val idle = IdleLogout()
-    private var idleOverlay: View? = null
-    private var seenScanActivity = 0L
-    private var idleButton: Button? = null
-    private val idleTick = object : Runnable {
-        override fun run() {
-            tickIdle()
-            handler.postDelayed(this, 1_000)
-        }
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         kiosk = KioskController.get(this)
@@ -106,17 +94,13 @@ class KioskActivity : Activity() {
         PanelStore.get(this).addListener(onPanelChange)
         OpsReader.onScriptChanged = onReaderChange
         OpsReader.onBusyEnd = onBusyEnd
-        IdleAlarmReceiver.onFire = onIdleAlarm
     }
 
     override fun onDestroy() {
-        IdleVibration.stop(this)
         kiosk.removeListener(onChange)
         PanelStore.get(this).removeListener(onPanelChange)
         if (OpsReader.onScriptChanged === onReaderChange) OpsReader.onScriptChanged = null
         if (OpsReader.onBusyEnd === onBusyEnd) OpsReader.onBusyEnd = null
-        if (IdleAlarmReceiver.onFire === onIdleAlarm) IdleAlarmReceiver.onFire = null
-        IdleAlarmReceiver.cancel(this)
         OpsReader.stop()
         gate?.stop()
         gate = null
@@ -142,13 +126,6 @@ class KioskActivity : Activity() {
         ensureLockTask()
         refresh()
         OpsReader.onScreen(true)
-        // acender a tela não é uso: quem passou do prazo com a tela apagada sai agora (ou vê o aviso com o que sobrou)
-        IdleAlarmReceiver.cancel(this)
-        // mudanças da página com a tela apagada não são leituras do colaborador
-        seenScanActivity = OpsReader.scanActivity
-        handler.removeCallbacks(idleTick)
-        tickIdle()
-        handler.postDelayed(idleTick, 1_000)
         if (config.kiosk.mode == KioskConfig.Mode.APP) {
             if (kiosk.restartAppPending) {
                 // "recarregar" do painel: o app já foi para segundo plano; encerra e abre de novo (sem contar como queda)
@@ -169,14 +146,9 @@ class KioskActivity : Activity() {
 
     override fun onPause() {
         resumed = false
-        IdleVibration.stop(this)
         cancelCountdown()
-        handler.removeCallbacks(idleTick)
         // tela apagada: o servidor fica sabendo na hora (o card mostra "tela apagada" em vez de "sem sinal")
         if (getSystemService(android.os.PowerManager::class.java)?.isInteractive == false) OpsReader.onScreen(false)
-        // tela apagada (ou outra tela por cima): o prazo continua correndo; o alarme desconecta se ninguém voltar
-        val (eligible, limitMs) = idleRule()
-        if (eligible) idle.logoutAt(limitMs)?.let { IdleAlarmReceiver.schedule(this, it) }
         super.onPause()
     }
 
@@ -196,10 +168,7 @@ class KioskActivity : Activity() {
 
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
         if (ev.actionMasked == MotionEvent.ACTION_DOWN) {
-            // aviso de inatividade aberto: qualquer toque para a vibração (o aviso continua até confirmar)
-            IdleVibration.stop(this)
             restartInactivity()
-            idle.activity(SystemClock.elapsedRealtime())
             swallowGesture = ScreenDimmer.onUserActivity()
         }
         if (swallowGesture) {
@@ -207,137 +176,6 @@ class KioskActivity : Activity() {
             return true
         }
         return super.dispatchTouchEvent(ev)
-    }
-
-    /** Tecla física ou leitor de código que digita como teclado: conta como atividade do operador. */
-    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (event.action == KeyEvent.ACTION_DOWN) idle.activity(SystemClock.elapsedRealtime())
-        return super.dispatchKeyEvent(event)
-    }
-
-    // ---------------------------------------------------------------- operador parado no SSW
-
-    private fun tickIdle() {
-        val now = SystemClock.elapsedRealtime()
-        // leituras na bipagem contam como uso (o leitor de código nem sempre chega aqui como tecla)
-        val scans = OpsReader.scanActivity
-        if (scans != seenScanActivity) {
-            seenScanActivity = scans
-            idle.activity(now)
-        }
-        val (eligible, limitMs) = idleRule()
-        when (idle.tick(now, limitMs, eligible)) {
-            IdleLogout.Action.SHOW -> showIdle(now)
-            IdleLogout.Action.UPDATE -> updateIdle(now)
-            IdleLogout.Action.HIDE -> hideIdle()
-            IdleLogout.Action.LOGOUT -> {
-                hideIdle()
-                logoutSsw()
-            }
-            IdleLogout.Action.NONE -> Unit
-        }
-    }
-
-    /** Conta a inatividade (alguém logado no SSW, modo site) e o prazo da tela aberta. */
-    private fun idleRule(): Pair<Boolean, Long> {
-        val url = pageUrl
-        val eligible = config.kiosk.mode == KioskConfig.Mode.WEB && webView != null && IdleLogout.loggedIn(url, OpsReader.isSswUrl(url))
-        // na bipagem o prazo é maior (o colaborador pode estar movendo volumes sem tocar no coletor)
-        val limitMin = if (IdleLogout.scanningUrl(url)) config.kiosk.web.idleLogoutScanMin else config.kiosk.web.idleLogoutMin
-        return eligible to limitMin * 60_000L
-    }
-
-    /** Alarme do prazo com a tela apagada: desconecta sem mostrar aviso (não tem ninguém olhando). */
-    private val onIdleAlarm: () -> Unit = {
-        if (!resumed) {
-            val (eligible, limitMs) = idleRule()
-            when (idle.tick(SystemClock.elapsedRealtime(), limitMs, eligible)) {
-                IdleLogout.Action.LOGOUT -> {
-                    hideIdle()
-                    wakeScreen()
-                    logoutSsw()
-                }
-                // acordou antes do prazo (alarme adiantado pelo Android): agenda de novo
-                IdleLogout.Action.SHOW, IdleLogout.Action.UPDATE -> idle.logoutAt(limitMs)?.let { IdleAlarmReceiver.schedule(this, it) }
-                else -> Unit
-            }
-        }
-    }
-
-    /**
-     * Acende a tela (saída por inatividade com a tela apagada): o colaborador vê que foi desconectado e, com o coletor
-     * acordado, o "saiu" chega ao servidor na hora. A tela volta a apagar sozinha pelo tempo normal do aparelho.
-     */
-    @Suppress("DEPRECATION")
-    private fun wakeScreen() {
-        runCatching {
-            val pm = getSystemService(android.os.PowerManager::class.java)
-            pm.newWakeLock(
-                android.os.PowerManager.SCREEN_BRIGHT_WAKE_LOCK or android.os.PowerManager.ACQUIRE_CAUSES_WAKEUP or android.os.PowerManager.ON_AFTER_RELEASE,
-                "starx:idle-logout",
-            ).acquire(10_000)
-        }.onFailure { Log.w(TAG, "Não acendeu a tela: ") }
-    }
-
-    private fun idleLabel(now: Long) = "Confirmo minha presença (${idle.secondsLeft(now)})"
-
-    /** Aviso por cima do site: só o botão confirma; o resto da tela não responde enquanto ele está aberto. */
-    private fun showIdle(now: Long) {
-        hideIdle()
-        ScreenDimmer.onUserActivity()
-        val button = Ui.button(this, idleLabel(now), Ui.Variant.PRIMARY) {
-            idle.confirm(SystemClock.elapsedRealtime())
-            hideIdle()
-        }
-        val card = Ui.card(this).apply {
-            setPadding(dp(20), dp(20), dp(20), dp(20))
-            addView(Ui.text(this@KioskActivity, "Usuário Inativo!", Theme.Type.SECTION_TITLE))
-            addView(Ui.note(this@KioskActivity, "Você será desconectado automaticamente caso não confirme em 30s.").apply { setPadding(0, dp(8), 0, dp(16)) })
-            addView(button, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
-        }
-        val overlay = FrameLayout(this).apply {
-            setBackgroundColor(Theme.withAlpha(Color.BLACK, 0.6f))
-            isClickable = true
-            isFocusable = true
-            addView(card, FrameLayout.LayoutParams(minOf(dp(340), resources.displayMetrics.widthPixels - dp(48)), FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
-        }
-        root.addView(overlay, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
-        idleOverlay = overlay
-        idleButton = button
-        IdleVibration.start(this)
-        Log.i(TAG, "Operador parado: aviso de inatividade")
-    }
-
-    private fun updateIdle(now: Long) {
-        val overlay = idleOverlay ?: return showIdle(now)
-        // a tela foi redesenhada (configuração nova): o aviso volta por cima
-        if (overlay.parent == null) root.addView(overlay, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
-        idleButton?.text = idleLabel(now)
-    }
-
-    private fun hideIdle() {
-        IdleVibration.stop(this)
-        idleOverlay?.let { root.removeView(it) }
-        idleOverlay = null
-        idleButton = null
-    }
-
-    /** Sai do SSW: apaga a sessão (cookies e dados da página) e volta à página inicial do site. */
-    private fun logoutSsw() {
-        Log.i(TAG, "Operador parado: saindo do SSW")
-        val wv = webView
-        // a página inicial só abre depois de os cookies terem saído de verdade (senão ela podia voltar logada)
-        SessionReset.clear(this, wv, forBoot = false) {
-            if (wv != null && webView === wv) wv.loadUrl(config.kiosk.web.url)
-        }
-    }
-
-    /** Ponte da página: digitação e rolagem dentro do site (o teclado da tela não passa pelos toques desta tela). */
-    private inner class IdleBridge {
-        @JavascriptInterface
-        fun activity() {
-            handler.post { idle.activity(SystemClock.elapsedRealtime()) }
-        }
     }
 
     private fun ensureLockTask() {
@@ -541,7 +379,6 @@ class KioskActivity : Activity() {
         val loader = LoadingOverlay(this, parseColor(config.appearance.backgroundColor, Theme.NIGHT), parseColor(config.appearance.textColor, Color.WHITE))
         // ponte do leitor do SSW: só aceita chamadas com o piloto ligado e com a página principal no SSW
         wv.addJavascriptInterface(OpsReader.Bridge { OpsReader.isSswUrl(pageUrl) }, OpsReader.JS_NAME)
-        wv.addJavascriptInterface(IdleBridge(), IDLE_JS_NAME)
         wv.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
@@ -569,7 +406,6 @@ class KioskActivity : Activity() {
             override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
                 webError = false
                 pageUrl = url
-                idle.activity(SystemClock.elapsedRealtime())
                 if (!OpsReader.isSswUrl(url)) OpsReader.onLeftSsw()
             }
 
@@ -582,10 +418,7 @@ class KioskActivity : Activity() {
                     openWhenOnline(view, loader, forBoot = false)
                     return
                 }
-                if (webView === view) {
-                    injectReader(view)
-                    view.evaluateJavascript(IDLE_HOOK, null)
-                }
+                if (webView === view) injectReader(view)
             }
 
             override fun doUpdateVisitedHistory(view: WebView, url: String?, isReload: Boolean) {
@@ -808,12 +641,6 @@ class KioskActivity : Activity() {
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
     private companion object {
-        /** Ponte da atividade do operador na página (só registra que houve digitação ou rolagem). */
-        private const val IDLE_JS_NAME = "StarXKiosk"
-        private const val IDLE_HOOK =
-            "(function(){if(window.__starxIdle)return;window.__starxIdle=1;var t=0;function a(){var n=Date.now();" +
-                "if(n-t>3000){t=n;try{StarXKiosk.activity()}catch(e){}}}" +
-                "['keydown','input','scroll','pointerdown'].forEach(function(e){document.addEventListener(e,a,true)});})()"
         const val TAG = "KioskActivity"
         const val STATUS_TAG = "status"
         const val CRASH_WINDOW_MS = 2 * 60_000L

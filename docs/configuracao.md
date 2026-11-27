@@ -22,7 +22,7 @@ Toda alteração ganha um número de **revisão** e a origem (`local`, `adb`, `p
     "app": null,
     "apps": ["com.android.chrome", "com.empresa.coletor"],
     "relaunchDelaySec": 3,
-    "web": { "url": "", "reloadOnErrorSec": 15, "inactivityReturnSec": 0, "allowZoom": true, "reloadButton": false, "idleLogoutMin": 2 }
+    "web": { "url": "", "reloadOnErrorSec": 15, "inactivityReturnSec": 0, "allowZoom": true, "reloadButton": false }
   },
   "display": { "keepScreenOn": true, "brightness": null, "dimAfterSec": 0, "lowBatteryPercent": 15, "lowBatteryMessage": "Troque a bateria antes de continuar a operação.", "orientation": "auto", "showStatusBar": false },
   "appearance": { "title": "", "backgroundColor": "#070E1A", "textColor": "#FFFFFF", "columns": 4 },
@@ -51,7 +51,7 @@ Toda alteração ganha um número de **revisão** e a origem (`local`, `adb`, `p
 | `kiosk.web.url` | http(s) | Site do modo `web`. Links que não são http(s) (tel:, intent:) são bloqueados. |
 | `kiosk.web.reloadOnErrorSec` | 0–3600 | Recarrega depois de erro de carregamento (0 = não recarrega). |
 | `kiosk.web.inactivityReturnSec` | 0–86400 | Volta para a URL inicial depois desse tempo sem toque (0 = nunca). |
-| `kiosk.web.idleLogoutMin` | 0–240 | Operador logado no SSW parado esse tempo (min): aviso "Usuário Inativo!" com 30 s para confirmar e depois sai do SSW (apaga a sessão e volta à página inicial). Nunca com a bipagem aberta. Toque, tecla, leitor de código e digitação contam como atividade. 0 = nunca. App 0.5.3 ou mais novo. |
+| `kiosk.web.idleLogoutMin`, `kiosk.web.idleLogoutScanMin` | 0–240 | **Removidos na 0.5.7** (saída por inatividade). Continuam aceitos e o painel manda 0; só têm efeito nos coletores ainda na 0.5.3–0.5.6, onde 0 desliga. |
 | `kiosk.web.reloadButton` | true/false | Botão de recarregar na tela do kiosk (no rodapé, ou flutuante quando a barra do Android aparece). |
 | `display.dimAfterSec` | 0–86400 | Sem toque por esse tempo, o brilho cai para 1%; a tela nunca apaga e o primeiro toque devolve o brilho (0 = desligado). Ligado, a tela fica sempre ligada. |
 | `display.lowBatteryPercent` | 0–50 | Aviso de bateria fraca na tela (sem carregar) a partir desse nível; repete a cada 5% a menos e fecha ao carregar (0 = sem aviso). |

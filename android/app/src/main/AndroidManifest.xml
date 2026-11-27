@@ -4,8 +4,6 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- vibração do aviso de inatividade (permissão normal: concedida na instalação) -->
     <uses-permission android:name="android.permission.VIBRATE" />
-    <!-- acender a tela na saída por inatividade com a tela apagada -->
-    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
@@ -76,11 +74,6 @@
         <!-- próximo check-in no painel -->
         <receiver
             android:name=".panel.PanelSync$Alarm"
-            android:exported="false" />
-
-        <!-- saída por inatividade com a tela apagada (alarme no prazo) -->
-        <receiver
-            android:name=".kiosk.IdleAlarmReceiver"
             android:exported="false" />
 
         <!-- resultado do PackageInstaller (instalação/remoção pelo painel) -->
