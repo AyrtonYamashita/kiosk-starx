@@ -1,13 +1,13 @@
 // Leitor da tela do SSW (fase 2.4). Injetado pelo app do kiosk nas páginas do SSW quando a leitura está ligada.
 // LÊ a página: não digita e não muda o que o SSW mostra. Manda um retrato da tela ao app (StarXOps.report) quando
 // algo muda, e avisa os toques em Concluir/Interromper (StarXOps.action) sem interferir neles.
-// Exceções (app 0.5.6+): o alerta de tela cheia em erros graves de bipagem e a confirmação de Concluir/Interromper,
+// Exceção (app 0.5.6+): o alerta de tela cheia em erros graves de bipagem,
 // por cima da página (ver "telas do kiosk por cima do SSW"). Elas repassam ao SSW o mesmo toque que o colaborador daria.
 // Entregue pela API (GET /v1/device/reader) e embutido no APK como reserva: ajustes de mapeamento não precisam de app novo.
 (function () {
   "use strict";
   // muda a cada versão do leitor: uma versão nova substitui a antiga já injetada na página
-  var VERSION = "2026-11-25.1";
+  var VERSION = "2026-11-27.1";
   if (window.__starxOps) {
     if (window.__starxOps.version === VERSION) {
       window.__starxOps.scan(true);
@@ -273,13 +273,12 @@
   }
 
   // ------------------------------------------------------------ telas do kiosk por cima do SSW (leitor 2026-11-25, app 0.5.6)
-  // Duas telas, só com o app que tem a ponte nova (StarXOps.alert, app 0.5.6+); nos apps anteriores nada muda:
+  // Só com o app que tem a ponte nova (StarXOps.alert, app 0.5.6+); nos apps anteriores nada muda:
   //  - alerta de tela cheia em erros que pedem atenção na hora (ALERTS): vermelho, ícone, a mensagem com os dados em
   //    negrito, quem/qual placa/hora. O app toca um alarme alto, vibra no máximo e tira uma captura da tela com o
   //    alerta, guardada no registro do erro. Leituras ficam bloqueadas até o toque em "Entendi", que fecha também a
-  //    janela de erro do SSW;
-  //  - confirmação de Concluir/Interromper: o toque no botão do SSW fica retido; o botão de confirmar libera depois de
-  //    3 s e repassa o toque ao botão original (o SSW faz o mesmo de sempre).
+  //    janela de erro do SSW.
+  // (A confirmação de Concluir/Interromper do leitor 2026-11-25.1 saiu no 2026-11-27.1: travava o botão do SSW.)
   // Visual: identidade do StarX Kiosk (tokens, raio 4 px, Space Grotesk/Inter/IBM Plex Mono servidas pelo app, sem
   // internet: /__starx/fonts/ no próprio endereço do SSW).
   var FONT_BASE = "/__starx/fonts/";
@@ -408,7 +407,6 @@
     var hit = ruleFor(err);
     if (!hit) return;
     closeAlert(false);
-    closeConfirm();
     loadFonts();
     var now = new Date();
     var sh = shadowHost("starx-alert", ALERT_CSS);
@@ -499,190 +497,9 @@
     focusBarcode();
   }
 
-  // ---- confirmação de Concluir/Interromper
-  var CONFIRM_WAIT_MS = 3000;
-  var cf = { host: null, timer: null, pass: false };
-  function lucide(paths) {
-    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + paths + "</svg>";
-  }
-  var CONFIRM = {
-    concluir: { title: "Concluir a carga?", text: "Essa ação é irreversível.", ok: "Concluir", tone: "blue", icon: lucide('<path d="M21.801 10A10 10 0 1 1 17 3.335"/><path d="m9 11 3 3L22 4"/>') },
-    interromper: {
-      title: "Interromper a carga?",
-      text: "Você sai da carga sem concluir.",
-      ok: "Interromper",
-      tone: "bad",
-      icon: lucide('<circle cx="12" cy="12" r="10"/><line x1="10" x2="10" y1="15" y2="9"/><line x1="14" x2="14" y1="15" y2="9"/>'),
-    },
-  };
-  var CONFIRM_CSS =
-    ".ov{position:fixed;inset:0;z-index:2147483646;box-sizing:border-box;display:flex;align-items:center;justify-content:center;padding:16px;" +
-    "background:rgb(4 10 20 / .55);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);font-family:var(--font-sans);color:var(--ink);" +
-    "-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;animation:fade .16s ease-out}" +
-    "@keyframes fade{from{opacity:0}to{opacity:1}}" +
-    "@keyframes in{from{opacity:0;transform:translateY(6px) scale(.98)}to{opacity:1;transform:none}}" +
-    ".box{width:100%;max-width:420px;box-sizing:border-box;display:flex;flex-direction:column;gap:16px;padding:18px;background:var(--surface);" +
-    "border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow-float);animation:in .16s ease-out}" +
-    ".head{display:flex;gap:12px;align-items:center}" +
-    ".icon{flex:none;width:40px;height:40px;display:grid;place-items:center;border-radius:var(--radius);border:1px solid}" +
-    ".icon svg{width:22px;height:22px}" +
-    ".icon.blue{background:var(--blue-tint);border-color:var(--blue-edge);color:var(--blue-deep)}" +
-    ".icon.bad{background:var(--bad-tint);border-color:var(--bad-edge);color:var(--bad)}" +
-    ".texts{display:flex;flex-direction:column;gap:2px;min-width:0}" +
-    "h2{margin:0;font-family:var(--font-display);font-size:19px;line-height:24px;font-weight:600;letter-spacing:-.02em}" +
-    ".texts p{margin:0;font-size:14px;line-height:20px;color:var(--mid)}" +
-    ".load{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:14px;color:var(--mid)}" +
-    ".load b{font-family:var(--font-mono);font-weight:500;color:var(--ink)}" +
-    ".badge{display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border-radius:var(--radius);font-size:12px;line-height:16px;font-weight:500;border:1px solid;white-space:nowrap}" +
-    ".badge.ok{color:var(--good);background:var(--good-tint);border-color:#9fd3b2}" +
-    ".badge.warn{color:var(--warn);background:var(--warn-tint);border-color:#e2b98a}" +
-    ".dot{width:6px;height:6px;border-radius:50%;background:currentColor}" +
-    ".nums{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--line);border-radius:var(--radius)}" +
-    ".nums div{padding:8px 10px;border-left:1px solid var(--line)}.nums div:first-child{border-left:0}" +
-    ".nums small{display:block;font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--soft)}" +
-    ".nums strong{display:block;margin-top:2px;font-family:var(--font-mono);font-size:20px;line-height:26px;font-weight:500;font-variant-numeric:tabular-nums}" +
-    ".alert{display:flex;align-items:flex-start;gap:8px;margin:0;padding:10px 12px;border-radius:var(--radius);font-size:14px;line-height:20px;font-weight:500;" +
-    "color:var(--warn);background:var(--warn-tint);border:1px solid var(--warn-edge)}" +
-    ".alert::before{content:'';width:6px;height:6px;border-radius:50%;flex:none;margin-top:7px;background:var(--warn)}" +
-    ".actions{display:flex;gap:8px}" +
-    "button{height:52px;padding:0 10px;display:inline-flex;align-items:center;justify-content:center;gap:8px;position:relative;overflow:hidden;" +
-    "font:500 16px/1 var(--font-sans);border-radius:var(--radius);border:1px solid var(--line);background:var(--surface);color:var(--mid);white-space:nowrap}" +
-    "button:active:not(:disabled){transform:scale(.98)}" +
-    ".back{flex:0 0 34%}.go{flex:1 1 auto}" +
-    "button.blue{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:600}" +
-    "button.bad{background:var(--bad);border-color:var(--bad);color:#fff;font-weight:600}" +
-    "button.blue:disabled{background:var(--blue-tint);border-color:var(--blue-edge);color:var(--blue-deep)}" +
-    "button.bad:disabled{background:var(--bad-tint);border-color:var(--bad-edge);color:var(--bad)}" +
-    "button .n{font-family:var(--font-mono);font-variant-numeric:tabular-nums}button .n:empty{display:none}" +
-    "button .bar{position:absolute;left:0;bottom:0;height:3px;border-radius:0 2px 2px 0;background:currentColor;transition:width .1s linear}";
-
-  function closeConfirm() {
-    if (!cf.host) return;
-    if (cf.host.parentNode) cf.host.parentNode.removeChild(cf.host);
-    clearInterval(cf.timer);
-    cf.host = null;
-    cf.timer = null;
-  }
-  function showConfirm(kind, target) {
-    closeConfirm();
-    loadFonts();
-    var k = CONFIRM[kind];
-    var sh = shadowHost("starx-confirm", CONFIRM_CSS);
-    var ov = el("div", "ov");
-    ov.setAttribute("role", "alertdialog");
-    ov.setAttribute("aria-modal", "true");
-    var box = el("div", "box");
-    var head = el("div", "head");
-    var ic = el("div", "icon " + k.tone);
-    ic.innerHTML = k.icon;
-    head.appendChild(ic);
-    var tx = el("div", "texts");
-    tx.appendChild(el("h2", null, k.title));
-    tx.appendChild(el("p", null, k.text));
-    head.appendChild(tx);
-    box.appendChild(head);
-
-    var plate = input("placa_real") || input("placa") || plateFromPath();
-    var fn = text(byId("navbar_title"));
-    var tot = text(byId("total_qtde"));
-    var cap = text(byId("cap_qtde"));
-    var fal = text(byId("fal_qtde"));
-    var falN = intNum(fal) || 0;
-    var load = el("div", "load");
-    var where = el("span");
-    where.appendChild(document.createTextNode(fn + (plate ? " · " : "")));
-    if (plate) where.appendChild(el("b", null, plate));
-    load.appendChild(where);
-    if (tot) {
-      var bd = el("span", "badge " + (falN > 0 ? "warn" : "ok"));
-      bd.appendChild(el("span", "dot"));
-      bd.appendChild(document.createTextNode(falN > 0 ? "faltam " + fal : "tudo lido"));
-      load.appendChild(bd);
-    }
-    box.appendChild(load);
-    if (tot) {
-      var nums = el("div", "nums");
-      var cells = [
-        ["Total", tot],
-        ["Lidos", cap],
-        ["Faltam", fal],
-      ];
-      for (var i = 0; i < cells.length; i++) {
-        var d = el("div");
-        d.appendChild(el("small", null, cells[i][0]));
-        d.appendChild(el("strong", null, cells[i][1] || "0"));
-        nums.appendChild(d);
-      }
-      box.appendChild(nums);
-    }
-    if (falN > 0) box.appendChild(el("p", "alert", kind === "concluir" ? "Ainda faltam " + fal + " volumes para ler." : "Faltam " + fal + " volumes: a carga fica incompleta."));
-
-    var act = el("div", "actions");
-    var back = el("button", "back", "Voltar");
-    back.type = "button";
-    var go = el("button", "go " + k.tone);
-    go.type = "button";
-    go.disabled = true;
-    var n = el("span", "n");
-    var bar = el("i", "bar");
-    go.appendChild(el("span", null, k.ok));
-    go.appendChild(n);
-    go.appendChild(bar);
-    act.appendChild(back);
-    act.appendChild(go);
-    box.appendChild(act);
-    ov.appendChild(box);
-    sh.root.appendChild(ov);
-    blurPage();
-    (document.body || document.documentElement).appendChild(sh.host);
-    cf.host = sh.host;
-
-    var t0 = Date.now();
-    var tick = function () {
-      var gone = Date.now() - t0;
-      var left = CONFIRM_WAIT_MS - gone;
-      if (left > 0) {
-        n.textContent = Math.ceil(left / 1000) + "s";
-        bar.style.width = 100 - (gone * 100) / CONFIRM_WAIT_MS + "%";
-        return;
-      }
-      clearInterval(cf.timer);
-      cf.timer = null;
-      go.disabled = false;
-      n.textContent = "";
-      bar.style.width = "0";
-    };
-    cf.timer = setInterval(tick, 100);
-    tick();
-    back.addEventListener("click", function () {
-      closeConfirm();
-      focusBarcode();
-    });
-    go.addEventListener("click", function () {
-      if (go.disabled) return;
-      closeConfirm();
-      // o mesmo toque, agora para o SSW (e para o aviso de Concluir/Interromper ao app, em onClick)
-      cf.pass = true;
-      try {
-        target.click();
-      } finally {
-        cf.pass = false;
-      }
-    });
-  }
-  /** Toque em Concluir/Interromper (fase de captura na janela: antes do SSW e do onClick abaixo). */
-  function guardActions(e) {
-    if (cf.pass || !bridge.alert) return;
-    var t = e.target && e.target.closest ? e.target.closest("#btn_concluir, #btn_sair") : null;
-    if (!t) return;
-    e.preventDefault();
-    e.stopImmediatePropagation();
-    if (al.host) return;
-    showConfirm(t.id === "btn_concluir" ? "concluir" : "interromper", t);
-  }
   /** Com uma das telas aberta, teclas (o leitor de código é um teclado) não chegam à página. */
   function blockKeys(e) {
-    if (!al.host && !cf.host) return;
+    if (!al.host) return;
     e.preventDefault();
     e.stopImmediatePropagation();
   }
@@ -761,7 +578,6 @@
 
   document.addEventListener("click", onClick, true);
   document.addEventListener("keydown", onKey, true);
-  window.addEventListener("click", guardActions, true);
   window.addEventListener("keydown", blockKeys, true);
   window.addEventListener("keypress", blockKeys, true);
   window.addEventListener("keyup", blockKeys, true);
@@ -784,12 +600,10 @@
       if (observer) observer.disconnect();
       document.removeEventListener("click", onClick, true);
       document.removeEventListener("keydown", onKey, true);
-      window.removeEventListener("click", guardActions, true);
       window.removeEventListener("keydown", blockKeys, true);
       window.removeEventListener("keypress", blockKeys, true);
       window.removeEventListener("keyup", blockKeys, true);
       closeAlert(false);
-      closeConfirm();
       delete window.__starxOps;
     },
   };
