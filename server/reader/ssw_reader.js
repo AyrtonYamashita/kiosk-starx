@@ -7,7 +7,7 @@
 (function () {
   "use strict";
   // muda a cada versão do leitor: uma versão nova substitui a antiga já injetada na página
-  var VERSION = "2026-11-27.3";
+  var VERSION = "2026-11-27.4";
   if (window.__starxOps) {
     if (window.__starxOps.version === VERSION) {
       window.__starxOps.scan(true);
@@ -251,6 +251,10 @@
       if (!(code === sc.lastTyped && now - sc.lastTypedAt <= ERROR_LATE_MS)) startScan(code, now, now);
     }
     if (err && err !== sc.err) {
+      // janela de erro do SSW abriu: página no topo, para o cabeçalho com o usuário logado aparecer acima dela
+      try {
+        window.scrollTo(0, 0);
+      } catch (e) {}
       var errId = onError(err, code, now);
       if (errId) raise(errId, err, s, sc.done && sc.done.id === errId ? sc.done.code : code);
     }
@@ -621,8 +625,20 @@
     } catch (e) {}
   }
 
+  // Janela de erro do SSW mais abaixo (posição escolhida no coletor): o cabeçalho com o usuário logado fica à vista
+  // acima dela (na tela e na captura do alerta).
+  var ERROR_TOP_PX = 68;
+  function errorBoxStyle() {
+    if (byId("starx-errpos")) return;
+    var st = document.createElement("style");
+    st.id = "starx-errpos";
+    st.textContent = "#errormsg .modal-dialog{margin-top:" + ERROR_TOP_PX + "px !important}";
+    (document.head || document.documentElement).appendChild(st);
+  }
+
   function scan(force) {
     pending = false;
+    errorBoxStyle();
     autoFit();
     var json;
     try {
@@ -686,6 +702,8 @@
       window.removeEventListener("keyup", blockKeys, true);
       window.removeEventListener("resize", autoFit);
       closeAlert(false);
+      var es = byId("starx-errpos");
+      if (es && es.parentNode) es.parentNode.removeChild(es);
       delete window.__starxOps;
     },
   };
