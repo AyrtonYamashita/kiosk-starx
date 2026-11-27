@@ -366,7 +366,7 @@
       var h = Math.max(b.scrollHeight, document.documentElement.scrollHeight);
       var w = Math.max(b.scrollWidth, document.documentElement.scrollWidth);
       var z = Math.min(1, window.innerHeight / (h || 1), window.innerWidth / (w || 1));
-      if (z < 1) b.style.zoom = String(Math.max(FIT_MIN, Math.floor(z * 100) / 100));
+      if (z < 1) b.style.zoom = String(Math.max(FIT_MIN, Math.floor(zoomOf(b) * z * 100) / 100));
     } catch (e) {}
   }
   function unfitPage() {
@@ -578,8 +578,52 @@
     return { reason: why, path: cut(location.pathname, 300), title: cut(text(byId("navbar_title")) || document.title, 120), ids: ids, inputs: inputs, texts: texts, reader: VERSION };
   }
 
+  // ------------------------------------------------------------ página do tamanho da tela (leitor 2026-11-27.2)
+  // O SSW é mais largo e mais alto que a tela do coletor: rola para os lados e para baixo. O leitor reduz a página
+  // (zoom no body) até caber na largura e na altura, sem passar de FIT_AUTO_MIN (texto legível); se ainda não couber,
+  // sobra só a rolagem vertical. A altura de referência é a maior vista (sem o teclado da tela, que encolhe a janela
+  // por um instante e faria a página encolher junto). Com o alerta aberto, quem manda no zoom é o alerta (fitPage).
+  var FIT_AUTO_MIN = 0.6;
+  var fitH = 0;
+  var fitW = 0;
+  function zoomOf(el) {
+    var z = parseFloat(el.style.zoom);
+    return z > 0 ? z : 1;
+  }
+  function autoFit() {
+    var b = document.body;
+    if (!b || al.fit) return;
+    var vw = window.innerWidth;
+    var vh = window.innerHeight;
+    if (!vw || !vh) return;
+    // girou a tela ou mudou a largura: recomeça a altura de referência
+    if (vw !== fitW) {
+      fitW = vw;
+      fitH = vh;
+    } else if (vh > fitH) fitH = vh;
+    try {
+      var cur = zoomOf(b);
+      var target = cur;
+      // duas passadas: reduzir libera largura (a página se rearruma mais baixa), então mede de novo
+      for (var i = 0; i < 2; i++) {
+        b.style.zoom = String(target);
+        var de = document.documentElement;
+        var w = Math.max(b.scrollWidth, de.scrollWidth) / target;
+        var h = Math.max(b.scrollHeight, de.scrollHeight) / target;
+        var next = Math.min(1, fitW / (w || 1), fitH / (h || 1));
+        next = Math.max(FIT_AUTO_MIN, Math.floor(next * 100) / 100);
+        if (Math.abs(next - target) < 0.02) break;
+        target = next;
+      }
+      // sem mexer por pouco (evita a página "respirar" a cada retrato)
+      b.style.zoom = Math.abs(target - cur) < 0.02 ? String(cur) : String(target);
+      if (b.style.zoom === "1") b.style.zoom = "";
+    } catch (e) {}
+  }
+
   function scan(force) {
     pending = false;
+    autoFit();
     var json;
     try {
       json = JSON.stringify(snapshot());
@@ -623,6 +667,7 @@
   } catch (e) {}
   // campos escondidos mudam por script sem gerar mutação: confere também a cada 500 ms
   timer = setInterval(scan, 500);
+  window.addEventListener("resize", autoFit);
 
   window.__starxOps = {
     version: VERSION,
@@ -639,6 +684,7 @@
       window.removeEventListener("keydown", blockKeys, true);
       window.removeEventListener("keypress", blockKeys, true);
       window.removeEventListener("keyup", blockKeys, true);
+      window.removeEventListener("resize", autoFit);
       closeAlert(false);
       delete window.__starxOps;
     },
